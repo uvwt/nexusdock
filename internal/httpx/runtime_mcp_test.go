@@ -95,3 +95,38 @@ func TestRuntimeMCPDetailForwardsServerName(t *testing.T) {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
 }
+
+func TestRuntimeMCPEnvironmentUsesReadOnlyBrowserRoute(t *testing.T) {
+	runtime := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/internal/runtime/mcp" {
+			t.Fatalf("unexpected runtime request: %s %s", r.Method, r.URL.Path)
+		}
+		var request runtimeMCPRequest
+		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+			t.Fatalf("decode request: %v", err)
+		}
+		if request.Action != "env_list" || request.Name != "demo" {
+			t.Fatalf("unexpected request: %+v", request)
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"ok":    true,
+			"name":  "demo",
+			"items": []map[string]any{{"key": "DEMO_TOKEN", "configured": true}},
+			"count": 1,
+		})
+	}))
+	defer runtime.Close()
+
+	server := &Server{cfg: config.Config{AgentDockEndpoint: runtime.URL}}
+	request := httptest.NewRequest(http.MethodGet, "/v1/runtime/mcp/demo/environment", nil)
+	request.SetPathValue("name", "demo")
+	response := httptest.NewRecorder()
+	server.runtimeMCPEnvironment(response, request)
+
+	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `"key":"DEMO_TOKEN"`) {
+		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+	}
+	if strings.Contains(response.Body.String(), `"value"`) {
+		t.Fatalf("environment response must not return values: %s", response.Body.String())
+	}
+}

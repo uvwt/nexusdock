@@ -105,7 +105,7 @@ export default function MCPPage({ refreshToken }: { refreshToken: number }) {
     try {
       const [detailResult, envResult] = await Promise.all([
         api<MCPDetailResponse>(`/v1/runtime/mcp/${encodeURIComponent(name)}`),
-        api<MCPEnvResponse>('/v1/runtime/mcp', { method: 'POST', body: JSON.stringify({ action: 'env_list', name }) }),
+        api<MCPEnvResponse>(`/v1/runtime/mcp/${encodeURIComponent(name)}/environment`),
       ]);
       if (requestID === detailRequestRef.current) {
         setDetail(detailResult);

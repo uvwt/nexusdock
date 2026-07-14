@@ -30,6 +30,7 @@ type runtimeMCPRequest struct {
 
 func (s *Server) registerRuntimeMCPRoutes(mux *http.ServeMux, protected func(http.HandlerFunc) http.HandlerFunc) {
 	mux.HandleFunc("GET /v1/runtime/mcp", protected(s.runtimeMCPServers))
+	mux.HandleFunc("GET /v1/runtime/mcp/{name}/environment", protected(s.runtimeMCPEnvironment))
 	mux.HandleFunc("GET /v1/runtime/mcp/{name}", protected(s.runtimeMCPServer))
 	mux.HandleFunc("POST /v1/runtime/mcp", protected(s.runtimeMCPManage))
 }
@@ -50,6 +51,23 @@ func (s *Server) runtimeMCPServer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	payload, err := s.runtimeGet(r.Context(), "/internal/runtime/mcp/"+url.PathEscape(name), nil)
+	if err != nil {
+		writeJSON(w, runtimeErrorHTTPStatus(err), runtimeUnavailablePayload(err))
+		return
+	}
+	writeJSON(w, http.StatusOK, payload)
+}
+
+func (s *Server) runtimeMCPEnvironment(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.PathValue("name"))
+	if name == "" || strings.Contains(name, "/") {
+		writeError(w, http.StatusBadRequest, "INVALID_MCP_NAME", "MCP 名称不能为空")
+		return
+	}
+	payload, err := s.runtimePost(r.Context(), "/internal/runtime/mcp", runtimeMCPRequest{
+		Action: "env_list",
+		Name:   name,
+	})
 	if err != nil {
 		writeJSON(w, runtimeErrorHTTPStatus(err), runtimeUnavailablePayload(err))
 		return
