@@ -1,7 +1,7 @@
 import { formatTime, timeZoneLabel } from './lib/time';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
-  Activity, ChevronRight,
+  Activity, Cable, ChevronRight,
   CircleAlert, Database, FileJson, Home, ListChecks, Menu, RefreshCw,
   Settings, ShieldCheck, Sparkles, Wrench, X,
 } from 'lucide-react';
@@ -11,9 +11,10 @@ import AccountSecurity from './AccountSecurity';
 import { ApiError, api, setCSRFToken } from './api/client';
 import WorkflowTemplatesPage from './components/workflows/WorkflowTemplatesPage';
 import { SkillsPage, TaskCenterPage } from './components/runtime/RuntimePages';
+import MCPPage from './components/runtime/MCPPage';
 import './nexus.css';
 
-type RuntimeSection = 'tasks' | 'skills' | 'templates';
+type RuntimeSection = 'tasks' | 'skills' | 'templates' | 'mcp';
 type Section = 'home' | 'recall' | RuntimeSection | 'settings';
 type Tone = 'ok' | 'warn' | 'danger' | 'muted';
 
@@ -68,6 +69,7 @@ const RUNTIME_SECTIONS: RuntimeSectionMeta[] = [
   { id: 'tasks', label: '任务', icon: ListChecks },
   { id: 'skills', label: 'Skill', icon: Wrench },
   { id: 'templates', label: '模板', icon: FileJson },
+  { id: 'mcp', label: 'MCP', icon: Cable },
 ];
 
 const NAV: SectionMeta[] = [
@@ -88,6 +90,7 @@ const LEGACY_RUNTIME_SECTIONS: Record<string, RuntimeSection> = {
   cleanup: 'tasks',
   skills: 'skills',
   templates: 'templates',
+  mcp: 'mcp',
 };
 
 function hashParts(): string[] {
@@ -299,6 +302,7 @@ function RuntimeContent({ active, refreshToken }: { active: RuntimeSection; refr
     {active === 'tasks' && <TaskCenterPage refreshToken={refreshToken} />}
     {active === 'skills' && <SkillsPage refreshToken={refreshToken} />}
     {active === 'templates' && <WorkflowTemplatesPage refreshToken={refreshToken} />}
+    {active === 'mcp' && <MCPPage refreshToken={refreshToken} />}
   </section>;
 }
 

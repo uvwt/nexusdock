@@ -182,6 +182,12 @@ func TestRuntimeRoutesUseRuntimePrefix(t *testing.T) {
 		t.Fatalf("DELETE /v1/runtime/tasks/{id} must be registered")
 	}
 
+	mcpResponse := httptest.NewRecorder()
+	h.ServeHTTP(mcpResponse, httptest.NewRequest(http.MethodGet, "/v1/runtime/mcp", nil))
+	if mcpResponse.Code == http.StatusNotFound {
+		t.Fatalf("/v1/runtime/mcp must be registered")
+	}
+
 	legacy := httptest.NewRecorder()
 	h.ServeHTTP(legacy, httptest.NewRequest(http.MethodGet, "/v1/ops/tasks", nil))
 	if legacy.Code != http.StatusNotFound {

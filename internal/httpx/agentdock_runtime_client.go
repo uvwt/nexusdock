@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -46,31 +47,42 @@ func (s *Server) agentDockRuntimeClient() (*agentDockRuntimeClient, error) {
 }
 
 func (s *Server) runtimeGet(ctx context.Context, path string, query url.Values) (map[string]any, error) {
-	return s.runtimeRequest(ctx, http.MethodGet, path, query)
+	return s.runtimeRequest(ctx, http.MethodGet, path, query, nil)
 }
 
 func (s *Server) runtimeDelete(ctx context.Context, path string) (map[string]any, error) {
-	return s.runtimeRequest(ctx, http.MethodDelete, path, nil)
+	return s.runtimeRequest(ctx, http.MethodDelete, path, nil, nil)
 }
 
-func (s *Server) runtimeRequest(ctx context.Context, method, path string, query url.Values) (map[string]any, error) {
+func (s *Server) runtimePost(ctx context.Context, path string, payload any) (map[string]any, error) {
+	body, err := json.Marshal(payload)
+	if err != nil {
+		return nil, fmt.Errorf("encode AgentDock Runtime request: %w", err)
+	}
+	return s.runtimeRequest(ctx, http.MethodPost, path, nil, body)
+}
+
+func (s *Server) runtimeRequest(ctx context.Context, method, path string, query url.Values, requestBody []byte) (map[string]any, error) {
 	client, err := s.agentDockRuntimeClient()
 	if err != nil {
 		return nil, err
 	}
-	return client.request(ctx, method, path, query)
+	return client.request(ctx, method, path, query, requestBody)
 }
 
-func (c *agentDockRuntimeClient) request(ctx context.Context, method, path string, query url.Values) (map[string]any, error) {
+func (c *agentDockRuntimeClient) request(ctx context.Context, method, path string, query url.Values, requestBody []byte) (map[string]any, error) {
 	u := c.endpoint + path
 	if len(query) > 0 {
 		u += "?" + query.Encode()
 	}
-	req, err := http.NewRequestWithContext(ctx, method, u, nil)
+	req, err := http.NewRequestWithContext(ctx, method, u, bytes.NewReader(requestBody))
 	if err != nil {
 		return nil, err
 	}
 	req.Header.Set("Accept", "application/json")
+	if len(requestBody) > 0 {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}

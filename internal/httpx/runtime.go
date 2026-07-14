@@ -126,6 +126,7 @@ func (s *Server) registerRuntimeRoutes(mux *http.ServeMux, protected func(http.H
 	mux.HandleFunc("GET /v1/runtime/skills/{source}/{skillID}", protected(s.runtimeSkillDetail))
 	mux.HandleFunc("GET /v1/runtime/workflow-templates", protected(s.listRuntimeWorkflowTemplates))
 	mux.HandleFunc("GET /v1/runtime/workflow-templates/", protected(s.runtimeWorkflowTemplateDetail))
+	s.registerRuntimeMCPRoutes(mux, protected)
 }
 
 func (s *Server) runtimeOverview(w http.ResponseWriter, r *http.Request) {
