@@ -188,8 +188,17 @@ func (s *Server) callNodeTool(ctx context.Context, name string, arguments map[st
 
 	delete(arguments, "node_id")
 	result, err := s.agentDockHub.Invoke(ctx, nodeID, protocol.OperationToolCall, map[string]any{"tool": name, "arguments": arguments})
-	if err == nil && containsString(node.Capabilities, agentdock.ArtifactReadCapability) {
-		err = s.decorateArtifactToolResult(nodeID, result)
+	if err == nil {
+		bridgeCapabilities, capabilityErr := s.agentDock.BridgeCapabilities(ctx, nodeID)
+		if capabilityErr != nil {
+			if s.logger != nil {
+				s.logger.Warn("读取 AgentDock Bridge 能力失败，保留原始工具结果", "node_id", nodeID, "error", capabilityErr)
+			}
+		} else if containsString(bridgeCapabilities, protocol.ArtifactReadCapability) {
+			if decorateErr := s.decorateArtifactToolResult(nodeID, result); decorateErr != nil && s.logger != nil {
+				s.logger.Warn("生成 Nexus Artifact 下载地址失败，保留原始工具结果", "node_id", nodeID, "error", decorateErr)
+			}
+		}
 	}
 	return gatewayToolResult(name, result, err)
 }

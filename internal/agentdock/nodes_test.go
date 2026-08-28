@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"testing"
 
@@ -53,6 +54,59 @@ func TestPairingCodeIsSingleUseAndStoresNoSecret(t *testing.T) {
 	}
 	if legacyColumns != 0 {
 		t.Fatalf("agentdock_devices retains %d legacy secret/location columns", legacyColumns)
+	}
+}
+
+func TestBridgeCapabilitiesPersistAcrossStoreRestart(t *testing.T) {
+	ctx := t.Context()
+	dbPath := filepath.Join(t.TempDir(), "nexus.db")
+	db, err := core.OpenSQLite(ctx, dbPath, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := core.EnsureSchema(ctx, db); err != nil {
+		t.Fatal(err)
+	}
+	store, err := NewStore(db)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pairing, err := store.CreatePairingCode(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	node, err := store.Pair(ctx, PairInput{Code: pairing.Code, DeviceID: "device_bridge_persist", Name: "DockMini"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.UpdateHello(ctx, node.ID, Hello{
+		DeviceID: node.DeviceID, ProtocolVersion: ConnectionProtocolVersion,
+		BridgeCapabilities: []string{protocol.ArtifactReadCapability}, UIResources: []UIResourceCapability{},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	reopened, err := core.OpenSQLite(ctx, dbPath, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	if err := core.EnsureSchema(ctx, reopened); err != nil {
+		t.Fatal(err)
+	}
+	restartedStore, err := NewStore(reopened)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := restartedStore.BridgeCapabilities(ctx, node.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, []string{protocol.ArtifactReadCapability}) {
+		t.Fatalf("bridge capabilities after restart = %#v", got)
 	}
 }
 
@@ -156,13 +210,18 @@ func TestHelloUpdatesCapabilitiesAndDisabledNodeIsRejected(t *testing.T) {
 	updated, err := store.UpdateHello(t.Context(), node.ID, Hello{
 		DeviceID: "device_12345678", Version: "0.8.0", ProtocolVersion: ConnectionProtocolVersion,
 		OS: "linux", Arch: "amd64", Capabilities: []string{"read_file", "read_file", "exec_command"}, ToolContractHash: "sha256:test",
-		Tools: []ToolDescriptor{{Name: "read_file", InputSchema: map[string]any{"type": "object"}}}, UIResources: []UIResourceCapability{},
+		BridgeCapabilities: []string{protocol.ArtifactReadCapability, protocol.ArtifactReadCapability},
+		Tools:              []ToolDescriptor{{Name: "read_file", InputSchema: map[string]any{"type": "object"}}}, UIResources: []UIResourceCapability{},
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(updated.Capabilities) != 2 || updated.LastSeenAt == nil {
 		t.Fatalf("unexpected hello state: %#v", updated)
+	}
+	bridgeCapabilities, err := store.BridgeCapabilities(t.Context(), node.ID)
+	if err != nil || !reflect.DeepEqual(bridgeCapabilities, []string{protocol.ArtifactReadCapability}) {
+		t.Fatalf("bridge capabilities = %#v err=%v", bridgeCapabilities, err)
 	}
 	descriptors, err := store.ToolDescriptors(t.Context(), node.ID)
 	if err != nil || len(descriptors) != 1 || descriptors[0].Name != "read_file" {

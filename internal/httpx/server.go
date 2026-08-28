@@ -102,6 +102,8 @@ type Server struct {
 	mcpResourcesMu       sync.RWMutex
 	mcpResources         map[string]struct{}
 	artifactSecretMu     sync.Mutex
+	artifactDownloadsMu  sync.Mutex
+	artifactDownloads    map[string]int
 }
 
 type ServerOption func(*Server)
@@ -222,6 +224,9 @@ func (s *Server) requestBoundary(next http.Handler) http.Handler {
 		ctx := context.WithValue(r.Context(), requestIDContextKey{}, requestID)
 		defer func() {
 			if recovered := recover(); recovered != nil {
+				if recovered == http.ErrAbortHandler {
+					panic(recovered)
+				}
 				logger.Error("http handler panic", "request_id", requestID, "method", r.Method, "path", r.URL.Path, "panic", recovered, "stack", string(debug.Stack()))
 				if !tracked.wroteHeader {
 					writeError(tracked, http.StatusInternalServerError, "INTERNAL_ERROR", "internal server error")

@@ -239,6 +239,10 @@ func (s *Store) UpdateHello(ctx context.Context, nodeID string, hello Hello) (No
 	if err != nil {
 		return Node{}, fmt.Errorf("编码 AgentDock 能力: %w", err)
 	}
+	bridgeCapabilities, err := json.Marshal(normalizeCapabilities(hello.BridgeCapabilities))
+	if err != nil {
+		return Node{}, fmt.Errorf("编码 AgentDock Bridge 能力: %w", err)
+	}
 	uiResources, err := validateUIResources(hello.UIResources)
 	if err != nil {
 		return Node{}, err
@@ -275,6 +279,12 @@ func (s *Store) UpdateHello(ctx context.Context, nodeID string, hello Hello) (No
 		nodeID, string(encodedUIResources), now.Format(time.RFC3339Nano))
 	if err != nil {
 		return Node{}, fmt.Errorf("保存 AgentDock UI resource 能力: %w", err)
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO agentdock_bridge_capabilities(node_id, capabilities_json, updated_at)
+		VALUES(?, ?, ?) ON CONFLICT(node_id) DO UPDATE SET capabilities_json = excluded.capabilities_json, updated_at = excluded.updated_at`,
+		nodeID, string(bridgeCapabilities), now.Format(time.RFC3339Nano))
+	if err != nil {
+		return Node{}, fmt.Errorf("保存 AgentDock Bridge 能力: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
 		return Node{}, fmt.Errorf("提交 AgentDock 握手事务: %w", err)
@@ -314,6 +324,22 @@ func (s *Store) UIResources(ctx context.Context, nodeID string) ([]UIResourceCap
 	return resources, nil
 }
 
+func (s *Store) BridgeCapabilities(ctx context.Context, nodeID string) ([]string, error) {
+	var encoded string
+	err := s.db.QueryRowContext(ctx, `SELECT capabilities_json FROM agentdock_bridge_capabilities WHERE node_id = ?`, strings.TrimSpace(nodeID)).Scan(&encoded)
+	if errors.Is(err, sql.ErrNoRows) {
+		return []string{}, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("读取 AgentDock Bridge 能力: %w", err)
+	}
+	var capabilities []string
+	if err := json.Unmarshal([]byte(encoded), &capabilities); err != nil {
+		return nil, fmt.Errorf("解析 AgentDock Bridge 能力: %w", err)
+	}
+	return capabilities, nil
+}
+
 func (s *Store) Touch(ctx context.Context, nodeID string) error {
 	now := s.now().UTC().Format(time.RFC3339Nano)
 	result, err := s.db.ExecContext(ctx, `UPDATE agentdock_devices SET last_seen_at = ?, updated_at = ? WHERE id = ? AND enabled = 1`, now, now, nodeID)
@@ -339,6 +365,9 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM agentdock_ui_resources WHERE node_id = ?`, id); err != nil {
 		return fmt.Errorf("删除 AgentDock UI resource 能力: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM agentdock_bridge_capabilities WHERE node_id = ?`, id); err != nil {
+		return fmt.Errorf("删除 AgentDock Bridge 能力: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM auth_tokens WHERE subject_type = 'device' AND subject_id = ?`, id); err != nil {
 		return fmt.Errorf("删除 AgentDock Device Token: %w", err)

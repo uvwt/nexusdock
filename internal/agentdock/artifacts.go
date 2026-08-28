@@ -5,12 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
-)
 
-const (
-	ArtifactReadCapability = "bridge.artifact.read.v1"
-	OperationArtifactRead  = "artifact.read"
-	MaxArtifactChunkBytes  = 512 << 10
+	protocol "github.com/uvwt/agentdock-protocol"
 )
 
 // ArtifactChunk 是 AgentDock 私有 artifact.read Bridge 操作在 Nexus 边界内的强类型结果。
@@ -32,7 +28,7 @@ type ArtifactChunk struct {
 }
 
 func (h *Hub) ReadArtifactChunk(ctx context.Context, nodeID, artifactID string, offset int64, maxBytes int) (ArtifactChunk, error) {
-	result, err := h.Invoke(ctx, nodeID, OperationArtifactRead, map[string]any{
+	result, err := h.Invoke(ctx, nodeID, protocol.OperationArtifactRead, map[string]any{
 		"artifact_id": artifactID,
 		"offset":      offset,
 		"max_bytes":   maxBytes,

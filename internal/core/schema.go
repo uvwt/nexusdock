@@ -188,6 +188,12 @@ END`,
     updated_at TEXT NOT NULL,
     FOREIGN KEY (node_id) REFERENCES agentdock_devices(id) ON DELETE CASCADE
 )`,
+	`CREATE TABLE IF NOT EXISTS agentdock_bridge_capabilities (
+    node_id TEXT PRIMARY KEY,
+    capabilities_json TEXT NOT NULL DEFAULT '[]',
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (node_id) REFERENCES agentdock_devices(id) ON DELETE CASCADE
+)`,
 	`CREATE TABLE IF NOT EXISTS agentdock_published_tool_contracts (
     tool_name TEXT PRIMARY KEY,
     descriptor_json TEXT NOT NULL,

@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -8,7 +9,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"mime"
 	"net/http"
@@ -19,10 +19,19 @@ import (
 	"strings"
 	"time"
 
+	protocol "github.com/uvwt/agentdock-protocol"
 	"github.com/uvwt/nexusdock/internal/agentdock"
 )
 
-const maxProxiedArtifactBytes = 512 << 20
+const (
+	maxProxiedArtifactBytes               = 512 << 20
+	artifactChunkTimeout                  = 30 * time.Second
+	maxArtifactChunkRequests              = (maxProxiedArtifactBytes + protocol.MaxArtifactChunkBytes - 1) / protocol.MaxArtifactChunkBytes
+	maxConcurrentArtifactDownloadsPerNode = 2
+	// The overall deadline intentionally bounds slow or adversarial nodes even when
+	// every individual chunk remains below artifactChunkTimeout.
+	artifactDownloadTimeout = 30 * time.Minute
+)
 
 func (s *Server) decorateArtifactToolResult(nodeID string, envelope map[string]any) error {
 	if strings.TrimSpace(s.cfg.PublicURL) == "" || envelope == nil {
@@ -84,6 +93,7 @@ func (s *Server) signedArtifactURL(nodeID, artifactID, filename, sha string, exp
 }
 
 func (s *Server) servePublicArtifact(w http.ResponseWriter, r *http.Request) {
+	setArtifactPublicHeaders(w.Header())
 	if s.agentDockHub == nil {
 		http.NotFound(w, r)
 		return
@@ -112,14 +122,20 @@ func (s *Server) servePublicArtifact(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if r.Header.Get("Range") != "" {
-		w.Header().Set("Content-Range", "bytes */*")
-		http.Error(w, http.StatusText(http.StatusRequestedRangeNotSatisfiable), http.StatusRequestedRangeNotSatisfiable)
-		return
+	if r.Method == http.MethodGet {
+		if !s.acquireArtifactDownload(nodeID) {
+			w.Header().Set("Retry-After", "5")
+			writeError(w, http.StatusTooManyRequests, "ARTIFACT_DOWNLOAD_BUSY", "Too many concurrent Artifact downloads for this node")
+			return
+		}
+		defer s.releaseArtifactDownload(nodeID)
 	}
 
+	downloadCtx, cancel := context.WithTimeout(r.Context(), artifactDownloadTimeout)
+	defer cancel()
+
 	if r.Method == http.MethodHead {
-		chunk, readErr := s.agentDockHub.ReadArtifactChunk(r.Context(), nodeID, artifactID, 0, 0)
+		chunk, readErr := s.readArtifactChunk(downloadCtx, nodeID, artifactID, 0, 0)
 		if readErr != nil {
 			s.writeArtifactBridgeError(w, readErr)
 			return
@@ -128,12 +144,16 @@ func (s *Server) servePublicArtifact(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadGateway, "ARTIFACT_NODE_RESPONSE_INVALID", err.Error())
 			return
 		}
+		if chunk.Size > maxProxiedArtifactBytes {
+			writeError(w, http.StatusRequestEntityTooLarge, "ARTIFACT_TOO_LARGE", "Artifact exceeds the NexusDock proxy limit")
+			return
+		}
 		setArtifactHeaders(w.Header(), chunk)
 		w.WriteHeader(http.StatusOK)
 		return
 	}
 
-	first, err := s.agentDockHub.ReadArtifactChunk(r.Context(), nodeID, artifactID, 0, agentdock.MaxArtifactChunkBytes)
+	first, err := s.readArtifactChunk(downloadCtx, nodeID, artifactID, 0, protocol.MaxArtifactChunkBytes)
 	if err != nil {
 		s.writeArtifactBridgeError(w, err)
 		return
@@ -146,47 +166,84 @@ func (s *Server) servePublicArtifact(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusRequestEntityTooLarge, "ARTIFACT_TOO_LARGE", "Artifact exceeds the NexusDock proxy limit")
 		return
 	}
+	firstData, err := decodeArtifactChunkData(first, 0)
+	if err != nil {
+		writeError(w, http.StatusBadGateway, "ARTIFACT_NODE_RESPONSE_INVALID", err.Error())
+		return
+	}
 	setArtifactHeaders(w.Header(), first)
 	w.WriteHeader(http.StatusOK)
 
 	hasher := sha256.New()
-	offset := int64(0)
+	_, _ = hasher.Write(firstData)
+	pending := firstData
+	offset := first.NextOffset
 	chunk := first
-	for {
-		data, decodeErr := base64.StdEncoding.DecodeString(chunk.DataBase64)
-		if decodeErr != nil || chunk.NextOffset != offset+int64(len(data)) || len(data) > agentdock.MaxArtifactChunkBytes {
-			s.artifactLogger().Error("invalid AgentDock Artifact chunk", "node_id", nodeID, "artifact_id", artifactID, "offset", offset)
-			return
+	chunkRequests := 1
+	for !chunk.EOF {
+		if chunkRequests >= maxArtifactChunkRequests {
+			s.artifactLogger().Error("AgentDock Artifact stream exceeded chunk request limit", "node_id", nodeID, "artifact_id", artifactID, "requests", chunkRequests)
+			panic(http.ErrAbortHandler)
 		}
-		if len(data) > 0 {
-			if _, err := io.MultiWriter(w, hasher).Write(data); err != nil {
-				return
-			}
-		}
-		offset = chunk.NextOffset
-		if chunk.EOF {
-			break
-		}
-		chunk, err = s.agentDockHub.ReadArtifactChunk(r.Context(), nodeID, artifactID, offset, agentdock.MaxArtifactChunkBytes)
+		chunk, err = s.readArtifactChunk(downloadCtx, nodeID, artifactID, offset, protocol.MaxArtifactChunkBytes)
+		chunkRequests++
 		if err != nil {
 			s.artifactLogger().Error("read AgentDock Artifact chunk", "node_id", nodeID, "artifact_id", artifactID, "offset", offset, "error", err)
-			return
+			panic(http.ErrAbortHandler)
+		}
+		if chunk.Size != first.Size {
+			s.artifactLogger().Error("AgentDock Artifact size changed between chunks", "node_id", nodeID, "artifact_id", artifactID, "offset", offset, "first_size", first.Size, "chunk_size", chunk.Size)
+			panic(http.ErrAbortHandler)
 		}
 		if err := validateArtifactChunk(chunk, artifactID, filename, sha, expires, offset, false); err != nil {
 			s.artifactLogger().Error("validate AgentDock Artifact chunk", "node_id", nodeID, "artifact_id", artifactID, "offset", offset, "error", err)
-			return
+			panic(http.ErrAbortHandler)
 		}
+		data, decodeErr := decodeArtifactChunkData(chunk, offset)
+		if decodeErr != nil {
+			s.artifactLogger().Error("decode AgentDock Artifact chunk", "node_id", nodeID, "artifact_id", artifactID, "offset", offset, "error", decodeErr)
+			panic(http.ErrAbortHandler)
+		}
+		_, _ = hasher.Write(data)
+		if len(pending) > 0 {
+			if _, err := w.Write(pending); err != nil {
+				return
+			}
+		}
+		pending = data
+		offset = chunk.NextOffset
 	}
 	if offset != first.Size || hex.EncodeToString(hasher.Sum(nil)) != sha {
 		s.artifactLogger().Error("AgentDock Artifact stream checksum mismatch", "node_id", nodeID, "artifact_id", artifactID, "bytes", offset)
+		panic(http.ErrAbortHandler)
 	}
+	if len(pending) > 0 {
+		_, _ = w.Write(pending)
+	}
+}
+
+func (s *Server) readArtifactChunk(ctx context.Context, nodeID, artifactID string, offset int64, maxBytes int) (agentdock.ArtifactChunk, error) {
+	chunkCtx, cancel := context.WithTimeout(ctx, artifactChunkTimeout)
+	defer cancel()
+	return s.agentDockHub.ReadArtifactChunk(chunkCtx, nodeID, artifactID, offset, maxBytes)
+}
+
+func decodeArtifactChunkData(chunk agentdock.ArtifactChunk, offset int64) ([]byte, error) {
+	data, err := base64.StdEncoding.DecodeString(chunk.DataBase64)
+	if err != nil {
+		return nil, errors.New("AgentDock Artifact chunk payload is not valid base64")
+	}
+	if len(data) > protocol.MaxArtifactChunkBytes || chunk.NextOffset != offset+int64(len(data)) {
+		return nil, errors.New("AgentDock Artifact chunk payload length does not match its offsets")
+	}
+	return data, nil
 }
 
 func validateArtifactChunk(chunk agentdock.ArtifactChunk, artifactID, filename, sha string, expires, offset int64, metadataOnly bool) error {
 	if chunk.ArtifactID != artifactID || chunk.Filename != filename || strings.ToLower(chunk.SHA256) != sha || chunk.ExpiresAt.Unix() != expires {
 		return errors.New("AgentDock Artifact metadata does not match the signed URL")
 	}
-	if chunk.Size < 0 || chunk.Size > maxProxiedArtifactBytes || chunk.Offset != offset {
+	if chunk.Size < 0 || chunk.Offset != offset {
 		return errors.New("AgentDock Artifact size or offset is invalid")
 	}
 	if chunk.NextOffset < chunk.Offset || chunk.NextOffset > chunk.Size {
@@ -212,24 +269,54 @@ func (s *Server) artifactLogger() *slog.Logger {
 }
 
 func setArtifactHeaders(headers http.Header, chunk agentdock.ArtifactChunk) {
+	setArtifactPublicHeaders(headers)
 	mimeType := strings.TrimSpace(chunk.MIMEType)
 	if mimeType == "" {
 		mimeType = "application/octet-stream"
 	}
 	headers.Set("Content-Type", mimeType)
 	headers.Set("Content-Length", strconv.FormatInt(chunk.Size, 10))
+	headers.Set("Accept-Ranges", "none")
 	headers.Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": chunk.Filename}))
+	headers.Set("Content-Security-Policy", "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
+}
+
+func setArtifactPublicHeaders(headers http.Header) {
 	headers.Set("Cache-Control", "private, no-store")
 	headers.Set("Access-Control-Allow-Origin", "*")
 	headers.Set("Cross-Origin-Resource-Policy", "cross-origin")
-	headers.Set("Content-Security-Policy", "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")
 	headers.Set("X-Content-Type-Options", "nosniff")
+}
+
+func (s *Server) acquireArtifactDownload(nodeID string) bool {
+	s.artifactDownloadsMu.Lock()
+	defer s.artifactDownloadsMu.Unlock()
+	if s.artifactDownloads == nil {
+		s.artifactDownloads = make(map[string]int)
+	}
+	if s.artifactDownloads[nodeID] >= maxConcurrentArtifactDownloadsPerNode {
+		return false
+	}
+	s.artifactDownloads[nodeID]++
+	return true
+}
+
+func (s *Server) releaseArtifactDownload(nodeID string) {
+	s.artifactDownloadsMu.Lock()
+	defer s.artifactDownloadsMu.Unlock()
+	if s.artifactDownloads[nodeID] <= 1 {
+		delete(s.artifactDownloads, nodeID)
+		return
+	}
+	s.artifactDownloads[nodeID]--
 }
 
 func (s *Server) writeArtifactBridgeError(w http.ResponseWriter, err error) {
 	status := http.StatusBadGateway
 	code := "ARTIFACT_PROXY_FAILED"
-	if errors.Is(err, agentdock.ErrNodeOffline) || errors.Is(err, agentdock.ErrNodeDisconnected) {
+	if errors.Is(err, context.DeadlineExceeded) {
+		status = http.StatusGatewayTimeout
+	} else if errors.Is(err, agentdock.ErrNodeOffline) || errors.Is(err, agentdock.ErrNodeDisconnected) {
 		status = http.StatusServiceUnavailable
 		code = "ARTIFACT_NODE_OFFLINE"
 	}
@@ -244,41 +331,82 @@ func (s *Server) artifactSigningSecret() ([]byte, error) {
 		return nil, errors.New("NEXUS_DATA_DIR is required for Artifact URL signing")
 	}
 	secretPath := filepath.Join(dataDir, "secrets", "artifact-url-secret")
-	if secret, err := os.ReadFile(secretPath); err == nil {
-		if len(secret) != sha256.Size {
-			return nil, errors.New("NexusDock Artifact signing secret has an invalid size")
-		}
-		return secret, nil
-	} else if !os.IsNotExist(err) {
-		return nil, fmt.Errorf("read NexusDock Artifact signing secret: %w", err)
-	}
-	if err := os.MkdirAll(filepath.Dir(secretPath), 0o700); err != nil {
+	secretDir := filepath.Dir(secretPath)
+	if err := os.MkdirAll(secretDir, 0o700); err != nil {
 		return nil, fmt.Errorf("create NexusDock secrets directory: %w", err)
 	}
+	if err := os.Chmod(secretDir, 0o700); err != nil {
+		return nil, fmt.Errorf("secure NexusDock secrets directory: %w", err)
+	}
+	if secret, err := readArtifactSigningSecret(secretPath); err == nil {
+		return secret, nil
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+
 	secret := make([]byte, sha256.Size)
 	if _, err := rand.Read(secret); err != nil {
 		return nil, fmt.Errorf("generate NexusDock Artifact signing secret: %w", err)
 	}
-	file, err := os.OpenFile(secretPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	tmp, err := os.CreateTemp(secretDir, ".artifact-url-secret-*")
 	if err != nil {
-		if os.IsExist(err) {
-			stored, readErr := os.ReadFile(secretPath)
-			if readErr == nil && len(stored) == sha256.Size {
-				return stored, nil
-			}
-		}
-		return nil, fmt.Errorf("create NexusDock Artifact signing secret: %w", err)
+		return nil, fmt.Errorf("create NexusDock Artifact signing secret temp file: %w", err)
 	}
-	if _, err := file.Write(secret); err != nil {
-		_ = file.Close()
-		_ = os.Remove(secretPath)
+	tmpPath := tmp.Name()
+	defer os.Remove(tmpPath)
+	if err := tmp.Chmod(0o600); err != nil {
+		_ = tmp.Close()
+		return nil, fmt.Errorf("secure NexusDock Artifact signing secret temp file: %w", err)
+	}
+	if _, err := tmp.WriteString(hex.EncodeToString(secret) + "\n"); err != nil {
+		_ = tmp.Close()
 		return nil, fmt.Errorf("write NexusDock Artifact signing secret: %w", err)
 	}
-	if err := file.Close(); err != nil {
-		_ = os.Remove(secretPath)
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return nil, fmt.Errorf("sync NexusDock Artifact signing secret: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
 		return nil, fmt.Errorf("close NexusDock Artifact signing secret: %w", err)
 	}
+	if err := os.Link(tmpPath, secretPath); err == nil {
+		syncDirectoryBestEffort(secretDir)
+		return secret, nil
+	} else if !os.IsExist(err) {
+		return nil, fmt.Errorf("publish NexusDock Artifact signing secret: %w", err)
+	}
+	return readArtifactSigningSecret(secretPath)
+}
+
+func readArtifactSigningSecret(path string) ([]byte, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return nil, errors.New("NexusDock Artifact signing secret must not be a symbolic link")
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read NexusDock Artifact signing secret: %w", err)
+	}
+	secret, err := hex.DecodeString(strings.TrimSpace(string(data)))
+	if err != nil || len(secret) != sha256.Size {
+		return nil, errors.New("NexusDock Artifact signing secret has an invalid format")
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		return nil, fmt.Errorf("secure NexusDock Artifact signing secret: %w", err)
+	}
 	return secret, nil
+}
+
+func syncDirectoryBestEffort(path string) {
+	dir, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	_ = dir.Sync()
+	_ = dir.Close()
 }
 
 func signArtifactURL(secret []byte, nodeID, artifactID, filename, sha string, expires int64) string {
