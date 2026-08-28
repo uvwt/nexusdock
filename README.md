@@ -14,6 +14,7 @@
 - **统一管理 AgentDock 节点**：查看多台设备是否在线，以及各节点的任务、Skill、动态 MCP 和运行状态。
 - **集中使用 Recall**：在 Web 中浏览、搜索、编辑 Markdown / 文本记忆，管理经验卡片、本地 Git 历史和向量召回。
 - **统一 MCP 入口**：客户端只连接 NexusDock `/mcp`，中心工具只出现一次，设备工具通过 `node_id` 路由到具体 AgentDock。
+- **回传节点 Artifact**：节点发布文件后由 NexusDock 返回临时签名 URL，并通过现有出站 WebSocket 分块代理下载，无需暴露节点端口。
 - **管理工作流模板**：集中维护和匹配可复用的任务流程。
 - **安全配对设备**：AgentDock 主动连接 NexusDock，不要求每台设备暴露公网入口。
 - **桌面与手机访问**：Web 控制台针对桌面和移动端都做了适配。
@@ -234,6 +235,7 @@ nexus-data/
   nexus.db
   secrets/
     mcp-access-token
+    artifact-url-secret
 
 recall/
   .git/
@@ -244,6 +246,8 @@ recall/
 - `recall`：长期记忆与本地 Git 历史。
 
 生产环境至少应同时备份这两个目录。可以使用宿主机快照、文件备份或自己的 Git 备份流程。
+
+Artifact 下载 URL 依赖 `NEXUS_PUBLIC_URL`，且下载时目标 AgentDock 节点必须在线。URL 到期后会返回 `410 Gone`；NexusDock 不持久化节点文件内容。
 
 ## 常用配置
 

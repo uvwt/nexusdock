@@ -188,6 +188,9 @@ func (s *Server) callNodeTool(ctx context.Context, name string, arguments map[st
 
 	delete(arguments, "node_id")
 	result, err := s.agentDockHub.Invoke(ctx, nodeID, protocol.OperationToolCall, map[string]any{"tool": name, "arguments": arguments})
+	if err == nil && containsString(node.Capabilities, agentdock.ArtifactReadCapability) {
+		err = s.decorateArtifactToolResult(nodeID, result)
+	}
 	return gatewayToolResult(name, result, err)
 }
 

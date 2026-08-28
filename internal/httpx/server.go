@@ -101,6 +101,7 @@ type Server struct {
 	mcpTools             map[string]publishedNodeTool
 	mcpResourcesMu       sync.RWMutex
 	mcpResources         map[string]struct{}
+	artifactSecretMu     sync.Mutex
 }
 
 type ServerOption func(*Server)
@@ -160,6 +161,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /", uiProtected(s.uiIndex))
 	mux.HandleFunc("GET /ui/", uiProtected(s.uiIndex))
 	mux.HandleFunc("GET /health", s.health)
+	mux.HandleFunc("GET /artifacts/public/{nodeID}/{artifactID}/{filename}", s.servePublicArtifact)
+	mux.HandleFunc("HEAD /artifacts/public/{nodeID}/{artifactID}/{filename}", s.servePublicArtifact)
 	if s.mcpHandler != nil {
 		gateway := s.withMCPAccess(s.mcpHandler.ServeHTTP)
 		mux.HandleFunc("GET /mcp", gateway)
