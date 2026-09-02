@@ -17,6 +17,19 @@ func TestRequireAuthNeedsAPIToken(t *testing.T) {
 	}
 }
 
+func TestFromEnvMCPAppsEnabledDefaultsAndOverride(t *testing.T) {
+	cfg := FromEnv()
+	if !cfg.MCPAppsEnabled {
+		t.Fatal("MCPAppsEnabled = false, want true by default")
+	}
+
+	t.Setenv("NEXUS_MCP_APPS_ENABLED", "false")
+	cfg = FromEnv()
+	if cfg.MCPAppsEnabled {
+		t.Fatal("MCPAppsEnabled = true, want false from environment override")
+	}
+}
+
 func TestFromEnvUsesNexusDataDirAndRecallRepoDir(t *testing.T) {
 	t.Setenv("NEXUS_DATA_DIR", "/tmp/nexus-data")
 	t.Setenv("RECALL_REPO_DIR", "/tmp/recall-repo")

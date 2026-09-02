@@ -540,6 +540,22 @@ def build_schemas() -> dict[str, dict[str, Any]]:
         },
         ("ok", "token"),
     )
+    schemas["MCPSettingsResponse"] = obj(
+        "Nexus MCP 接入设置。管理员接口会同时返回固定访问 Token 与 Apps UI 开关状态。",
+        {
+            "ok": scalar("boolean", "请求是否成功。"),
+            "token": scalar("string", "用于 Nexus /mcp 的 Bearer Token。", minLength=64, maxLength=64),
+            "mcp_apps_enabled": scalar("boolean", "是否向 MCP 客户端发布 MCP Apps UI 元数据与资源。"),
+            "persisted": scalar("boolean", "是否已保存 SQLite 覆盖配置；false 表示当前来自环境变量或默认值。"),
+            "updated_at": scalar("string", "最近一次持久化更新时间。", format="date-time"),
+        },
+        ("ok", "token", "mcp_apps_enabled", "persisted"),
+    )
+    schemas["MCPSettingsUpdateRequest"] = obj(
+        "更新 Nexus MCP Apps UI 开关。",
+        {"mcp_apps_enabled": scalar("boolean", "是否启用 MCP Apps UI。")},
+        ("mcp_apps_enabled",),
+    )
     schemas["RuntimeAIConnectionTestResponse"] = obj(
         "Stage 3 或向量服务的脱敏连接测试结果。",
         {
@@ -931,6 +947,15 @@ def build_openapi(schemas: dict[str, Any]) -> dict[str, Any]:
                 "保存并立即应用 Stage 3 与向量检索配置",
                 request=body(ref("RuntimeAISettingsUpdateRequest")),
                 success=ok(ref("RuntimeAISettingsResponse")),
+            ),
+        },
+        "/v1/settings/mcp": {
+            "get": operation("getMCPSettings", "读取 Nexus MCP 接入设置", success=ok(ref("MCPSettingsResponse"))),
+            "put": operation(
+                "updateMCPSettings",
+                "更新 Nexus MCP Apps UI 开关",
+                request=body(ref("MCPSettingsUpdateRequest")),
+                success=ok(ref("MCPSettingsResponse")),
             ),
         },
         "/v1/settings/mcp-token": {

@@ -238,7 +238,7 @@ func (s *Server) loadPublishedNodeTools(ctx context.Context) error {
 		published := publishedNodeTool{
 			Descriptor: contract.Descriptor, ContractHash: hash, AcceptedSemanticHashes: acceptedHashes,
 		}
-		s.mcpServer.AddTool(nodeMCPTool(contract.Descriptor), s.nodeToolHandler(contract.ToolName))
+		s.mcpServer.AddTool(nodeMCPToolWithApps(contract.Descriptor, s.mcpAppsEnabled()), s.nodeToolHandler(contract.ToolName))
 		s.mcpTools[contract.ToolName] = published
 	}
 	return nil
@@ -339,7 +339,7 @@ func (s *Server) reconcileFleetNodeTool(name string) error {
 		return err
 	}
 	if s.mcpServer != nil && descriptorChanged {
-		s.mcpServer.AddTool(nodeMCPTool(candidate.Descriptor), s.nodeToolHandler(name))
+		s.mcpServer.AddTool(nodeMCPToolWithApps(candidate.Descriptor, s.mcpAppsEnabled()), s.nodeToolHandler(name))
 	}
 	s.mcpTools[name] = candidate
 	s.mcpToolsMu.Unlock()

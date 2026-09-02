@@ -33,21 +33,7 @@ func (s *Server) initializeMCPGateway() {
 			Instructions: nexusServerInstructions,
 		},
 	)
-	for _, definition := range nexusToolDefinitions() {
-		definition := definition
-		s.mcpServer.AddTool(definition, func(ctx context.Context, request *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
-			arguments, err := toolArguments(request)
-			if err != nil {
-				return nil, err
-			}
-			result, err := s.callNexusTool(ctx, definition.Name, arguments)
-			response, responseErr := gatewayToolResult(definition.Name, result, err)
-			if responseErr == nil && response != nil {
-				response.Meta = centralToolResultMeta(definition.Name, arguments)
-			}
-			return response, responseErr
-		})
-	}
+	s.registerCentralTools()
 	if s.agentDockHub != nil {
 		s.agentDockHub.SetHelloHandler(s.registerNodeTools)
 	}
@@ -72,6 +58,62 @@ func (s *Server) initializeMCPGateway() {
 		func(*http.Request) *mcpsdk.Server { return s.mcpServer },
 		&mcpsdk.StreamableHTTPOptions{Stateless: true, JSONResponse: true, MaxRequestBodyBytes: 1 << 20, PropagateRequestCancellation: true},
 	)
+}
+
+func (s *Server) registerCentralTools() {
+	if s == nil || s.mcpServer == nil {
+		return
+	}
+	for _, definition := range nexusToolDefinitionsWithApps(s.mcpAppsEnabled()) {
+		definition := definition
+		s.mcpServer.AddTool(definition, func(ctx context.Context, request *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
+			arguments, err := toolArguments(request)
+			if err != nil {
+				return nil, err
+			}
+			result, err := s.callNexusTool(ctx, definition.Name, arguments)
+			response, responseErr := s.gatewayToolResult(definition.Name, result, err)
+			if responseErr == nil && response != nil {
+				response.Meta = centralToolResultMetaWithApps(definition.Name, arguments, s.mcpAppsEnabled())
+			}
+			return response, responseErr
+		})
+	}
+}
+
+func (s *Server) mcpAppsEnabled() bool {
+	if s == nil {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.cfg.MCPAppsEnabled
+}
+
+func (s *Server) setMCPAppsEnabled(enabled bool) {
+	if s == nil {
+		return
+	}
+	s.mu.Lock()
+	changed := s.cfg.MCPAppsEnabled != enabled
+	s.cfg.MCPAppsEnabled = enabled
+	s.mu.Unlock()
+	if !changed || s.mcpServer == nil {
+		return
+	}
+
+	// MCP Apps UI 只属于展示层；刷新对外工具和资源，不改节点持久化 descriptor。
+	s.registerCentralTools()
+	s.mcpToolsMu.RLock()
+	published := make([]publishedNodeTool, 0, len(s.mcpTools))
+	for _, tool := range s.mcpTools {
+		published = append(published, tool)
+	}
+	s.mcpToolsMu.RUnlock()
+	for _, tool := range published {
+		s.mcpServer.AddTool(nodeMCPToolWithApps(tool.Descriptor, enabled), s.nodeToolHandler(tool.Descriptor.Name))
+	}
+	s.syncMCPAppResources()
 }
 
 func (s *Server) registerNodeTools(node agentdock.Node, hello agentdock.Hello) {
@@ -106,7 +148,7 @@ func (s *Server) registerNodeTools(node agentdock.Node, hello agentdock.Hello) {
 				}
 				continue
 			}
-			s.mcpServer.AddTool(nodeMCPTool(descriptor), s.nodeToolHandler(name))
+			s.mcpServer.AddTool(nodeMCPToolWithApps(descriptor, s.mcpAppsEnabled()), s.nodeToolHandler(name))
 			s.mcpTools[name] = candidate
 		}
 		s.mcpToolsMu.Unlock()
@@ -133,6 +175,10 @@ func (s *Server) registerNodeTools(node agentdock.Node, hello agentdock.Hello) {
 }
 
 func nodeMCPTool(descriptor agentdock.ToolDescriptor) *mcpsdk.Tool {
+	return nodeMCPToolWithApps(descriptor, true)
+}
+
+func nodeMCPToolWithApps(descriptor agentdock.ToolDescriptor, mcpAppsEnabled bool) *mcpsdk.Tool {
 	tool := &mcpsdk.Tool{
 		Name: descriptor.Name, Title: descriptor.Title, Description: descriptor.Description,
 		InputSchema: nodeInputSchema(descriptor.InputSchema), OutputSchema: descriptor.OutputSchema,
@@ -145,7 +191,16 @@ func nodeMCPTool(descriptor agentdock.ToolDescriptor) *mcpsdk.Tool {
 		}
 	}
 	if len(descriptor.Meta) > 0 {
-		tool.Meta = mcpsdk.Meta(descriptor.Meta)
+		meta := make(mcpsdk.Meta, len(descriptor.Meta))
+		for key, value := range descriptor.Meta {
+			if key == "ui" && !mcpAppsEnabled {
+				continue
+			}
+			meta[key] = value
+		}
+		if len(meta) > 0 {
+			tool.Meta = meta
+		}
 	}
 	return tool
 }
@@ -164,26 +219,26 @@ func (s *Server) callNodeTool(ctx context.Context, name string, arguments map[st
 	nodeID, _ := arguments["node_id"].(string)
 	nodeID = strings.TrimSpace(nodeID)
 	if nodeID == "" {
-		return gatewayToolResult(name, nil, errors.New("node_id is required"))
+		return s.gatewayToolResult(name, nil, errors.New("node_id is required"))
 	}
 	node, err := s.agentDock.Get(ctx, nodeID)
 	if err != nil {
-		return gatewayToolResult(name, nil, err)
+		return s.gatewayToolResult(name, nil, err)
 	}
 	if !containsString(node.Capabilities, name) {
-		return gatewayToolResult(name, nil, fmt.Errorf("AgentDock node %s does not provide tool %s", nodeID, name))
+		return s.gatewayToolResult(name, nil, fmt.Errorf("AgentDock node %s does not provide tool %s", nodeID, name))
 	}
 
 	mismatch, err := s.nodeToolContractMismatch(ctx, node, name)
 	if err != nil {
-		return gatewayToolResult(name, nil, err)
+		return s.gatewayToolResult(name, nil, err)
 	}
 	if mismatch != nil {
 		details, encodeErr := asMap(mismatch)
 		if encodeErr != nil {
 			return nil, encodeErr
 		}
-		return gatewayToolResult(name, details, errors.New(mismatch.Message))
+		return s.gatewayToolResult(name, details, errors.New(mismatch.Message))
 	}
 
 	delete(arguments, "node_id")
@@ -200,7 +255,7 @@ func (s *Server) callNodeTool(ctx context.Context, name string, arguments map[st
 			}
 		}
 	}
-	return gatewayToolResult(name, result, err)
+	return s.gatewayToolResult(name, result, err)
 }
 
 func containsString(values []string, target string) bool {
@@ -287,6 +342,18 @@ func gatewayToolResult(name string, result map[string]any, err error) (*mcpsdk.C
 		return nil, decodeErr
 	}
 	return &response, nil
+}
+
+func (s *Server) gatewayToolResult(name string, result map[string]any, err error) (*mcpsdk.CallToolResult, error) {
+	response, responseErr := gatewayToolResult(name, result, err)
+	if responseErr != nil || response == nil || s.mcpAppsEnabled() || response.Meta == nil {
+		return response, responseErr
+	}
+	delete(response.Meta, "ui")
+	if len(response.Meta) == 0 {
+		response.Meta = nil
+	}
+	return response, nil
 }
 
 func prettyJSON(value any) string {
@@ -393,7 +460,11 @@ func (s *Server) callNexusTool(ctx context.Context, name string, args map[string
 }
 
 func centralToolResultMeta(name string, args map[string]any) mcpsdk.Meta {
-	if name == "workflow_template_manage" && strings.EqualFold(stringArgument(args, "action"), "match") {
+	return centralToolResultMetaWithApps(name, args, true)
+}
+
+func centralToolResultMetaWithApps(name string, args map[string]any, mcpAppsEnabled bool) mcpsdk.Meta {
+	if mcpAppsEnabled && name == "workflow_template_manage" && strings.EqualFold(stringArgument(args, "action"), "match") {
 		return centralToolUIResourceMeta(protocol.WorkflowUIResourceURI)
 	}
 	return nil

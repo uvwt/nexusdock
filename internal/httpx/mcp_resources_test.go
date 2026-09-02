@@ -36,7 +36,7 @@ func TestSyncMCPAppResourcesPublishesAdvertisedUIResources(t *testing.T) {
 
 	sdk := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "test", Version: "1"}, nil)
 	server := &Server{
-		cfg: config.Config{PublicURL: domain}, agentDock: store, mcpServer: sdk,
+		cfg: config.Config{PublicURL: domain, MCPAppsEnabled: true}, agentDock: store, mcpServer: sdk,
 		mcpResources: make(map[string]struct{}),
 	}
 	server.syncMCPAppResources()
@@ -81,6 +81,48 @@ func TestSyncMCPAppResourcesPublishesAdvertisedUIResources(t *testing.T) {
 	}
 }
 
+func TestMCPAppsToggleRemovesRelayButKeepsPersistedCapabilities(t *testing.T) {
+	store := newHTTPTestAgentDockStore(t)
+	descriptor := agentdock.ToolDescriptor{Name: "file_edit", InputSchema: map[string]any{"type": "object"}}
+	node := pairHTTPTestNode(t, store, "device_resource_toggle", "DockMini", "2.0.0", descriptor)
+	capability := agentdock.UIResourceCapability{
+		URI: protocol.FileChangeUIResourceURI, Contract: protocol.FileChangeUIContract, MIMEType: protocol.MCPAppMIMEType,
+	}
+	if _, err := store.UpdateHello(t.Context(), node.ID, agentdock.Hello{
+		DeviceID: node.DeviceID, ProtocolVersion: agentdock.ConnectionProtocolVersion,
+		Tools: []agentdock.ToolDescriptor{descriptor}, UIResources: []agentdock.UIResourceCapability{capability},
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	sdk := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "toggle-test", Version: "1"}, nil)
+	server := &Server{
+		cfg: config.Config{MCPAppsEnabled: true}, agentDock: store, mcpServer: sdk,
+		mcpTools: make(map[string]publishedNodeTool), mcpResources: make(map[string]struct{}),
+	}
+	server.syncMCPAppResources()
+	if _, ok := server.mcpResources[capability.URI]; !ok {
+		t.Fatalf("resource %s was not published before toggle", capability.URI)
+	}
+
+	server.setMCPAppsEnabled(false)
+	if len(server.mcpResources) != 0 {
+		t.Fatalf("resources were not removed after disabling MCP Apps UI: %#v", server.mcpResources)
+	}
+	persisted, err := store.UIResources(t.Context(), node.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(persisted) != 1 || persisted[0] != capability {
+		t.Fatalf("toggle mutated persisted node capability: %#v", persisted)
+	}
+
+	server.setMCPAppsEnabled(true)
+	if _, ok := server.mcpResources[capability.URI]; !ok {
+		t.Fatalf("resource %s was not restored after enabling MCP Apps UI", capability.URI)
+	}
+}
+
 func TestPublishedMCPAppResourcesRecoverFromPersistedCapabilities(t *testing.T) {
 	store := newHTTPTestAgentDockStore(t)
 	descriptor := agentdock.ToolDescriptor{Name: "read_file", InputSchema: map[string]any{"type": "object"}}
@@ -97,7 +139,7 @@ func TestPublishedMCPAppResourcesRecoverFromPersistedCapabilities(t *testing.T) 
 	}
 
 	// A new Server has no in-memory tool/provider state; its resource catalog must recover solely from persisted ui_resources.
-	restarted := &Server{agentDock: store}
+	restarted := &Server{cfg: config.Config{MCPAppsEnabled: true}, agentDock: store}
 	resources, err := restarted.publishedMCPAppResourceURIs(t.Context())
 	if err != nil {
 		t.Fatal(err)
