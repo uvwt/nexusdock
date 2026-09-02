@@ -92,6 +92,7 @@ type Server struct {
 	oauthRegisterLimiter *fixedWindowLimiter
 	embedding            *recall.EmbeddingService
 	settings             *settings.Store
+	mcpSettings          *settings.MCPStore
 	mcpToken             *auth.MCPTokenStore
 	stage3Wake           chan struct{}
 	mcpServer            *mcpsdk.Server
@@ -129,6 +130,10 @@ func WithEmbeddingService(service *recall.EmbeddingService) ServerOption {
 
 func WithRuntimeSettings(store *settings.Store) ServerOption {
 	return func(server *Server) { server.settings = store }
+}
+
+func WithMCPSettings(store *settings.MCPStore) ServerOption {
+	return func(server *Server) { server.mcpSettings = store }
 }
 
 func WithPrivateNotes(store *privatenotes.Store) ServerOption {
@@ -174,6 +179,8 @@ func (s *Server) Handler() http.Handler {
 	s.registerOAuthRoutes(mux)
 	mux.HandleFunc("GET /v1/system/status", protected(s.systemStatus))
 	mux.HandleFunc("GET /v1/settings/ai", protected(s.getRuntimeAISettings))
+	mux.HandleFunc("GET /v1/settings/mcp", protected(s.getMCPSettings))
+	mux.HandleFunc("PUT /v1/settings/mcp", protected(s.updateMCPSettings))
 	mux.HandleFunc("GET /v1/settings/mcp-token", protected(s.getMCPAccessToken))
 	mux.HandleFunc("POST /v1/settings/mcp-token/reset", protected(s.resetMCPAccessToken))
 	mux.HandleFunc("PUT /v1/settings/ai", protected(s.updateRuntimeAISettings))

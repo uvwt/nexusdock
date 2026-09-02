@@ -897,6 +897,16 @@ summary::-webkit-details-marker { display: none; }
 .mcp-access-value input { min-width: 0; width: 100%; height: 38px; padding: 0 10px; border: 1px solid #cfcfcf; border-radius: 5px; background: #fafafa; color: #222; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; outline: 0; }
 .mcp-access-value input:focus { border-color: #777; background: #fff; }
 .mcp-token-icon-button { width: 34px; padding: 0; justify-content: center; }
+.mcp-apps-toggle { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px; align-items: center; cursor: pointer; }
+.mcp-apps-toggle input { appearance: none; width: 34px; height: 20px; margin: 0; position: relative; border: 1px solid #c4c4c4; border-radius: 999px; background: #dedede; cursor: pointer; }
+.mcp-apps-toggle input::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: transform .14s ease; }
+.mcp-apps-toggle input:checked { border-color: #171717; background: #171717; }
+.mcp-apps-toggle input:checked::after { transform: translateX(14px); }
+.mcp-apps-toggle input:disabled { cursor: wait; opacity: .6; }
+.mcp-apps-toggle strong,
+.mcp-apps-toggle small { display: block; }
+.mcp-apps-toggle strong { color: #222; font-size: 12px; }
+.mcp-apps-toggle small { margin-top: 3px; color: var(--nx-muted); font-size: 10.5px; line-height: 1.45; }
 .mcp-access-footer { padding: 12px 17px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border-top: 1px solid var(--nx-line); background: #fafafa; }
 .mcp-access-footer > div { min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; color: #555; }
 .mcp-access-footer strong,

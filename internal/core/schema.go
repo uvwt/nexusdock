@@ -207,6 +207,11 @@ END`,
     PRIMARY KEY (tool_name, semantic_hash),
     FOREIGN KEY (tool_name) REFERENCES agentdock_published_tool_contracts(tool_name) ON DELETE CASCADE
 )`,
+	`CREATE TABLE IF NOT EXISTS mcp_settings (
+    singleton_id INTEGER PRIMARY KEY CHECK (singleton_id = 1),
+    mcp_apps_enabled INTEGER NOT NULL DEFAULT 1 CHECK (mcp_apps_enabled IN (0, 1)),
+    updated_at TEXT NOT NULL
+)`,
 	`CREATE INDEX IF NOT EXISTS idx_agentdock_pairing_codes_active
     ON agentdock_pairing_codes(code_hash, used_at, expires_at)`,
 	`CREATE TABLE IF NOT EXISTS runtime_ai_settings (

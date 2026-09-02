@@ -1,11 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Cable, Copy, Eye, EyeOff, RefreshCw, RotateCcw, ShieldCheck } from 'lucide-react';
+import { AppWindow, Cable, Copy, Eye, EyeOff, RefreshCw, RotateCcw, ShieldCheck } from 'lucide-react';
 import { ApiError, api } from '../../api/client';
 import Dialog from '../Dialog';
 
 type MCPTokenResponse = {
   ok: boolean;
   token: string;
+};
+
+type MCPSettingsResponse = MCPTokenResponse & {
+  mcp_apps_enabled: boolean;
+  persisted: boolean;
+  updated_at?: string;
 };
 
 function errorMessage(error: unknown): string {
@@ -35,6 +41,8 @@ export default function MCPAccessPanel({ refreshToken }: { refreshToken: number 
   const [revealed, setRevealed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [resetting, setResetting] = useState(false);
+  const [mcpAppsEnabled, setMCPAppsEnabled] = useState(true);
+  const [savingApps, setSavingApps] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'success' | 'error' | 'info'; text: string } | null>(null);
   const endpoint = useMemo(() => new URL('/mcp', window.location.origin).toString(), []);
@@ -42,8 +50,9 @@ export default function MCPAccessPanel({ refreshToken }: { refreshToken: number 
   async function load() {
     setLoading(true);
     try {
-      const result = await api<MCPTokenResponse>('/v1/settings/mcp-token');
+      const result = await api<MCPSettingsResponse>('/v1/settings/mcp');
       setToken(result.token);
+      setMCPAppsEnabled(result.mcp_apps_enabled);
       setRevealed(false);
       setNotice(null);
     } catch (error) {
@@ -81,6 +90,26 @@ export default function MCPAccessPanel({ refreshToken }: { refreshToken: number 
     }
   }
 
+  async function updateMCPAppsEnabled(enabled: boolean) {
+    const previous = mcpAppsEnabled;
+    setMCPAppsEnabled(enabled);
+    setSavingApps(true);
+    setNotice(null);
+    try {
+      const result = await api<MCPSettingsResponse>('/v1/settings/mcp', {
+        method: 'PUT',
+        body: JSON.stringify({ mcp_apps_enabled: enabled }),
+      });
+      setMCPAppsEnabled(result.mcp_apps_enabled);
+      setNotice({ tone: 'success', text: `MCP Apps UI 已${result.mcp_apps_enabled ? '启用' : '关闭'}。` });
+    } catch (error) {
+      setMCPAppsEnabled(previous);
+      setNotice({ tone: 'error', text: errorMessage(error) });
+    } finally {
+      setSavingApps(false);
+    }
+  }
+
   return <section className="mcp-access-panel">
     <header className="settings-section-heading mcp-access-heading">
       <div><span className="nexus-eyebrow">MCP ACCESS</span><h2>MCP 接入</h2><p>为不使用 OAuth 的 MCP 客户端提供固定 Bearer Token。</p></div>
@@ -112,6 +141,19 @@ export default function MCPAccessPanel({ refreshToken }: { refreshToken: number 
         <div><ShieldCheck size={16} /><span><strong>仅用于 MCP</strong><small>这个 Token 不能访问 NexusDock 的 `/v1` 管理 API。</small></span></div>
         <button type="button" className="nx-button is-danger" onClick={() => setResetOpen(true)} disabled={loading || resetting}><RotateCcw size={15} />重置 Token</button>
       </footer>
+    </section>
+
+    <section className="mcp-access-card">
+      <header>
+        <span className="nexus-panel-icon"><AppWindow size={17} /></span>
+        <div><h3>MCP Apps UI</h3><p>控制 NexusDock 对 MCP 客户端发布交互式 Apps UI。</p></div>
+      </header>
+      <div className="mcp-access-body">
+        <label className="mcp-apps-toggle">
+          <input type="checkbox" checked={mcpAppsEnabled} onChange={(event) => void updateMCPAppsEnabled(event.target.checked)} disabled={loading || savingApps} />
+          <span><strong>启用 MCP Apps UI</strong><small>为支持 MCP Apps 的客户端提供交互式 UI 视图；关闭后工具功能不受影响。</small></span>
+        </label>
+      </div>
     </section>
 
     <div className="mcp-access-hint"><strong>Authorization</strong><code>Bearer {'<Access Token>'}</code><span>重置会立刻断开旧 Token 的访问权限，OAuth 客户端不受影响。</span></div>

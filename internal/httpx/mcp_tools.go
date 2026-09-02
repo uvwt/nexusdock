@@ -14,6 +14,10 @@ type centralToolPresentation struct {
 }
 
 func nexusToolDefinitions() []*mcpsdk.Tool {
+	return nexusToolDefinitionsWithApps(true)
+}
+
+func nexusToolDefinitionsWithApps(mcpAppsEnabled bool) []*mcpsdk.Tool {
 	presentations := []centralToolPresentation{
 		{name: mcpcontract.ToolAgentDockContext, title: "AgentDock fleet context", description: "Return one combined context for all enabled AgentDock nodes, including node-local capabilities and Nexus-owned shared Workflow and Recall context.", uiURI: protocol.ContextUIResourceURI},
 		{name: mcpcontract.ToolRecallSearch, title: "Search NexusDock Recall", description: "Search Markdown documents and cards with lexical retrieval and optional semantic enhancement when embeddings are available."},
@@ -25,12 +29,16 @@ func nexusToolDefinitions() []*mcpsdk.Tool {
 	}
 	tools := make([]*mcpsdk.Tool, 0, len(presentations))
 	for _, presentation := range presentations {
-		tools = append(tools, canonicalCentralTool(presentation))
+		tools = append(tools, canonicalCentralToolWithApps(presentation, mcpAppsEnabled))
 	}
 	return tools
 }
 
 func canonicalCentralTool(presentation centralToolPresentation) *mcpsdk.Tool {
+	return canonicalCentralToolWithApps(presentation, true)
+}
+
+func canonicalCentralToolWithApps(presentation centralToolPresentation, mcpAppsEnabled bool) *mcpsdk.Tool {
 	input, ok := mcpcontract.InputSchema(presentation.name)
 	if !ok {
 		panic("missing canonical MCP input contract: " + presentation.name)
@@ -57,7 +65,7 @@ func canonicalCentralTool(presentation centralToolPresentation) *mcpsdk.Tool {
 		OutputSchema: output,
 		Annotations:  canonicalCentralAnnotations(annotations),
 	}
-	if presentation.uiURI != "" {
+	if mcpAppsEnabled && presentation.uiURI != "" {
 		tool.Meta = centralToolUIResourceMeta(presentation.uiURI)
 	}
 	return tool

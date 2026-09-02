@@ -63,7 +63,7 @@ func (s *Server) syncMCPAppResources() {
 
 func (s *Server) publishedMCPAppResourceURIs(ctx context.Context) (map[string]struct{}, error) {
 	uris := make(map[string]struct{})
-	if s == nil || s.agentDock == nil {
+	if s == nil || s.agentDock == nil || !s.mcpAppsEnabled() {
 		return uris, nil
 	}
 	nodes, err := s.agentDock.List(ctx)
@@ -90,7 +90,7 @@ func (s *Server) publishedMCPAppResourceURIs(ctx context.Context) (map[string]st
 }
 
 func (s *Server) readPublishedMCPAppResource(ctx context.Context, uri string) (*mcpsdk.ReadResourceResult, error) {
-	if s.agentDock == nil || s.agentDockHub == nil {
+	if s.agentDock == nil || s.agentDockHub == nil || !s.mcpAppsEnabled() {
 		return nil, mcpsdk.ResourceNotFoundError(uri)
 	}
 	nodes, err := s.agentDock.List(ctx)

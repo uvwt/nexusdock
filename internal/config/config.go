@@ -23,6 +23,7 @@ type Config struct {
 	AuthAllowInsecureHTTP bool
 	TrustedProxies        []string
 	LogLevelName          string
+	MCPAppsEnabled        bool
 	EmbeddingEnabled      bool
 	EmbeddingEndpoint     string
 	EmbeddingModel        string
@@ -54,6 +55,7 @@ func FromEnv() Config {
 		AuthAllowInsecureHTTP: getenvBool("NEXUS_AUTH_ALLOW_INSECURE_HTTP", false),
 		TrustedProxies:        splitCSV(getenv("NEXUS_TRUSTED_PROXIES", "127.0.0.1,::1")),
 		LogLevelName:          getenv("NEXUS_LOG_LEVEL", "info"),
+		MCPAppsEnabled:        getenvBool("NEXUS_MCP_APPS_ENABLED", true),
 		EmbeddingEnabled:      getenvBool("RECALL_EMBEDDING_ENABLED", false),
 		EmbeddingEndpoint:     strings.TrimSpace(os.Getenv("RECALL_EMBEDDING_ENDPOINT")),
 		EmbeddingModel:        getenv("RECALL_EMBEDDING_MODEL", "BAAI/bge-m3"),

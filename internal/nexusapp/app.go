@@ -78,6 +78,13 @@ func run(args []string) error {
 	if cfg, _, err = runtimeSettings.Load(ctx); err != nil {
 		return fmt.Errorf("load runtime AI settings: %w", err)
 	}
+	mcpSettings, err := settings.NewMCPStore(controlDB, cfg.MCPAppsEnabled)
+	if err != nil {
+		return fmt.Errorf("initialize MCP settings: %w", err)
+	}
+	if cfg.MCPAppsEnabled, _, err = mcpSettings.Load(ctx); err != nil {
+		return fmt.Errorf("load MCP settings: %w", err)
+	}
 	agentDockNodes, err := agentdock.NewStore(controlDB)
 	if err != nil {
 		return fmt.Errorf("initialize AgentDock node store: %w", err)
@@ -112,6 +119,7 @@ func run(args []string) error {
 		httpx.WithWebAuthentication(authService),
 		httpx.WithEmbeddingService(embeddingService),
 		httpx.WithRuntimeSettings(runtimeSettings),
+		httpx.WithMCPSettings(mcpSettings),
 		httpx.WithMCPTokenStore(mcpTokenStore),
 		httpx.WithPrivateNotes(privateNoteStore),
 	)
@@ -125,7 +133,7 @@ func run(args []string) error {
 	}
 
 	server.StartEvolutionStage3(ctx)
-	logger.Info("nexusdock starting", "addr", cfg.Addr(), "nexus_data_dir", cfg.NexusDataDir, "recall_repo_dir", cfg.RecallRepoDir, "embedding_enabled", cfg.EmbeddingEnabled, "embedding_model", cfg.EmbeddingModel, "stage3_evolution_enabled", cfg.EvolutionEnabled && cfg.ModelEndpoint != "" && cfg.ModelName != "")
+	logger.Info("nexusdock starting", "addr", cfg.Addr(), "nexus_data_dir", cfg.NexusDataDir, "recall_repo_dir", cfg.RecallRepoDir, "mcp_apps_enabled", cfg.MCPAppsEnabled, "embedding_enabled", cfg.EmbeddingEnabled, "embedding_model", cfg.EmbeddingModel, "stage3_evolution_enabled", cfg.EvolutionEnabled && cfg.ModelEndpoint != "" && cfg.ModelName != "")
 	serveErr := serveHTTP(ctx, httpServer)
 	cancel()
 	if serveErr != nil {
