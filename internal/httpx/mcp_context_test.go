@@ -105,7 +105,11 @@ func TestCallFleetAgentDockContextAggregatesOnlineAndOfflineNodes(t *testing.T) 
 			"version": "9.9.9", "os": "linux", "arch": "amd64",
 			"agentdock_home": "/wrong", "agentdock_default_dir": "/wrong", "default_cwd": ".", "path_model": "host",
 		},
-		"skills":             []any{map[string]any{"name": "desktop", "description": "Desktop", "file": "skill://desktop/SKILL.md"}},
+		"skills": []any{map[string]any{"name": "desktop", "description": "Desktop", "file": "skill://desktop/SKILL.md"}},
+		"common_skills": map[string]any{
+			"root": "/Users/xx/.agents/skills", "total": 1, "truncated": false,
+			"items": []any{map[string]any{"name": "personal-dev-guard", "description": "Development guard", "file": "/Users/xx/.agents/skills/personal-dev-guard/SKILL.md"}},
+		},
 		"dynamic_mcp":        []any{map[string]any{"name": "github", "description": "GitHub"}},
 		"workflow_templates": []any{map[string]any{"name": "deploy", "description": "Deploy"}},
 		"recall":             map[string]any{"enabled": true, "items": []any{map[string]any{"name": "profile.md", "description": "Profile"}}},
@@ -134,6 +138,9 @@ func TestCallFleetAgentDockContextAggregatesOnlineAndOfflineNodes(t *testing.T) 
 	}
 	if fleet.Nodes[0].Name != "DockMini" || !fleet.Nodes[0].Online || containsString(fleet.Nodes[0].Capabilities, descriptor.Name) || fleet.Nodes[0].Context == nil || len(fleet.Nodes[0].Context.Skills) != 1 {
 		t.Fatalf("online node context = %#v", fleet.Nodes[0])
+	}
+	if fleet.Nodes[0].Context.CommonSkills == nil || fleet.Nodes[0].Context.CommonSkills.Total != 1 || len(fleet.Nodes[0].Context.CommonSkills.Items) != 1 || fleet.Nodes[0].Context.CommonSkills.Items[0].Name != "personal-dev-guard" {
+		t.Fatalf("common Skill context was not forwarded: %#v", fleet.Nodes[0].Context.CommonSkills)
 	}
 	if fleet.Nodes[0].Version != "2.0.0" || fleet.Nodes[0].OS != "darwin" || fleet.Nodes[0].Arch != "arm64" {
 		t.Fatalf("fleet node facts must come from Bridge Hello, got %#v", fleet.Nodes[0])
@@ -201,6 +208,21 @@ func TestDecodeAgentDockContextRejectsLegacyMarkdownResult(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "结构化契约") {
 		t.Fatalf("legacy context should be rejected, got %v", err)
+	}
+}
+
+func TestDecodeAgentDockContextAcceptsOlderNodeWithoutCommonSkills(t *testing.T) {
+	decoded, err := decodeAgentDockContextResult(map[string]any{
+		"isError": false,
+		"structuredContent": map[string]any{
+			"skills": []any{}, "dynamic_mcp": []any{}, "workflow_templates": []any{}, "rules": []any{},
+		},
+	})
+	if err != nil {
+		t.Fatalf("older node context should remain compatible: %v", err)
+	}
+	if decoded.CommonSkills != nil {
+		t.Fatalf("older node should decode without synthetic common Skills: %#v", decoded.CommonSkills)
 	}
 }
 

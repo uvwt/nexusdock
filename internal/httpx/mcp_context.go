@@ -27,13 +27,14 @@ var nexusSharedAgentDockRules = []string{
 }
 
 type agentDockContext struct {
-	Skills            []agentDockContextSkill   `json:"skills"`
-	DynamicMCP        []agentDockContextItem    `json:"dynamic_mcp"`
-	ACP               *agentDockContextACP      `json:"acp,omitempty"`
-	WorkflowTemplates []agentDockContextItem    `json:"workflow_templates"`
-	Recall            *agentDockContextRecall   `json:"recall,omitempty"`
-	Rules             []string                  `json:"rules"`
-	Warnings          []agentDockContextWarning `json:"warnings,omitempty"`
+	Skills            []agentDockContextSkill       `json:"skills"`
+	CommonSkills      *agentDockContextCommonSkills `json:"common_skills,omitempty"`
+	DynamicMCP        []agentDockContextItem        `json:"dynamic_mcp"`
+	ACP               *agentDockContextACP          `json:"acp,omitempty"`
+	WorkflowTemplates []agentDockContextItem        `json:"workflow_templates"`
+	Recall            *agentDockContextRecall       `json:"recall,omitempty"`
+	Rules             []string                      `json:"rules"`
+	Warnings          []agentDockContextWarning     `json:"warnings,omitempty"`
 }
 
 type agentDockContextSkill struct {
@@ -41,6 +42,19 @@ type agentDockContextSkill struct {
 	Description string `json:"description"`
 	File        string `json:"file"`
 	Bundled     bool   `json:"bundled,omitempty"`
+}
+
+type agentDockContextCommonSkills struct {
+	Root      string                        `json:"root"`
+	Total     int                           `json:"total"`
+	Truncated bool                          `json:"truncated"`
+	Items     []agentDockContextCommonSkill `json:"items"`
+}
+
+type agentDockContextCommonSkill struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	File        string `json:"file"`
 }
 
 type agentDockContextItem struct {
@@ -82,11 +96,12 @@ type fleetAgentDockContextNode struct {
 }
 
 type fleetAgentDockNodeContext struct {
-	Skills     []agentDockContextSkill   `json:"skills"`
-	DynamicMCP []agentDockContextItem    `json:"dynamic_mcp"`
-	ACP        *agentDockContextACP      `json:"acp,omitempty"`
-	Rules      []string                  `json:"rules"`
-	Warnings   []agentDockContextWarning `json:"warnings,omitempty"`
+	Skills       []agentDockContextSkill       `json:"skills"`
+	CommonSkills *agentDockContextCommonSkills `json:"common_skills,omitempty"`
+	DynamicMCP   []agentDockContextItem        `json:"dynamic_mcp"`
+	ACP          *agentDockContextACP          `json:"acp,omitempty"`
+	Rules        []string                      `json:"rules"`
+	Warnings     []agentDockContextWarning     `json:"warnings,omitempty"`
 }
 
 type fleetAgentDockSharedContext struct {
@@ -179,6 +194,9 @@ func decodeAgentDockContextResult(result map[string]any) (agentDockContext, erro
 	if decoded.Skills == nil || decoded.DynamicMCP == nil || decoded.WorkflowTemplates == nil || decoded.Rules == nil {
 		return agentDockContext{}, errors.New("agentdock_context structuredContent 不符合当前结构化契约")
 	}
+	if decoded.CommonSkills != nil && decoded.CommonSkills.Items == nil {
+		return agentDockContext{}, errors.New("agentdock_context common_skills 不符合当前结构化契约")
+	}
 	return decoded, nil
 }
 
@@ -208,7 +226,7 @@ func localAgentDockContext(context agentDockContext) *fleetAgentDockNodeContext 
 		}
 	}
 	return &fleetAgentDockNodeContext{
-		Skills: context.Skills, DynamicMCP: context.DynamicMCP, ACP: context.ACP,
+		Skills: context.Skills, CommonSkills: context.CommonSkills, DynamicMCP: context.DynamicMCP, ACP: context.ACP,
 		Rules: localRules, Warnings: warnings,
 	}
 }
