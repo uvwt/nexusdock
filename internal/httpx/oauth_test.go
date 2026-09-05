@@ -173,6 +173,41 @@ func TestOAuthHTTPAuthorizationCodeFlowAndMCPIsolation(t *testing.T) {
 	}
 }
 
+func TestOAuthDesktopCustomRedirectRegistrationAndAuthorize(t *testing.T) {
+	server, _ := newOAuthHTTPTestServer(t)
+	handler := server.Handler()
+	verifier := "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG"
+	digest := sha256.Sum256([]byte(verifier))
+	challenge := base64.RawURLEncoding.EncodeToString(digest[:])
+
+	for _, redirectURI := range []string{"grokbot://mcp/oauth/callback", "cursor://anysphere.cursor-mcp/oauth/callback"} {
+		body := `{"redirect_uris":["` + redirectURI + `"]}`
+		registerReq := httptest.NewRequest(http.MethodPost, "https://nexus.example/register", strings.NewReader(body))
+		registerReq.Header.Set("Content-Type", "application/json")
+		registerRes := httptest.NewRecorder()
+		handler.ServeHTTP(registerRes, registerReq)
+		if registerRes.Code != http.StatusCreated {
+			t.Fatalf("register %s: status=%d body=%s", redirectURI, registerRes.Code, registerRes.Body.String())
+		}
+		var registered struct {
+			ClientID string `json:"client_id"`
+		}
+		if err := json.Unmarshal(registerRes.Body.Bytes(), &registered); err != nil || registered.ClientID == "" {
+			t.Fatalf("decode registration: %v body=%s", err, registerRes.Body.String())
+		}
+
+		query := url.Values{
+			"response_type": {"code"}, "client_id": {registered.ClientID}, "redirect_uri": {redirectURI},
+			"code_challenge": {challenge}, "code_challenge_method": {"S256"}, "resource": {"https://nexus.example/mcp"}, "scope": {"mcp"},
+		}
+		authorizeRes := httptest.NewRecorder()
+		handler.ServeHTTP(authorizeRes, httptest.NewRequest(http.MethodGet, "https://nexus.example/oauth/authorize?"+query.Encode(), nil))
+		if authorizeRes.Code != http.StatusFound || !strings.HasPrefix(authorizeRes.Header().Get("Location"), "/login?return_to=") {
+			t.Fatalf("authorize %s: status=%d location=%s", redirectURI, authorizeRes.Code, authorizeRes.Header().Get("Location"))
+		}
+	}
+}
+
 func TestDedicatedMCPTokenAuthorizesOnlyMCP(t *testing.T) {
 	server, _ := newOAuthHTTPTestServer(t)
 	called := false

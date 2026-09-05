@@ -129,16 +129,21 @@ func TestOAuthRegistrationPrunesIdleClientsAndEnforcesLimit(t *testing.T) {
 	}
 }
 
-func TestOAuthRegistrationRejectsUnsafeRedirect(t *testing.T) {
+func TestOAuthRegistrationRedirectPolicy(t *testing.T) {
 	service, _, _ := newWebAuthTestService(t)
 	oauth := NewOAuthService(service.db)
-	for _, redirect := range []string{"http://example.com/callback", "javascript:alert(1)", "https://user@example.com/callback"} {
+	for _, redirect := range []string{"http://example.com/callback", "javascript:alert(1)", "https://user@example.com/callback", "otherapp://mcp/oauth/callback"} {
 		if _, err := oauth.RegisterClient(t.Context(), OAuthClientRegistration{RedirectURIs: []string{redirect}}); err == nil {
 			t.Fatalf("unsafe redirect accepted: %s", redirect)
 		}
 	}
 	if _, err := oauth.RegisterClient(t.Context(), OAuthClientRegistration{RedirectURIs: []string{"http://127.0.0.1:8787/callback"}}); err != nil {
 		t.Fatalf("loopback redirect rejected: %v", err)
+	}
+	for _, redirect := range []string{"grokbot://mcp/oauth/callback", "cursor://anysphere.cursor-mcp/oauth/callback"} {
+		if _, err := oauth.RegisterClient(t.Context(), OAuthClientRegistration{RedirectURIs: []string{redirect}}); err != nil {
+			t.Fatalf("known desktop callback rejected: %s: %v", redirect, err)
+		}
 	}
 }
 

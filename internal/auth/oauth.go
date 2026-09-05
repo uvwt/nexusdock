@@ -495,7 +495,14 @@ func canonicalOAuthResourceURI(raw string) (string, bool) {
 }
 
 func ValidOAuthRedirectURI(raw string) bool {
-	parsed, err := url.Parse(strings.TrimSpace(raw))
+	raw = strings.TrimSpace(raw)
+	switch raw {
+	case "grokbot://mcp/oauth/callback", "cursor://anysphere.cursor-mcp/oauth/callback":
+		// 桌面客户端的私有 scheme 无法像 HTTPS 一样按 origin 校验，因此只允许已知客户端的完整固定回调。
+		return true
+	}
+
+	parsed, err := url.Parse(raw)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" || parsed.User != nil || parsed.Fragment != "" || parsed.Opaque != "" {
 		return false
 	}
