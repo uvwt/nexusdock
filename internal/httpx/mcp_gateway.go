@@ -52,8 +52,9 @@ func (s *Server) initializeMCPGateway() {
 		}
 		// 启动时也核对一次已发布目录，清理旧版本遗留但 fleet 已不再提供的 stale tool。
 		s.reconcileNodeToolContracts(s.publishedNodeToolNames())
-		s.syncMCPAppResources()
 	}
+	// Nexus 自有的 Context / Recall / Workflow Apps 不依赖任何 AgentDock 节点，启动时始终注册。
+	s.syncMCPAppResources()
 	s.mcpHandler = mcpsdk.NewStreamableHTTPHandler(
 		func(*http.Request) *mcpsdk.Server { return s.mcpServer },
 		&mcpsdk.StreamableHTTPOptions{Stateless: true, JSONResponse: true, MaxRequestBodyBytes: 1 << 20, PropagateRequestCancellation: true},

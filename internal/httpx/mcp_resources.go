@@ -11,8 +11,31 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	protocol "github.com/uvwt/agentdock-protocol"
+	"github.com/uvwt/agentdock-protocol/mcpapps"
 	"github.com/uvwt/nexusdock/internal/agentdock"
 )
+
+type nexusOwnedMCPApp struct {
+	URI         string
+	View        string
+	Title       string
+	Description string
+}
+
+var nexusOwnedMCPApps = []nexusOwnedMCPApp{
+	{URI: protocol.ContextUIResourceURI, View: "agentdock_context", Title: "NexusDock context", Description: "NexusDock fleet context and shared capability view."},
+	{URI: protocol.RecallUIResourceURI, View: "recall", Title: "NexusDock Recall", Description: "NexusDock Recall write result view."},
+	{URI: protocol.WorkflowUIResourceURI, View: "workflow", Title: "NexusDock workflow", Description: "NexusDock workflow template match view."},
+}
+
+func nexusOwnedMCPAppByURI(uri string) (nexusOwnedMCPApp, bool) {
+	for _, app := range nexusOwnedMCPApps {
+		if app.URI == uri {
+			return app, true
+		}
+	}
+	return nexusOwnedMCPApp{}, false
+}
 
 func (s *Server) syncMCPAppResources() {
 	if s == nil || s.mcpServer == nil {
@@ -20,16 +43,27 @@ func (s *Server) syncMCPAppResources() {
 	}
 
 	desired, err := s.publishedMCPAppResourceURIs(context.Background())
-	if err != nil {
-		if s.logger != nil {
-			s.logger.Warn("同步 AgentDock MCP App resource 目录失败", "error", err)
-		}
-		return
-	}
 	s.mcpResourcesMu.Lock()
 	defer s.mcpResourcesMu.Unlock()
 	if s.mcpResources == nil {
 		s.mcpResources = make(map[string]struct{})
+	}
+	if err != nil {
+		if s.logger != nil {
+			s.logger.Warn("同步 AgentDock MCP App resource 目录失败，保留已发布节点资源", "error", err)
+		}
+		if desired == nil {
+			desired = make(map[string]struct{})
+		}
+		// Nexus 自有 UI 不应受节点目录故障影响；节点目录暂不可读时也保留已经发布的 relay resource。
+		for _, app := range nexusOwnedMCPApps {
+			desired[app.URI] = struct{}{}
+		}
+		for uri := range s.mcpResources {
+			if _, local := nexusOwnedMCPAppByURI(uri); !local {
+				desired[uri] = struct{}{}
+			}
+		}
 	}
 
 	for uri := range s.mcpResources {
@@ -44,16 +78,26 @@ func (s *Server) syncMCPAppResources() {
 			continue
 		}
 		uri := uri
+		localApp, local := nexusOwnedMCPAppByURI(uri)
+		title := "AgentDock MCP App"
+		description := "MCP App resource relayed from a compatible AgentDock node."
+		if local {
+			title = localApp.Title
+			description = localApp.Description
+		}
 		s.mcpServer.AddResource(&mcpsdk.Resource{
 			URI:         uri,
 			Name:        mcpAppResourceName(uri),
-			Title:       "AgentDock MCP App",
-			Description: "MCP App resource relayed from a compatible AgentDock node.",
+			Title:       title,
+			Description: description,
 			MIMEType:    protocol.MCPAppMIMEType,
 			Meta:        nexusMCPAppResourceMeta(s.cfg.PublicURL),
 		}, func(ctx context.Context, request *mcpsdk.ReadResourceRequest) (*mcpsdk.ReadResourceResult, error) {
 			if request == nil || request.Params == nil || request.Params.URI != uri {
 				return nil, mcpsdk.ResourceNotFoundError(uri)
+			}
+			if local {
+				return nexusOwnedMCPAppReadResult(localApp, s.cfg.PublicURL), nil
 			}
 			return s.readPublishedMCPAppResource(ctx, uri)
 		})
@@ -63,12 +107,18 @@ func (s *Server) syncMCPAppResources() {
 
 func (s *Server) publishedMCPAppResourceURIs(ctx context.Context) (map[string]struct{}, error) {
 	uris := make(map[string]struct{})
-	if s == nil || s.agentDock == nil || !s.mcpAppsEnabled() {
+	if s == nil || !s.mcpAppsEnabled() {
+		return uris, nil
+	}
+	for _, app := range nexusOwnedMCPApps {
+		uris[app.URI] = struct{}{}
+	}
+	if s.agentDock == nil {
 		return uris, nil
 	}
 	nodes, err := s.agentDock.List(ctx)
 	if err != nil {
-		return nil, err
+		return uris, err
 	}
 	for _, node := range nodes {
 		if !node.Enabled {
@@ -76,9 +126,12 @@ func (s *Server) publishedMCPAppResourceURIs(ctx context.Context) (map[string]st
 		}
 		resources, err := s.agentDock.UIResources(ctx, node.ID)
 		if err != nil {
-			return nil, err
+			return uris, err
 		}
 		for _, resource := range resources {
+			if _, local := nexusOwnedMCPAppByURI(resource.URI); local {
+				continue
+			}
 			expectedContract, known := protocol.UIResourceContract(resource.URI)
 			if !known || resource.Contract != expectedContract || resource.MIMEType != protocol.MCPAppMIMEType {
 				continue
@@ -90,6 +143,9 @@ func (s *Server) publishedMCPAppResourceURIs(ctx context.Context) (map[string]st
 }
 
 func (s *Server) readPublishedMCPAppResource(ctx context.Context, uri string) (*mcpsdk.ReadResourceResult, error) {
+	if app, ok := nexusOwnedMCPAppByURI(uri); ok && s.mcpAppsEnabled() {
+		return nexusOwnedMCPAppReadResult(app, s.cfg.PublicURL), nil
+	}
 	if s.agentDock == nil || s.agentDockHub == nil || !s.mcpAppsEnabled() {
 		return nil, mcpsdk.ResourceNotFoundError(uri)
 	}
@@ -98,6 +154,15 @@ func (s *Server) readPublishedMCPAppResource(ctx context.Context, uri string) (*
 		return nil, err
 	}
 	return s.readMCPAppResourceWithTimeout(ctx, nodes, uri, agentDockNodeInvokeTimeout)
+}
+
+func nexusOwnedMCPAppReadResult(app nexusOwnedMCPApp, publicURL string) *mcpsdk.ReadResourceResult {
+	return &mcpsdk.ReadResourceResult{Contents: []*mcpsdk.ResourceContents{{
+		URI:      app.URI,
+		MIMEType: protocol.MCPAppMIMEType,
+		Text:     mcpapps.HTML(app.View, app.Title),
+		Meta:     nexusMCPAppResourceMeta(publicURL),
+	}}}
 }
 
 func (s *Server) readMCPAppResourceWithTimeout(ctx context.Context, nodes []agentdock.Node, uri string, leafTimeout time.Duration) (*mcpsdk.ReadResourceResult, error) {

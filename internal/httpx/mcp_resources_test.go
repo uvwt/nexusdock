@@ -21,7 +21,7 @@ func TestSyncMCPAppResourcesPublishesAdvertisedUIResources(t *testing.T) {
 	store := newHTTPTestAgentDockStore(t)
 	descriptor := agentdock.ToolDescriptor{
 		Name: "file_edit",
-		Meta: map[string]any{"ui": map[string]any{"resourceUri": protocol.ContextUIResourceURI}},
+		Meta: map[string]any{"ui": map[string]any{"resourceUri": protocol.TaskProgressUIResourceURI}},
 	}
 	node := pairHTTPTestNode(t, store, "device_resource_catalog", "DockMini", "2.0.0", descriptor)
 	if _, err := store.UpdateHello(t.Context(), node.ID, agentdock.Hello{
@@ -72,12 +72,72 @@ func TestSyncMCPAppResourcesPublishesAdvertisedUIResources(t *testing.T) {
 	if resource == nil || resource.MIMEType != protocol.MCPAppMIMEType {
 		t.Fatalf("listed resource = %#v", resource)
 	}
-	if listed[protocol.ContextUIResourceURI] != nil {
-		t.Fatalf("tool _meta.ui incorrectly published a resource without ui_resources capability: %#v", listed)
+	if listed[protocol.TaskProgressUIResourceURI] != nil {
+		t.Fatalf("tool _meta.ui incorrectly published a node resource without ui_resources capability: %#v", listed)
+	}
+	for _, uri := range []string{protocol.ContextUIResourceURI, protocol.RecallUIResourceURI, protocol.WorkflowUIResourceURI} {
+		if listed[uri] == nil {
+			t.Fatalf("Nexus-owned resource %s was not published locally: %#v", uri, listed)
+		}
 	}
 	ui, ok := resource.Meta["ui"].(map[string]any)
 	if !ok || ui["prefersBorder"] != true || ui["domain"] != domain {
 		t.Fatalf("resource ui meta = %#v", resource.Meta)
+	}
+}
+
+func TestNexusOwnedMCPAppResourcesDoNotRequireAgentDockProvider(t *testing.T) {
+	const domain = "https://nexus.example.test"
+	sdk := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "local-app-test", Version: "1"}, nil)
+	server := &Server{
+		cfg: config.Config{PublicURL: domain, MCPAppsEnabled: true}, mcpServer: sdk,
+		mcpResources: make(map[string]struct{}),
+	}
+	server.syncMCPAppResources()
+
+	serverTransport, clientTransport := mcpsdk.NewInMemoryTransports()
+	serverDone := make(chan error, 1)
+	go func() { serverDone <- sdk.Run(t.Context(), serverTransport) }()
+	client := mcpsdk.NewClient(
+		&mcpsdk.Implementation{Name: "nexus-local-app-test", Version: "1"},
+		&mcpsdk.ClientOptions{Capabilities: &mcpsdk.ClientCapabilities{}},
+	)
+	session, err := client.Connect(t.Context(), clientTransport, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := session.Close(); err != nil {
+			t.Errorf("Close() error = %v", err)
+		}
+		if err := <-serverDone; err != nil && !errors.Is(err, context.Canceled) {
+			t.Errorf("Server.Run() error = %v", err)
+		}
+	})
+
+	views := map[string]string{
+		protocol.ContextUIResourceURI:  "agentdock_context",
+		protocol.RecallUIResourceURI:   "recall",
+		protocol.WorkflowUIResourceURI: "workflow",
+	}
+	for uri, view := range views {
+		read, err := session.ReadResource(t.Context(), &mcpsdk.ReadResourceParams{URI: uri})
+		if err != nil {
+			t.Fatalf("ReadResource(%s) error = %v", uri, err)
+		}
+		if len(read.Contents) != 1 {
+			t.Fatalf("ReadResource(%s) contents = %#v", uri, read.Contents)
+		}
+		html := read.Contents[0].Text
+		for _, marker := range []string{`expectedView="` + view + `"`, `ui/notifications/host-context-changed`, `--ad-text-primary`} {
+			if !strings.Contains(html, marker) {
+				t.Fatalf("Nexus-owned resource %s missing shared renderer marker %q", uri, marker)
+			}
+		}
+		ui, ok := read.Contents[0].Meta["ui"].(map[string]any)
+		if !ok || ui["domain"] != domain {
+			t.Fatalf("Nexus-owned resource %s meta = %#v", uri, read.Contents[0].Meta)
+		}
 	}
 }
 
@@ -128,8 +188,8 @@ func TestPublishedMCPAppResourcesRecoverFromPersistedCapabilities(t *testing.T) 
 	descriptor := agentdock.ToolDescriptor{Name: "read_file", InputSchema: map[string]any{"type": "object"}}
 	node := pairHTTPTestNode(t, store, "device_resource_restart", "DockMini", "2.0.0", descriptor)
 	capabilities := []agentdock.UIResourceCapability{
-		{URI: protocol.ContextUIResourceURI, Contract: protocol.ContextUIContract, MIMEType: protocol.MCPAppMIMEType},
-		{URI: protocol.WorkflowUIResourceURI, Contract: protocol.WorkflowUIContract, MIMEType: protocol.MCPAppMIMEType},
+		{URI: protocol.FileChangeUIResourceURI, Contract: protocol.FileChangeUIContract, MIMEType: protocol.MCPAppMIMEType},
+		{URI: protocol.ACPStatusUIResourceURI, Contract: protocol.ACPStatusUIContract, MIMEType: protocol.MCPAppMIMEType},
 	}
 	if _, err := store.UpdateHello(t.Context(), node.ID, agentdock.Hello{
 		DeviceID: node.DeviceID, ProtocolVersion: agentdock.ConnectionProtocolVersion,
@@ -144,12 +204,17 @@ func TestPublishedMCPAppResourcesRecoverFromPersistedCapabilities(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(resources) != len(capabilities) {
+	if len(resources) != len(capabilities)+len(nexusOwnedMCPApps) {
 		t.Fatalf("restarted resource catalog = %#v", resources)
 	}
 	for _, capability := range capabilities {
 		if _, ok := resources[capability.URI]; !ok {
 			t.Fatalf("persisted capability %s missing after restart: %#v", capability.URI, resources)
+		}
+	}
+	for _, app := range nexusOwnedMCPApps {
+		if _, ok := resources[app.URI]; !ok {
+			t.Fatalf("Nexus-owned resource %s missing after restart: %#v", app.URI, resources)
 		}
 	}
 }
@@ -178,6 +243,9 @@ func TestDecodeNodeMCPAppResourceReplacesNodeDomainWithNexusDomain(t *testing.T)
 	}
 	if len(read.Contents) != 1 {
 		t.Fatalf("contents = %#v", read.Contents)
+	}
+	if read.Contents[0].Text != "<!doctype html>" {
+		t.Fatalf("relay changed App HTML: %q", read.Contents[0].Text)
 	}
 	ui, ok := read.Contents[0].Meta["ui"].(map[string]any)
 	if !ok || ui["prefersBorder"] != true || ui["domain"] != domain {
@@ -222,28 +290,28 @@ func TestToolBoundUIResourceURIIsPresentationOnlyAndRejectsUnknownResources(t *t
 func TestMCPAppResourceSelectsOnlyExplicitCapableProvider(t *testing.T) {
 	store := newHTTPTestAgentDockStore(t)
 	bindingOnlyDescriptor := agentdock.ToolDescriptor{
-		Name: "agentdock_context", InputSchema: map[string]any{"type": "object"},
-		Meta: map[string]any{"ui": map[string]any{"resourceUri": protocol.ContextUIResourceURI}},
+		Name: "task_manage", InputSchema: map[string]any{"type": "object"},
+		Meta: map[string]any{"ui": map[string]any{"resourceUri": protocol.TaskProgressUIResourceURI}},
 	}
-	capableDescriptor := agentdock.ToolDescriptor{Name: "agentdock_context", InputSchema: map[string]any{"type": "object"}}
+	capableDescriptor := agentdock.ToolDescriptor{Name: "task_manage", InputSchema: map[string]any{"type": "object"}}
 	withoutResource := pairHTTPTestNode(t, store, "device_resource_none", "A Without Resource", "2.0.0", bindingOnlyDescriptor)
 	withResource := pairHTTPTestNode(t, store, "device_resource_capable", "B Capable", "2.0.0", capableDescriptor)
 	hub := agentdock.NewHub(store)
 
 	// Presentation binding is deliberately insufficient: this node advertises _meta.ui but no ui_resources capability.
-	withoutInvoked := connectResourceTestNode(t, hub, withoutResource, bindingOnlyDescriptor, nil, protocol.ContextUIResourceURI, "<html>wrong</html>", false)
+	withoutInvoked := connectResourceTestNode(t, hub, withoutResource, bindingOnlyDescriptor, nil, protocol.TaskProgressUIResourceURI, "<html>wrong</html>", false)
 	capability := agentdock.UIResourceCapability{
-		URI: protocol.ContextUIResourceURI, Contract: protocol.ContextUIContract, MIMEType: protocol.MCPAppMIMEType,
+		URI: protocol.TaskProgressUIResourceURI, Contract: protocol.TaskProgressUIContract, MIMEType: protocol.MCPAppMIMEType,
 	}
 	// Capability is sufficient even when this tool descriptor has no _meta.ui presentation binding.
-	withInvoked := connectResourceTestNode(t, hub, withResource, capableDescriptor, []agentdock.UIResourceCapability{capability}, protocol.ContextUIResourceURI, "<html>capable</html>", true)
+	withInvoked := connectResourceTestNode(t, hub, withResource, capableDescriptor, []agentdock.UIResourceCapability{capability}, protocol.TaskProgressUIResourceURI, "<html>capable</html>", true)
 
 	nodes, err := store.List(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	server := &Server{agentDock: store, agentDockHub: hub, cfg: config.Config{PublicURL: "https://nexus.example.test"}}
-	read, err := server.readMCPAppResourceWithTimeout(t.Context(), nodes, protocol.ContextUIResourceURI, time.Second)
+	read, err := server.readMCPAppResourceWithTimeout(t.Context(), nodes, protocol.TaskProgressUIResourceURI, time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -264,20 +332,20 @@ func TestMCPAppResourceSelectsOnlyExplicitCapableProvider(t *testing.T) {
 
 func TestMCPAppResourceBoundsStalledCompatibleProvider(t *testing.T) {
 	store := newHTTPTestAgentDockStore(t)
-	descriptor := agentdock.ToolDescriptor{Name: "agentdock_context", InputSchema: map[string]any{"type": "object"}}
+	descriptor := agentdock.ToolDescriptor{Name: "task_manage", InputSchema: map[string]any{"type": "object"}}
 	node := pairHTTPTestNode(t, store, "device_resource_stalled", "Stalled", "2.0.0", descriptor)
 	hub := agentdock.NewHub(store)
 	capability := agentdock.UIResourceCapability{
-		URI: protocol.ContextUIResourceURI, Contract: protocol.ContextUIContract, MIMEType: protocol.MCPAppMIMEType,
+		URI: protocol.TaskProgressUIResourceURI, Contract: protocol.TaskProgressUIContract, MIMEType: protocol.MCPAppMIMEType,
 	}
-	_ = connectResourceTestNode(t, hub, node, descriptor, []agentdock.UIResourceCapability{capability}, protocol.ContextUIResourceURI, "", false)
+	_ = connectResourceTestNode(t, hub, node, descriptor, []agentdock.UIResourceCapability{capability}, protocol.TaskProgressUIResourceURI, "", false)
 	nodes, err := store.List(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
 	server := &Server{agentDock: store, agentDockHub: hub}
 	started := time.Now()
-	_, err = server.readMCPAppResourceWithTimeout(t.Context(), nodes, protocol.ContextUIResourceURI, 30*time.Millisecond)
+	_, err = server.readMCPAppResourceWithTimeout(t.Context(), nodes, protocol.TaskProgressUIResourceURI, 30*time.Millisecond)
 	if err == nil || !strings.Contains(err.Error(), "resource timeout") {
 		t.Fatalf("timeout err=%v", err)
 	}
