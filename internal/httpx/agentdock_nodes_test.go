@@ -76,6 +76,40 @@ func TestNodeListReportsHubOnlineState(t *testing.T) {
 	}
 }
 
+func TestNodeConnectDistinguishesInvalidTokenFromAuthBackendFailure(t *testing.T) {
+	t.Run("invalid token", func(t *testing.T) {
+		server := newNodeTestServer(t)
+		request := httptest.NewRequest(http.MethodGet, "/v1/nodes/connect", nil)
+		request.Header.Set("Authorization", "Bearer invalid-device-token")
+		response := httptest.NewRecorder()
+
+		server.agentDockNodeConnect(response, request)
+		if response.Code != http.StatusUnauthorized || !strings.Contains(response.Body.String(), `"code":"INVALID_DEVICE_TOKEN"`) {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+	})
+
+	t.Run("authentication backend failure", func(t *testing.T) {
+		db, err := core.OpenSQLite(t.Context(), ":memory:", 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		authService := auth.NewService(db)
+		if err := db.Close(); err != nil {
+			t.Fatal(err)
+		}
+		server := &Server{auth: authService, agentDockHub: agentdock.NewHub(nil)}
+		request := httptest.NewRequest(http.MethodGet, "/v1/nodes/connect", nil)
+		request.Header.Set("Authorization", "Bearer any-device-token")
+		response := httptest.NewRecorder()
+
+		server.agentDockNodeConnect(response, request)
+		if response.Code != http.StatusInternalServerError || !strings.Contains(response.Body.String(), `"code":"AGENTDOCK_DEVICE_AUTH_FAILED"`) {
+			t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
+		}
+	})
+}
+
 func TestDeviceTokenAccessesOnlyExplicitDeviceRoutes(t *testing.T) {
 	server := newNodeTestServer(t)
 	pairing, _ := server.agentDock.CreatePairingCode(t.Context())

@@ -84,7 +84,19 @@ func (s *Server) agentDockNodeConnect(w http.ResponseWriter, r *http.Request) {
 	}
 	token := bearerToken(r.Header.Get("Authorization"))
 	principal, err := s.auth.Authenticate(r.Context(), token)
-	if err != nil || principal.Actor.Type != core.ActorDevice || principal.TokenKind != "device_token" {
+	if err != nil {
+		switch core.ErrorCodeOf(err) {
+		case core.CodeAuthRequired, core.CodeInvalidToken, core.CodeTokenRevoked:
+			writeError(w, http.StatusUnauthorized, "INVALID_DEVICE_TOKEN", "AgentDock Device Token 无效")
+		default:
+			if s.logger != nil {
+				s.logger.Error("验证 AgentDock Device Token 失败", "request_id", requestIDFromContext(r.Context()), "error", err)
+			}
+			writeError(w, http.StatusInternalServerError, "AGENTDOCK_DEVICE_AUTH_FAILED", "无法验证 AgentDock Device Token")
+		}
+		return
+	}
+	if principal.Actor.Type != core.ActorDevice || principal.TokenKind != "device_token" {
 		writeError(w, http.StatusUnauthorized, "INVALID_DEVICE_TOKEN", "AgentDock Device Token 无效")
 		return
 	}
