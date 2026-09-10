@@ -11,6 +11,7 @@ import RecallWorkspace from './RecallWorkspace';
 import { type WebSession } from './Auth';
 import AccountSecurity from './AccountSecurity';
 import AISettingsPanel from './components/settings/AISettingsPanel';
+import LanguageSettingsPanel from './components/settings/LanguageSettingsPanel';
 import MCPAccessPanel from './components/settings/MCPAccessPanel';
 import { ApiError, api, setCSRFToken } from './api/client';
 import WorkflowTemplatesPage from './components/workflows/WorkflowTemplatesPage';
@@ -418,7 +419,7 @@ function SettingsPage({ refreshToken, runtimeNodes }: { refreshToken: number; ru
       })}
     </nav>
     <div className="settings-content">
-      {active === 'account' && <AccountSecurity />}
+      {active === 'account' && <div className="account-settings-stack"><LanguageSettingsPanel /><AccountSecurity /></div>}
       {active === 'mcp' && <MCPAccessPanel refreshToken={refreshToken} />}
       {active === 'ai' && <AISettingsPanel refreshToken={refreshToken} />}
       {active === 'system' && <SystemSettingsPage refreshToken={refreshToken} runtimeNodes={runtimeNodes} />}

@@ -171,6 +171,28 @@
 .auth-success { display: flex; align-items: center; gap: 8px; border: 1px solid var(--nx-success-line); background: var(--nx-success-bg); color: var(--nx-success); }
 
 /* 账号设置与会话管理 */
+.account-settings-stack { display: grid; gap: 12px; }
+
+.language-settings-panel {
+  padding: 14px 16px;
+  border: 1px solid var(--nx-line);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.language-settings-panel > header,
+.language-settings-panel > label {
+  display: flex;
+  align-items: center;
+}
+
+.language-settings-panel > header { gap: 10px; }
+.language-settings-panel > header h2 { margin: 0; font-size: 14px; }
+.language-settings-panel > header p { margin: 3px 0 0; color: var(--nx-muted); font-size: 11px; }
+.language-settings-panel > label { justify-content: space-between; gap: 16px; margin-top: 14px; font-size: 12px; font-weight: 600; }
+.language-settings-panel select { min-width: 180px; height: 34px; padding: 0 30px 0 10px; border: 1px solid var(--nx-line-strong); border-radius: 6px; background: #fff; }
+.language-settings-panel > small { display: block; margin-top: 8px; color: var(--nx-muted); font-size: 11px; }
+
 .security-panel {
   overflow: hidden;
   border: 1px solid var(--nx-line);
@@ -250,6 +272,8 @@
 
 @media (max-width: 860px) {
   .auth-login { padding: 24px 14px; }
+  .language-settings-panel > label { align-items: stretch; flex-direction: column; gap: 7px; }
+  .language-settings-panel select { width: 100%; }
   .auth-panel { min-height: auto; padding: 18px 14px 28px; place-items: start center; }
   .auth-card { padding: 20px; }
   .security-head,

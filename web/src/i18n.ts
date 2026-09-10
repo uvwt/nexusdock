@@ -3,6 +3,7 @@ import { initReactI18next } from 'react-i18next';
 import zhCN from './locales/zh-CN';
 
 export type AppLocale = 'en' | 'zh-CN';
+export type LocalePreference = 'system' | AppLocale;
 
 const localeStorageKey = 'nexus.locale';
 
@@ -36,12 +37,20 @@ function storedLocale(): AppLocale | null {
   }
 }
 
+export function getLocalePreference(): LocalePreference {
+  return storedLocale() || 'system';
+}
+
 function systemLocale(): AppLocale {
   return resolveLocale([...(window.navigator.languages || []), window.navigator.language]);
 }
 
 function preferredLocale(): AppLocale {
   return storedLocale() || systemLocale();
+}
+
+function updateDocumentLanguage(locale: AppLocale): void {
+  document.documentElement.lang = locale;
 }
 
 void i18n
@@ -61,7 +70,7 @@ void i18n
     },
   });
 
-document.documentElement.lang = resolveLocale([i18n.resolvedLanguage, i18n.language]);
+updateDocumentLanguage(resolveLocale([i18n.resolvedLanguage, i18n.language]));
 
 export async function setLocale(locale: AppLocale | null): Promise<void> {
   try {
@@ -72,7 +81,17 @@ export async function setLocale(locale: AppLocale | null): Promise<void> {
   }
   const next = locale || systemLocale();
   await i18n.changeLanguage(next);
-  document.documentElement.lang = next;
+  updateDocumentLanguage(next);
 }
+
+export function setLocalePreference(preference: LocalePreference): Promise<void> {
+  return setLocale(preference === 'system' ? null : preference);
+}
+
+window.addEventListener('languagechange', () => {
+  if (getLocalePreference() !== 'system') return;
+  const next = systemLocale();
+  void i18n.changeLanguage(next).then(() => updateDocumentLanguage(next));
+});
 
 export default i18n;
