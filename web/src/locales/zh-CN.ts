@@ -65,7 +65,7 @@ const common: Record<string, string> = {
   'Waiting for first connection': '等待首次连接',
   'Settings categories': '设置分类',
   'Manage AgentDock nodes and view NexusDock runtime status.': '管理 AgentDock 节点，并查看 NexusDock 运行状态。',
-  'System': '系统',
+  'System': 'System',
   'Runtime status and data locations': '运行状态与数据位置',
   'Service': '服务',
   'Database': '数据库',
