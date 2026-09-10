@@ -1,13 +1,18 @@
-export const NEW_RECALL_TEMPLATE = `---
+import i18n from '../../i18n';
+
+export function createNewRecallTemplate(title: string): string {
+  return `---
 type: recall
 scope: inbox
 source: user-confirmed
 confidence: medium
 ---
 
-# 新召回条目
+# ${title}
 
 `;
+}
+
 
 export function normalizePath(value: string): string {
   return String(value || '').replace(/^\/+|\/+$/g, '').replace(/\/+/g, '/');
@@ -39,8 +44,9 @@ export function updateRoute(path = '', query = '') {
   window.history.replaceState(null, '', next);
 }
 
-export function messageOf(reason: unknown): string {
-  return reason instanceof Error ? reason.message : '操作失败';
+export function messageOf(reason: unknown, fallback?: string): string {
+  if (reason instanceof Error) return reason.message;
+  return fallback || i18n.t('Operation failed');
 }
 
 export function usesSinglePaneRecallLayout(): boolean {

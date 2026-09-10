@@ -14,6 +14,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { ApiError, api, setCSRFToken } from './api/client';
+import { useTranslation } from 'react-i18next';
 import { errorMessage, safeReturnTo } from './authShared';
 import './auth.css';
 
@@ -38,6 +39,7 @@ type SessionResponse = { ok: boolean; session: WebSession };
 type SessionsResponse = { ok: boolean; items: WebSession[] };
 
 export function LoginPage() {
+  const { t } = useTranslation();
   const params = useMemo(() => new URLSearchParams(window.location.search), []);
   const returnTo = safeReturnTo(params.get('return_to'));
   const [username, setUsername] = useState('');
@@ -97,19 +99,19 @@ export function LoginPage() {
       <section className="auth-login" aria-label="NexusDock">
         <div className="auth-brand"><span aria-hidden="true">N</span><strong>NexusDock</strong></div>
         <form className="auth-card" aria-labelledby="login-title" onSubmit={submit}>
-          <header><span className="auth-card-icon"><LockKeyhole size={21} /></span><div><h2 id="login-title">登录控制台</h2><p>使用 NexusDock 管理员账号继续</p></div></header>
-          {params.get('changed') === '1' && <div className="auth-success" role="status"><CheckCircle2 size={17} />密码已更新，请重新登录。</div>}
-          {initialized === false && <div className="auth-error" role="alert">管理员尚未初始化。请在 DockMini 本机运行管理命令后刷新。</div>}
+          <header><span className="auth-card-icon"><LockKeyhole size={21} /></span><div><h2 id="login-title">{t('Sign in to console')}</h2><p>{t('Continue with your NexusDock administrator account')}</p></div></header>
+          {params.get('changed') === '1' && <div className="auth-success" role="status"><CheckCircle2 size={17} />{t('Password updated. Please sign in again.')}</div>}
+          {initialized === false && <div className="auth-error" role="alert">{t('The administrator has not been initialized. Run the initialization command on DockMini, then refresh.')}</div>}
           {error && <div id="login-error" className="auth-error" role="alert">{error}</div>}
-          <label htmlFor="login-username"><span>用户名</span><input id="login-username" name="username" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} aria-invalid={Boolean(error)} aria-describedby={error ? 'login-error' : undefined} value={username} onChange={(event) => setUsername(event.target.value)} disabled={submitting || initialized === false} required /></label>
-          <label htmlFor="login-password"><span>密码</span><input id="login-password" name="password" type="password" autoComplete="current-password" aria-invalid={Boolean(error)} aria-describedby={error ? 'login-error' : undefined} value={password} onChange={(event) => setPassword(event.target.value)} disabled={submitting || initialized === false} required /></label>
-          <label className="auth-check" htmlFor="login-remember"><input id="login-remember" name="remember_me" type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} /><span>记住我 30 天</span></label>
+          <label htmlFor="login-username"><span>{t('Username')}</span><input id="login-username" name="username" type="text" autoComplete="username" autoCapitalize="none" spellCheck={false} aria-invalid={Boolean(error)} aria-describedby={error ? 'login-error' : undefined} value={username} onChange={(event) => setUsername(event.target.value)} disabled={submitting || initialized === false} required /></label>
+          <label htmlFor="login-password"><span>{t('Password')}</span><input id="login-password" name="password" type="password" autoComplete="current-password" aria-invalid={Boolean(error)} aria-describedby={error ? 'login-error' : undefined} value={password} onChange={(event) => setPassword(event.target.value)} disabled={submitting || initialized === false} required /></label>
+          <label className="auth-check" htmlFor="login-remember"><input id="login-remember" name="remember_me" type="checkbox" checked={rememberMe} onChange={(event) => setRememberMe(event.target.checked)} /><span>{t('Remember me for 30 days')}</span></label>
           <button className="auth-primary" type="submit" aria-busy={submitting} disabled={submitting || initialized !== true || !username || !password}>
-            {submitting ? <><RefreshCw className="spin" size={17} />正在验证</> : <>进入 Nexus<ArrowRight size={17} /></>}
+            {submitting ? <><RefreshCw className="spin" size={17} />{t('Verifying')}</> : <>{t('Enter Nexus')}<ArrowRight size={17} /></>}
           </button>
-          <p id="login-help" className="auth-help">忘记密码时，请在 DockMini 本机使用管理员恢复命令。Nexus 不提供公网找回入口。</p>
+          <p id="login-help" className="auth-help">{t('If you forget the password, use the administrator recovery command on DockMini. Nexus does not provide a public recovery endpoint.')}</p>
         </form>
-        <div className="auth-security-note"><ShieldCheck size={15} /><span>HttpOnly Session · SameSite Strict · CSRF 防护</span></div>
+        <div className="auth-security-note"><ShieldCheck size={15} /><span>{t('HttpOnly Session · SameSite Strict · CSRF protection')}</span></div>
       </section>
     </main>
   );

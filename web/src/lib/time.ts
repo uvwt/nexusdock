@@ -1,4 +1,5 @@
-const LOCALE = 'zh-CN';
+import i18n from '../i18n';
+
 const DEFAULT_TIME_ZONE = 'Asia/Shanghai';
 const ISO_WITHOUT_ZONE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?$/;
 const TIME_FORMATTERS = new Map<string, Intl.DateTimeFormat>();
@@ -26,12 +27,13 @@ function parseTimestamp(value?: string): Date | null {
 
 export function formatTime(value?: string, options: { seconds?: boolean; compact?: boolean; fallback?: string } = {}): string {
   const date = parseTimestamp(value);
-  if (!date) return value || options.fallback || '暂无';
+  if (!date) return value || options.fallback || i18n.t('None');
   const timeZone = displayTimeZone();
-  const key = [timeZone, options.seconds ? 'seconds' : 'minutes', options.compact ? 'compact' : 'offset'].join(':');
+  const locale = i18n.resolvedLanguage || i18n.language || 'en';
+  const key = [locale, timeZone, options.seconds ? 'seconds' : 'minutes', options.compact ? 'compact' : 'offset'].join(':');
   let formatter = TIME_FORMATTERS.get(key);
   if (!formatter) {
-    formatter = new Intl.DateTimeFormat(LOCALE, {
+    formatter = new Intl.DateTimeFormat(locale, {
       timeZone,
       year: '2-digit',
       month: '2-digit',

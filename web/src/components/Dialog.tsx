@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type ReactNode } from 'react';
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export default function Dialog({ title, description, children, onClose, wide = false }: {
   title: string;
@@ -8,6 +9,7 @@ export default function Dialog({ title, description, children, onClose, wide = f
   onClose: () => void;
   wide?: boolean;
 }) {
+  const { t } = useTranslation();
   const dialogRef = useRef<HTMLDialogElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
@@ -39,7 +41,7 @@ export default function Dialog({ title, description, children, onClose, wide = f
       <div ref={panelRef} className={`nx-dialog ${wide ? 'is-wide' : ''}`}>
         <header>
           <div><h2 id={titleId}>{title}</h2>{description && <p id={descriptionId}>{description}</p>}</div>
-          <button type="button" className="nx-icon-button" aria-label="关闭" onClick={onClose}><X size={19} /></button>
+          <button type="button" className="nx-icon-button" aria-label={t('Close')} onClick={onClose}><X size={19} /></button>
         </header>
         <div className="nx-dialog-body">{children}</div>
       </div>

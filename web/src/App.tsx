@@ -1,5 +1,7 @@
 import { formatTime } from './lib/time';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
+import i18n from './i18n';
 import {
   Activity, BrainCircuit, Cable, ChevronRight,
   CircleAlert, Database, FileJson, Home, ListChecks, Menu, RefreshCw,
@@ -63,17 +65,17 @@ type RuntimeSectionMeta = { id: RuntimeSection; label: string; icon: typeof Home
 type NavGroup = { label: string; items: SectionMeta[] };
 
 const RUNTIME_SECTIONS: RuntimeSectionMeta[] = [
-  { id: 'tasks', label: '任务', icon: ListChecks },
+  { id: 'tasks', label: 'Tasks', icon: ListChecks },
   { id: 'skills', label: 'Skill', icon: Wrench },
   { id: 'mcp', label: 'MCP', icon: Cable },
 ];
 
 const NAV: SectionMeta[] = [
-  { id: 'home', label: '总览', icon: Home, scope: 'workspace' },
+  { id: 'home', label: 'Overview', icon: Home, scope: 'workspace' },
   { id: 'recall', label: 'Recall', icon: Database, scope: 'workspace' },
   { id: 'templates', label: 'Workflow', icon: FileJson, scope: 'workspace' },
   ...RUNTIME_SECTIONS.map((item) => ({ ...item, scope: 'runtime' })),
-  { id: 'settings', label: '设置', icon: Settings, scope: 'system' },
+  { id: 'settings', label: 'Settings', icon: Settings, scope: 'system' },
 ];
 
 const NAV_GROUPS: NavGroup[] = [
@@ -83,10 +85,10 @@ const NAV_GROUPS: NavGroup[] = [
 ];
 
 const SETTINGS_SECTIONS: Array<{ id: SettingsSection; label: string; description: string; icon: typeof Settings }> = [
-  { id: 'account', label: '账号与会话', description: '登录、安全与活动会话', icon: UserRound },
-  { id: 'mcp', label: 'MCP 接入', description: '客户端地址与访问 Token', icon: Cable },
-  { id: 'ai', label: 'AI 与向量', description: '模型、Embedding 与索引', icon: BrainCircuit },
-  { id: 'system', label: '系统与节点', description: 'AgentDock、节点与系统状态', icon: ServerCog },
+  { id: 'account', label: 'Account & sessions', description: 'Sign-in, security, and active sessions', icon: UserRound },
+  { id: 'mcp', label: 'MCP access', description: 'Client address and access token', icon: Cable },
+  { id: 'ai', label: 'AI & vectors', description: 'Models, Embedding, and indexes', icon: BrainCircuit },
+  { id: 'system', label: 'System & nodes', description: 'AgentDock, nodes, and system status', icon: ServerCog },
 ];
 
 function sectionFromHash(): Section {
@@ -111,9 +113,9 @@ function unpackAPI<T>(body: unknown, fallback: T): T {
 }
 
 function messageOf(error: unknown): string {
-  if (error instanceof ApiError && error.status === 401) return '登录会话已失效，请重新登录。';
-  if (error instanceof ApiError && error.status === 403) return '当前账号没有访问权限。';
-  return error instanceof Error ? error.message : '读取 Nexus 数据失败';
+  if (error instanceof ApiError && error.status === 401) return i18n.t('Your login session has expired. Please sign in again.');
+  if (error instanceof ApiError && error.status === 403) return i18n.t('This account does not have permission to access this resource.');
+  return error instanceof Error ? error.message : i18n.t('Failed to load Nexus data');
 }
 
 function useResource<T>(path: string, fallback: T, refreshToken: number): Resource<T> {
@@ -136,6 +138,7 @@ function useResource<T>(path: string, fallback: T, refreshToken: number): Resour
 
 
 export default function App() {
+  const { t } = useTranslation();
   const [section, setSection] = useState<Section>(sectionFromHash);
   const [menuOpen, setMenuOpen] = useState(false);
   const [refreshToken, setRefreshToken] = useState(0);
@@ -187,26 +190,26 @@ export default function App() {
           <span className="nexus-brand-mark" aria-hidden="true">N</span>
           <span><strong>Nexus</strong><small>AgentDock Console</small></span>
         </div>
-        <nav aria-label="主导航">
+        <nav aria-label={t('Primary navigation')}>
           {NAV_GROUPS.map((group) => <div className="nexus-nav-group" key={group.label}>
             <span className="nexus-nav-title">{group.label}</span>
             {group.items.map((item) => {
               const Icon = item.icon;
-              return <button type="button" key={item.id} className={section === item.id ? 'active' : ''} aria-current={section === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><Icon size={18} /><span>{item.label}</span></button>;
+              return <button type="button" key={item.id} className={section === item.id ? 'active' : ''} aria-current={section === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}><Icon size={18} /><span>{t(item.label)}</span></button>;
             })}
           </div>)}
         </nav>
         <div className="nexus-sidebar-foot"><ShieldCheck size={16} /><span><strong>Private workspace</strong><small>Local-first console</small></span></div>
       </aside>
-      {menuOpen && <button type="button" className="nexus-scrim" aria-label="关闭菜单" onClick={() => setMenuOpen(false)} />}
+      {menuOpen && <button type="button" className="nexus-scrim" aria-label={t('Close menu')} onClick={() => setMenuOpen(false)} />}
       <main className="nexus-main">
         <header className="nexus-topbar">
-          <button type="button" className="nexus-mobile-menu" aria-label="切换菜单" aria-expanded={menuOpen} aria-controls="nexus-primary-navigation" onClick={() => setMenuOpen((value) => !value)}>{menuOpen ? <X /> : <Menu />}</button>
-          <div><span className="nexus-eyebrow">Nexus / {active.scope}</span><h1>{active.label}</h1></div>
+          <button type="button" className="nexus-mobile-menu" aria-label={t('Toggle menu')} aria-expanded={menuOpen} aria-controls="nexus-primary-navigation" onClick={() => setMenuOpen((value) => !value)}>{menuOpen ? <X /> : <Menu />}</button>
+          <div><span className="nexus-eyebrow">Nexus / {active.scope}</span><h1>{t(active.label)}</h1></div>
           <div className="nexus-top-actions">
-            <span className="nexus-environment"><i />运行中</span>
-            <button type="button" className="icon-button" title="刷新" aria-label="刷新当前页面" onClick={() => setRefreshToken((value) => value + 1)}><RefreshCw size={17} /></button>
-            <span className="nexus-session-user" title={session?.username || '管理员会话'}><span className="nexus-avatar">{sessionName.charAt(0).toUpperCase()}</span><span>{sessionName}</span></span>
+            <span className="nexus-environment"><i />{t('Running')}</span>
+            <button type="button" className="icon-button" title={t('Refresh')} aria-label={t('Refresh current page')} onClick={() => setRefreshToken((value) => value + 1)}><RefreshCw size={17} /></button>
+            <span className="nexus-session-user" title={session?.username || t('Administrator session')}><span className="nexus-avatar">{sessionName.charAt(0).toUpperCase()}</span><span>{sessionName}</span></span>
           </div>
         </header>
         <div className="nexus-content">
@@ -228,12 +231,13 @@ function signInAgain() {
 }
 
 function SessionExpiredDialog() {
+  const { t } = useTranslation();
   const dialogRef = useRef<HTMLDialogElement>(null);
   useEffect(() => {
     const dialog = dialogRef.current;
     if (dialog && !dialog.open) dialog.showModal();
   }, []);
-  return <dialog ref={dialogRef} className="session-expired-overlay" aria-labelledby="session-expired-title"><section className="session-expired-dialog"><span><CircleAlert size={22} /></span><h2 id="session-expired-title">会话已过期</h2><p>当前页面保持不变，失败的写操作不会自动重试。</p><button type="button" onClick={signInAgain}>重新登录</button></section></dialog>;
+  return <dialog ref={dialogRef} className="session-expired-overlay" aria-labelledby="session-expired-title"><section className="session-expired-dialog"><span><CircleAlert size={22} /></span><h2 id="session-expired-title">{t('Session expired')}</h2><p>{t('The current page is preserved. Failed write operations will not be retried automatically.')}</p><button type="button" onClick={signInAgain}>{t('Sign in again')}</button></section></dialog>;
 }
 
 type RuntimeNodesState = ReturnType<typeof useAgentDockNodes>;
@@ -287,6 +291,7 @@ function useRuntimeNodeMetrics(runtimeNodes: RuntimeNodesState, refreshToken: nu
 }
 
 function HomePage({ refreshToken, runtimeNodes, navigate }: { refreshToken: number; runtimeNodes: RuntimeNodesState; navigate: (section: Section) => void }) {
+  const { t } = useTranslation();
   const system = useResource<SystemStatus>('/v1/system/status', { ok: false, service: 'nexusdock', database: 'unknown', schema_version: 0, nexus_data_dir: '', recall_repo_dir: '' }, refreshToken);
   const runtimeMetrics = useRuntimeNodeMetrics(runtimeNodes, refreshToken);
   const enabledNodes = runtimeNodes.nodes.filter((node) => node.enabled);
@@ -294,49 +299,50 @@ function HomePage({ refreshToken, runtimeNodes, navigate }: { refreshToken: numb
   const offlineNodes = enabledNodes.filter((node) => !node.online);
   const runtimeErrors = Object.entries(runtimeMetrics.errors).map(([nodeID, message]) => {
     const node = runtimeNodes.nodes.find((item) => item.id === nodeID);
-    return `${node?.name || nodeID}：${message}`;
+    return `${node?.name || nodeID}: ${message}`;
   });
   const errors = [system.error, runtimeNodes.error, ...runtimeErrors].filter(Boolean) as string[];
   const systemTone = system.data.ok ? 'ok' : 'danger';
   const nodesTone: Tone = runtimeNodes.loading ? 'muted' : offlineNodes.length > 0 ? 'danger' : enabledNodes.length > 0 ? 'ok' : 'muted';
-  const nodeSummary = runtimeNodes.loading ? '读取中' : enabledNodes.length > 0 ? `${onlineNodes.length}/${enabledNodes.length} 在线` : '暂无节点';
+  const nodeSummary = runtimeNodes.loading ? t('Loading') : enabledNodes.length > 0 ? t('{{online}}/{{total}} online', { online: onlineNodes.length, total: enabledNodes.length }) : t('No nodes');
   const databaseAbnormal = system.live && !system.data.ok;
   const needsAttention = databaseAbnormal || offlineNodes.length > 0 || errors.length > 0;
 
   return <>
     <section className="nexus-overview-strip">
-      <div><span className="nexus-kicker">个人控制台</span><h2>{needsAttention ? '有项目需要处理' : '核心服务正常'}</h2><p>数据库 {system.data.database || 'unknown'} · 节点 {nodeSummary}</p></div>
-      <div className="nexus-overview-status"><StatusBadge tone={systemTone}>Nexus</StatusBadge><StatusBadge tone={nodesTone}>节点 {nodeSummary}</StatusBadge></div>
+      <div><span className="nexus-kicker">{t('Personal console')}</span><h2>{needsAttention ? t('Items need attention') : t('Core services are healthy')}</h2><p>{t('Database {{database}} · Nodes {{nodes}}', { database: system.data.database || 'unknown', nodes: nodeSummary })}</p></div>
+      <div className="nexus-overview-status"><StatusBadge tone={systemTone}>Nexus</StatusBadge><StatusBadge tone={nodesTone}>{t('Nodes {{summary}}', { summary: nodeSummary })}</StatusBadge></div>
     </section>
-    {errors.length > 0 && <InlineAlert tone="danger" title="部分数据读取失败" message={errors.join('；')} />}
+    {errors.length > 0 && <InlineAlert tone="danger" title={t('Some data could not be loaded')} message={errors.join('; ')} />}
 
     <NodeOverview runtimeNodes={runtimeNodes} runtimeMetrics={runtimeMetrics} />
 
-    {needsAttention && <Panel className="dashboard-attention-panel" icon={CircleAlert} title="需要处理" subtitle="只显示会影响使用的问题">
-      {databaseAbnormal && <button type="button" className="attention-row" onClick={() => navigate('settings')}><StatusBadge tone="danger">异常</StatusBadge><span><strong>数据库异常</strong><small>{system.data.database || 'unknown'}</small></span><ChevronRight size={16} /></button>}
-      {offlineNodes.map((node) => <button type="button" className="attention-row" key={node.id} onClick={() => { window.location.hash = 'settings/system'; }}><StatusBadge tone="danger">离线</StatusBadge><span><strong>{node.name}</strong><small>{formatTime(node.last_seen_at, { compact: true })}</small></span><ChevronRight size={16} /></button>)}
+    {needsAttention && <Panel className="dashboard-attention-panel" icon={CircleAlert} title={t('Needs attention')} subtitle={t('Only issues that affect normal use are shown')}>
+      {databaseAbnormal && <button type="button" className="attention-row" onClick={() => navigate('settings')}><StatusBadge tone="danger">{t('Abnormal')}</StatusBadge><span><strong>{t('Database abnormal')}</strong><small>{system.data.database || 'unknown'}</small></span><ChevronRight size={16} /></button>}
+      {offlineNodes.map((node) => <button type="button" className="attention-row" key={node.id} onClick={() => { window.location.hash = 'settings/system'; }}><StatusBadge tone="danger">{t('Offline')}</StatusBadge><span><strong>{node.name}</strong><small>{formatTime(node.last_seen_at, { compact: true })}</small></span><ChevronRight size={16} /></button>)}
       {errors.map((message) => <div className="nx-alert is-error" key={message}>{message}</div>)}
     </Panel>}
   </>;
 }
 
 function NodeOverview({ runtimeNodes, runtimeMetrics }: { runtimeNodes: RuntimeNodesState; runtimeMetrics: RuntimeMetricsState }) {
+  const { t } = useTranslation();
   const onlineCount = runtimeNodes.nodes.filter((node) => node.enabled && node.online).length;
   return <section className="dashboard-node-section">
     <header>
-      <div className="dashboard-node-heading"><span className="nexus-panel-icon"><ServerCog size={17} /></span><div><h3>AgentDock 节点</h3><p>{runtimeNodes.loading ? '正在读取节点状态…' : `${runtimeNodes.nodes.length} 个节点 · ${onlineCount} 在线`}</p></div></div>
-      <button type="button" className="nx-button is-secondary is-small" onClick={() => { window.location.hash = 'settings/system'; }}>管理节点</button>
+      <div className="dashboard-node-heading"><span className="nexus-panel-icon"><ServerCog size={17} /></span><div><h3>{t('AgentDock nodes')}</h3><p>{runtimeNodes.loading ? t('Loading node status…') : t('{{count}} nodes · {{online}} online', { count: runtimeNodes.nodes.length, online: onlineCount })}</p></div></div>
+      <button type="button" className="nx-button is-secondary is-small" onClick={() => { window.location.hash = 'settings/system'; }}>{t('Manage nodes')}</button>
     </header>
     <div className="dashboard-node-list">
-      {runtimeNodes.loading && runtimeNodes.nodes.length === 0 && <EmptyMini text="正在读取 AgentDock 节点…" />}
-      {!runtimeNodes.loading && runtimeNodes.nodes.length === 0 && <EmptyMini text="尚未配对 AgentDock 节点。" />}
+      {runtimeNodes.loading && runtimeNodes.nodes.length === 0 && <EmptyMini text={t('Loading AgentDock nodes…')} />}
+      {!runtimeNodes.loading && runtimeNodes.nodes.length === 0 && <EmptyMini text={t('No AgentDock nodes have been paired.')} />}
       {runtimeNodes.nodes.map((node) => {
         const statusTone: Tone = !node.enabled ? 'muted' : node.online ? 'ok' : 'danger';
-        const statusLabel = !node.enabled ? '已停用' : node.online ? '在线' : '离线';
+        const statusLabel = !node.enabled ? t('Disabled') : node.online ? t('Online') : t('Offline');
         const metrics = runtimeMetrics.data[node.id];
         const metricValue = (value?: number) => {
           if (!node.enabled || !node.online) return '—';
-          if (runtimeMetrics.loading && !metrics) return '读取中';
+          if (runtimeMetrics.loading && !metrics) return t('Loading');
           return metrics ? String(value ?? 0) : '—';
         };
         return <article className="dashboard-node-row" key={node.id}>
@@ -345,12 +351,12 @@ function NodeOverview({ runtimeNodes, runtimeMetrics }: { runtimeNodes: RuntimeN
             <span><strong>{node.name}</strong><small>{nodePlatformLabel(node.os, node.arch)}</small></span>
           </div>
           <div className="dashboard-node-meta">
-            <span><small>AgentDock</small><strong>{node.version ? `v${node.version}` : '未知'}</strong></span>
+            <span><small>AgentDock</small><strong>{node.version ? `v${node.version}` : t('Unknown')}</strong></span>
             <span><small>Skill</small><strong>{metricValue(metrics?.skills)}</strong></span>
             <span><small>MCP</small><strong>{metricValue(metrics?.mcp)}</strong></span>
-            <span><small>24h 进行中</small><strong>{metricValue(metrics?.activeRecent24h)}</strong></span>
-            <span><small>工具</small><strong>{node.capabilities?.length || 0} 个</strong></span>
-            <span><small>最近在线</small><strong>{formatTime(node.last_seen_at, { compact: true })}</strong></span>
+            <span><small>{t('In progress (24h)')}</small><strong>{metricValue(metrics?.activeRecent24h)}</strong></span>
+            <span><small>{t('Tools')}</small><strong>{t('{{count}} tools', { count: node.capabilities?.length || 0 })}</strong></span>
+            <span><small>{t('Last online')}</small><strong>{formatTime(node.last_seen_at, { compact: true })}</strong></span>
           </div>
           <div className="dashboard-node-badges"><StatusBadge tone={statusTone}>{statusLabel}</StatusBadge></div>
         </article>;
@@ -361,7 +367,7 @@ function NodeOverview({ runtimeNodes, runtimeMetrics }: { runtimeNodes: RuntimeN
 
 function nodePlatformLabel(os?: string, arch?: string): string {
   const osLabel = os === 'darwin' ? 'macOS' : os === 'windows' ? 'Windows' : os === 'linux' ? 'Linux' : os || '';
-  return [osLabel, arch].filter(Boolean).join(' / ') || '等待首次连接';
+  return [osLabel, arch].filter(Boolean).join(' / ') || i18n.t('Waiting for first connection');
 }
 
 function isRuntimeSection(section: Section): section is RuntimeSection {
@@ -373,12 +379,13 @@ function RuntimeContent({ active, refreshToken, runtimeNodes }: {
   refreshToken: number;
   runtimeNodes: RuntimeNodesState;
 }) {
+  const { t } = useTranslation();
   return <section className={`runtime-standalone-page runtime-${active}-page`}>
     <div className="runtime-node-bar">
       <AgentDockNodeSelector nodes={runtimeNodes.nodes} selectedNodeID={runtimeNodes.selectedNodeID} onSelect={runtimeNodes.selectNode} />
-      {runtimeNodes.selectedNode && <span className={`runtime-node-status ${runtimeNodes.selectedNode.online ? 'is-online' : 'is-offline'}`}>{runtimeNodes.selectedNode.online ? '在线' : '离线'}{runtimeNodes.selectedNode.os ? ` · ${runtimeNodes.selectedNode.os}/${runtimeNodes.selectedNode.arch}` : ''}</span>}
+      {runtimeNodes.selectedNode && <span className={`runtime-node-status ${runtimeNodes.selectedNode.online ? 'is-online' : 'is-offline'}`}>{runtimeNodes.selectedNode.online ? t('Online') : t('Offline')}{runtimeNodes.selectedNode.os ? ` · ${runtimeNodes.selectedNode.os}/${runtimeNodes.selectedNode.arch}` : ''}</span>}
     </div>
-    {!runtimeNodes.selectedNode && <AgentDockNodeRequired><button type="button" className="nx-button" onClick={() => { window.location.hash = 'settings/system'; }}>管理节点</button></AgentDockNodeRequired>}
+    {!runtimeNodes.selectedNode && <AgentDockNodeRequired><button type="button" className="nx-button" onClick={() => { window.location.hash = 'settings/system'; }}>{t('Manage nodes')}</button></AgentDockNodeRequired>}
     {active === 'tasks' && runtimeNodes.selectedNode && <TaskCenterPage key={runtimeNodes.selectedNode.id} nodeID={runtimeNodes.selectedNode.id} refreshToken={refreshToken} />}
     {active === 'skills' && runtimeNodes.selectedNode && <SkillsPage key={runtimeNodes.selectedNode.id} nodeID={runtimeNodes.selectedNode.id} refreshToken={refreshToken} />}
     {active === 'mcp' && runtimeNodes.selectedNode && <MCPPage key={runtimeNodes.selectedNode.id} nodeID={runtimeNodes.selectedNode.id} refreshToken={refreshToken} />}
@@ -386,6 +393,7 @@ function RuntimeContent({ active, refreshToken, runtimeNodes }: {
 }
 
 function SettingsPage({ refreshToken, runtimeNodes }: { refreshToken: number; runtimeNodes: RuntimeNodesState }) {
+  const { t } = useTranslation();
   const [active, setActive] = useState<SettingsSection>(settingsSectionFromHash);
 
   useEffect(() => {
@@ -400,12 +408,12 @@ function SettingsPage({ refreshToken, runtimeNodes }: { refreshToken: number; ru
   }
 
   return <section className="settings-page">
-    <nav className="settings-subnav" aria-label="设置分类">
+    <nav className="settings-subnav" aria-label={t('Settings categories')}>
       {SETTINGS_SECTIONS.map((item) => {
         const Icon = item.icon;
         return <button key={item.id} type="button" className={active === item.id ? 'is-active' : ''} aria-current={active === item.id ? 'page' : undefined} onClick={() => navigate(item.id)}>
           <span className="settings-subnav-icon"><Icon size={17} /></span>
-          <span><strong>{item.label}</strong><small>{item.description}</small></span>
+          <span><strong>{t(item.label)}</strong><small>{t(item.description)}</small></span>
         </button>;
       })}
     </nav>
@@ -419,10 +427,11 @@ function SettingsPage({ refreshToken, runtimeNodes }: { refreshToken: number; ru
 }
 
 function SystemSettingsPage({ refreshToken, runtimeNodes }: { refreshToken: number; runtimeNodes: RuntimeNodesState }) {
+  const { t } = useTranslation();
   const system = useResource<SystemStatus>('/v1/system/status', { ok: false, service: 'nexusdock', database: 'unknown', schema_version: 0, nexus_data_dir: '', recall_repo_dir: '' }, refreshToken);
 
   return <section className="system-settings-page">
-    <header className="settings-section-heading"><div><span className="nexus-eyebrow">SYSTEM</span><h2>系统与节点</h2><p>管理 AgentDock 节点，并查看 NexusDock 运行状态。</p></div></header>
+    <header className="settings-section-heading"><div><span className="nexus-eyebrow">SYSTEM</span><h2>{t('System & nodes')}</h2><p>{t('Manage AgentDock nodes and view NexusDock runtime status.')}</p></div></header>
     <AgentDockNodesPanel
       nodes={runtimeNodes.nodes}
       selectedNodeID={runtimeNodes.selectedNodeID}
@@ -432,10 +441,10 @@ function SystemSettingsPage({ refreshToken, runtimeNodes }: { refreshToken: numb
       onSelect={runtimeNodes.selectNode}
     />
     <section className="settings-grid settings-system-grid">
-      <Panel icon={Activity} title="系统" subtitle="运行状态与数据位置">
-        <SettingValue label="服务" value={system.data.service || 'nexusdock'} tone={system.data.ok ? 'ok' : 'danger'} />
-        <SettingValue label="数据库" value={system.data.database || 'unknown'} tone={system.data.database === 'ok' ? 'ok' : 'danger'} />
-        <details className="nexus-technical-details"><summary>数据与版本</summary><SettingValue label="Schema" value={String(system.data.schema_version || 0)} /><SettingValue label="Nexus 数据" value={system.data.nexus_data_dir || '暂无'} mono /><SettingValue label="Recall 仓库" value={system.data.recall_repo_dir || '暂无'} mono /></details>
+      <Panel icon={Activity} title={t('System')} subtitle={t('Runtime status and data locations')}>
+        <SettingValue label={t('Service')} value={system.data.service || 'nexusdock'} tone={system.data.ok ? 'ok' : 'danger'} />
+        <SettingValue label={t('Database')} value={system.data.database || 'unknown'} tone={system.data.database === 'ok' ? 'ok' : 'danger'} />
+        <details className="nexus-technical-details"><summary>{t('Data & version')}</summary><SettingValue label="Schema" value={String(system.data.schema_version || 0)} /><SettingValue label={t('Nexus data')} value={system.data.nexus_data_dir || t('None')} mono /><SettingValue label={t('Recall repository')} value={system.data.recall_repo_dir || t('None')} mono /></details>
       </Panel>
     </section>
   </section>;

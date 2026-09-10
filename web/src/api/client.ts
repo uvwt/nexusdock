@@ -1,3 +1,5 @@
+import i18n from '../i18n';
+
 export type ApiErrorBody = {
   error?: {
     code?: string;
@@ -50,7 +52,7 @@ function requestURL(path: string): URL {
   url.username = '';
   url.password = '';
   if (url.origin !== window.location.origin) {
-    throw new ApiError('拒绝跨源 API 请求，避免泄漏管理凭据', 0);
+    throw new ApiError(i18n.t('Cross-origin API requests are blocked to protect administrative credentials.'), 0);
   }
   return url;
 }
@@ -101,7 +103,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
       try {
         body = JSON.parse(text) as ApiErrorBody | T;
       } catch {
-        throw new ApiError('服务返回了无法解析的响应', response.status, { error: { code: 'INVALID_JSON' } });
+        throw new ApiError(i18n.t('The service returned an unreadable response.'), response.status, { error: { code: 'INVALID_JSON' } });
       }
     }
 
@@ -112,7 +114,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
         window.dispatchEvent(new CustomEvent('nexus:session-expired'));
       }
       throw new ApiError(
-        errorBody.error?.message || errorBody.message || response.statusText || '请求失败',
+        errorBody.error?.message || errorBody.message || response.statusText || i18n.t('Request failed'),
         response.status,
         errorBody,
       );
@@ -121,9 +123,9 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
   } catch (error) {
     if (error instanceof ApiError) throw error;
     if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new Error(externalSignal?.aborted ? '请求已取消' : '请求超时');
+      throw new Error(externalSignal?.aborted ? i18n.t('Request cancelled') : i18n.t('Request timed out'));
     }
-    throw error instanceof Error ? error : new Error('网络请求失败');
+    throw error instanceof Error ? error : new Error(i18n.t('Network request failed'));
   } finally {
     window.clearTimeout(timeout);
     externalSignal?.removeEventListener('abort', abort);

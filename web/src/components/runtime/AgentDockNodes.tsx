@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useTranslation } from 'react-i18next';
 import { CirclePlus, Pencil, RefreshCw, Server, Trash2 } from 'lucide-react';
 import { api } from '../../api/client';
 import Dialog from '../Dialog';
@@ -29,6 +30,7 @@ type NodeResponse = { ok: boolean; node: AgentDockNode };
 type PairingResponse = { ok: boolean; pairing: { code: string; expires_at: string } };
 
 export function useAgentDockNodes(refreshToken: number) {
+  const { t } = useTranslation();
   const [nodes, setNodes] = useState<AgentDockNode[]>([]);
   const [selectedNodeID, setSelectedNodeID] = useState(() => window.localStorage.getItem(selectedNodeStorageKey) || '');
   const [loading, setLoading] = useState(true);
@@ -51,12 +53,12 @@ export function useAgentDockNodes(refreshToken: number) {
       setNodes(next);
       if (selectedNodeID && !next.some((node) => node.id === selectedNodeID && node.enabled)) selectNode('');
     }).catch((cause) => {
-      if (!cancelled) setError(cause instanceof Error ? cause.message : '无法读取 AgentDock 节点');
+      if (!cancelled) setError(cause instanceof Error ? cause.message : t('Failed to load AgentDock nodes'));
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
     return () => { cancelled = true; };
-  }, [refreshToken, revision, selectedNodeID, selectNode]);
+  }, [refreshToken, revision, selectedNodeID, selectNode, t]);
 
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedNodeID && node.enabled) || null,
@@ -70,21 +72,23 @@ export function AgentDockNodeSelector({ nodes, selectedNodeID, onSelect }: {
   selectedNodeID: string;
   onSelect: (nodeID: string) => void;
 }) {
+  const { t } = useTranslation();
   return <label className="runtime-node-selector">
     <Server size={15} />
     <span>AgentDock</span>
-    <select aria-label="选择 AgentDock 节点" value={selectedNodeID} onChange={(event) => onSelect(event.target.value)}>
-      <option value="">请选择节点</option>
-      {nodes.filter((node) => node.enabled).map((node) => <option key={node.id} value={node.id}>{node.name}{node.online ? '' : '（离线）'}</option>)}
+    <select aria-label={t('Select AgentDock node')} value={selectedNodeID} onChange={(event) => onSelect(event.target.value)}>
+      <option value="">{t('Please select a node')}</option>
+      {nodes.filter((node) => node.enabled).map((node) => <option key={node.id} value={node.id}>{node.name}{node.online ? '' : t(' (offline)')}</option>)}
     </select>
   </label>;
 }
 
 export function AgentDockNodeRequired({ children }: { children?: ReactNode }) {
+  const { t } = useTranslation();
   return <section className="runtime-node-required">
     <span><Server size={25} /></span>
-    <h2>请选择 AgentDock 节点</h2>
-    <p>节点操作必须明确指定设备。请从上方选择，或先配对一台 AgentDock。</p>
+    <h2>{t('Please select an AgentDock node')}</h2>
+    <p>{t('Node operations must explicitly specify a device. Please select from above, or pair an AgentDock first.')}</p>
     {children}
   </section>;
 }
@@ -97,6 +101,7 @@ export function AgentDockNodesPanel({ nodes, selectedNodeID, loading, error, onR
   onReload: () => void;
   onSelect: (nodeID: string) => void;
 }) {
+  const { t } = useTranslation();
   const [editing, setEditing] = useState<AgentDockNode | null>(null);
   const [editName, setEditName] = useState('');
   const [editEnabled, setEditEnabled] = useState(true);
@@ -112,7 +117,7 @@ export function AgentDockNodesPanel({ nodes, selectedNodeID, loading, error, onR
       const result = await api<PairingResponse>('/v1/runtime/nodes/pairing-codes', { method: 'POST' });
       setPairing(result.pairing);
     } catch (cause) {
-      setNotice({ tone: 'error', text: cause instanceof Error ? cause.message : '无法生成配对码' });
+      setNotice({ tone: 'error', text: cause instanceof Error ? cause.message : t('Failed to generate pairing code') });
     } finally {
       setBusy('');
     }
@@ -134,9 +139,9 @@ export function AgentDockNodesPanel({ nodes, selectedNodeID, loading, error, onR
       });
       setEditing(null);
       onReload();
-      setNotice({ tone: 'success', text: `已更新 ${result.node.name}` });
+      setNotice({ tone: 'success', text: t('Updated {{name}}', { name: result.node.name }) });
     } catch (cause) {
-      setNotice({ tone: 'error', text: cause instanceof Error ? cause.message : '节点保存失败' });
+      setNotice({ tone: 'error', text: cause instanceof Error ? cause.message : t('Failed to save node') });
     } finally {
       setBusy('');
     }
@@ -150,9 +155,9 @@ export function AgentDockNodesPanel({ nodes, selectedNodeID, loading, error, onR
       if (selectedNodeID === deleting.id) onSelect('');
       setDeleting(null);
       onReload();
-      setNotice({ tone: 'success', text: `已删除 ${deleting.name}` });
+      setNotice({ tone: 'success', text: t('Deleted {{name}}', { name: deleting.name }) });
     } catch (cause) {
-      setNotice({ tone: 'error', text: cause instanceof Error ? cause.message : '节点删除失败' });
+      setNotice({ tone: 'error', text: cause instanceof Error ? cause.message : t('Failed to delete node') });
     } finally {
       setBusy('');
     }
@@ -164,44 +169,44 @@ export function AgentDockNodesPanel({ nodes, selectedNodeID, loading, error, onR
 
   return <section className="agentdock-nodes-panel">
     <header>
-      <div><span className="nexus-eyebrow">RUNTIME NODES</span><h2>AgentDock 节点</h2><p>AgentDock 主动连接 Nexus；无需设备公网地址，也无需向 Nexus 提供 AgentDock Token。</p></div>
+      <div><span className="nexus-eyebrow">RUNTIME NODES</span><h2>{t('AgentDock nodes')}</h2><p>{t('AgentDock actively connects to Nexus; no public device address needed, and no need to provide AgentDock token to Nexus.')}</p></div>
       <div className="agentdock-node-actions">
-        <button type="button" className="nx-button is-secondary" onClick={onReload} disabled={loading}><RefreshCw size={15} />刷新</button>
-        <button type="button" className="nx-button" onClick={() => void createPairingCode()} disabled={busy === 'pair'}><CirclePlus size={15} />{busy === 'pair' ? '生成中…' : '配对设备'}</button>
+        <button type="button" className="nx-button is-secondary" onClick={onReload} disabled={loading}><RefreshCw size={15} />{t('Refresh')}</button>
+        <button type="button" className="nx-button" onClick={() => void createPairingCode()} disabled={busy === 'pair'}><CirclePlus size={15} />{busy === 'pair' ? t('Generating…') : t('Pair device')}</button>
       </div>
     </header>
 
     {(error || notice) && <div className={`nx-alert is-${error || notice?.tone === 'error' ? 'error' : notice?.tone || 'info'}`}>{error || notice?.text}</div>}
 
     <div className="agentdock-node-list">
-      {loading && nodes.length === 0 ? <p className="empty-mini">正在读取 AgentDock 节点…</p> : nodes.length === 0 ? <p className="empty-mini">尚未配对 AgentDock 节点。</p> : nodes.map((node) => <article key={node.id} className={selectedNodeID === node.id ? 'is-selected' : ''}>
+      {loading && nodes.length === 0 ? <p className="empty-mini">{t('Loading AgentDock nodes…')}</p> : nodes.length === 0 ? <p className="empty-mini">{t('No AgentDock nodes have been paired.')}</p> : nodes.map((node) => <article key={node.id} className={selectedNodeID === node.id ? 'is-selected' : ''}>
         <span className="agentdock-node-icon"><Server size={18} /></span>
         <div className="agentdock-node-copy">
-          <div><strong>{node.name}</strong><code>{node.id}</code>{!node.enabled && <em>已停用</em>}</div>
-          <small>{node.os && node.arch ? `${node.os}/${node.arch}` : '等待首次连接'}{node.version ? ` · AgentDock ${node.version}` : ''}</small>
-          <span className={`agentdock-node-status ${node.online ? 'is-online' : 'is-offline'}`}><strong>{node.online ? '在线' : '离线'}</strong><span>· {node.capabilities?.length || 0} 个节点工具{node.last_seen_at ? ` · 最近 ${new Date(node.last_seen_at).toLocaleString()}` : ''}</span></span>
+          <div><strong>{node.name}</strong><code>{node.id}</code>{!node.enabled && <em>{t('Disabled')}</em>}</div>
+          <small>{node.os && node.arch ? `${node.os}/${node.arch}` : t('Waiting for first connection')}{node.version ? ` · AgentDock ${node.version}` : ''}</small>
+          <span className={`agentdock-node-status ${node.online ? 'is-online' : 'is-offline'}`}><strong>{node.online ? t('Online') : t('Offline')}</strong><span>· {t('{{count}} node tools', { count: node.capabilities?.length || 0 })}{node.last_seen_at ? ` · ${t('Recent {{time}}', { time: new Date(node.last_seen_at).toLocaleString() })}` : ''}</span></span>
         </div>
         <div className="agentdock-node-row-actions">
-          <button type="button" className="nx-button is-secondary is-small" disabled={!!busy} onClick={() => openEdit(node)}><Pencil size={14} />编辑</button>
-          <button type="button" className="nx-button is-danger is-small" disabled={!!busy} onClick={() => setDeleting(node)}><Trash2 size={14} />删除</button>
+          <button type="button" className="nx-button is-secondary is-small" disabled={!!busy} onClick={() => openEdit(node)}><Pencil size={14} />{t('Edit')}</button>
+          <button type="button" className="nx-button is-danger is-small" disabled={!!busy} onClick={() => setDeleting(node)}><Trash2 size={14} />{t('Delete')}</button>
         </div>
       </article>)}
     </div>
 
-    {pairing && <Dialog title="配对 AgentDock" description={`配对码将在 ${new Date(pairing.expires_at).toLocaleString()} 失效，且只能使用一次。`} onClose={() => setPairing(null)} wide>
-      <div className="agentdock-node-delete"><p>在目标设备执行以下命令，然后重启 AgentDock：</p><code>{pairCommand}</code><footer><button type="button" className="nx-button" onClick={() => void navigator.clipboard.writeText(pairCommand)}>复制命令</button></footer></div>
+    {pairing && <Dialog title={t('Pair AgentDock')} description={t('Pairing code expires at {{time}} and can only be used once.', { time: new Date(pairing.expires_at).toLocaleString() })} onClose={() => setPairing(null)} wide>
+      <div className="agentdock-node-delete"><p>{t('Run the following command on the target device, then restart AgentDock:')}</p><code>{pairCommand}</code><footer><button type="button" className="nx-button" onClick={() => void navigator.clipboard.writeText(pairCommand)}>{t('Copy command')}</button></footer></div>
     </Dialog>}
 
-    {editing && <Dialog title={`编辑 ${editing.name}`} description="设备身份和连接凭据由配对流程管理。" onClose={() => setEditing(null)}>
+    {editing && <Dialog title={t('Edit {{name}}', { name: editing.name })} description={t('Device identity and connection credentials are managed by the pairing process.')} onClose={() => setEditing(null)}>
       <form className="agentdock-node-form" onSubmit={submitEdit}>
-        <label className="is-wide"><span>显示名称</span><input required maxLength={100} value={editName} onChange={(event) => setEditName(event.target.value)} /></label>
-        <label className="agentdock-node-check"><input type="checkbox" checked={editEnabled} onChange={(event) => setEditEnabled(event.target.checked)} /><span>启用节点</span></label>
-        <footer><button type="button" className="nx-button is-secondary" onClick={() => setEditing(null)}>取消</button><button type="submit" className="nx-button" disabled={busy === 'save'}>{busy === 'save' ? '保存中…' : '保存'}</button></footer>
+        <label className="is-wide"><span>{t('Display name')}</span><input required maxLength={100} value={editName} onChange={(event) => setEditName(event.target.value)} /></label>
+        <label className="agentdock-node-check"><input type="checkbox" checked={editEnabled} onChange={(event) => setEditEnabled(event.target.checked)} /><span>{t('Enable node')}</span></label>
+        <footer><button type="button" className="nx-button is-secondary" onClick={() => setEditing(null)}>{t('Cancel')}</button><button type="submit" className="nx-button" disabled={busy === 'save'}>{busy === 'save' ? t('Saving…') : t('Save')}</button></footer>
       </form>
     </Dialog>}
 
-    {deleting && <Dialog title="删除 AgentDock 节点" description="该设备的 Device Token 会同时失效；AgentDock 本地服务不受影响。" onClose={() => setDeleting(null)}>
-      <div className="agentdock-node-delete"><p>确定删除「{deleting.name}」？</p><code>{deleting.id}</code><footer><button type="button" className="nx-button is-secondary" onClick={() => setDeleting(null)}>取消</button><button type="button" className="nx-button is-danger" disabled={busy === 'delete'} onClick={() => void remove()}>{busy === 'delete' ? '删除中…' : '确认删除'}</button></footer></div>
+    {deleting && <Dialog title={t('Delete AgentDock node')} description={t('The Device Token for this device will be revoked immediately; local AgentDock service is unaffected.')} onClose={() => setDeleting(null)}>
+      <div className="agentdock-node-delete"><p>{t('Are you sure you want to delete “{{name}}”?', { name: deleting.name })}</p><code>{deleting.id}</code><footer><button type="button" className="nx-button is-secondary" onClick={() => setDeleting(null)}>{t('Cancel')}</button><button type="button" className="nx-button is-danger" disabled={busy === 'delete'} onClick={() => void remove()}>{busy === 'delete' ? t('Deleting…') : t('Confirm delete')}</button></footer></div>
     </Dialog>}
   </section>;
 }

@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+import { useMemo } from 'react';
 import type { RecallPage, RecallWorkspaceViewModel } from './types';
 import RecallActionDialog from './RecallActionDialog';
 import RecallEditor from './RecallEditor';
@@ -16,15 +18,17 @@ type Props = RecallWorkspaceViewModel & {
   onNavigate: (page: RecallPage) => void;
 };
 
-const recallNavigation: Array<{ id: RecallPage; label: string }> = [
-  { id: 'library', label: '资料库' },
-  { id: 'cards', label: '经验卡片' },
-  { id: 'evolution', label: '进化' },
-  { id: 'vectors', label: '向量召回' },
-  { id: 'history', label: '版本历史' },
-];
-
 export default function RecallWorkspaceView(props: Props) {
+  const { t } = useTranslation();
+
+  const recallNavigation = useMemo<Array<{ id: RecallPage; label: string }>>(() => [
+    { id: 'library', label: t('Library') },
+    { id: 'cards', label: t('Experience Cards') },
+    { id: 'evolution', label: t('Evolution') },
+    { id: 'vectors', label: t('Vector Recall') },
+    { id: 'history', label: t('Version History') },
+  ], [t]);
+
   function openCardFromTools(path: string) {
     props.onNavigate('library');
     props.actions.openSimilarCard(path);
@@ -32,7 +36,7 @@ export default function RecallWorkspaceView(props: Props) {
 
   return <main className={`recall-workspace ${props.detailOpen ? 'is-detail-open' : ''}`}>
     <RecallHeader {...props} />
-    <nav className="recall-subnav" aria-label="Recall 分类">
+    <nav className="recall-subnav" aria-label={t('Recall navigation')}>
       {recallNavigation.map((item) => <button type="button" key={item.id} className={props.page === item.id ? 'is-active' : ''} aria-current={props.page === item.id ? 'page' : undefined} onClick={() => props.onNavigate(item.id)}><strong>{item.label}</strong></button>)}
     </nav>
     <RecallNoticeArea {...props} />

@@ -101,11 +101,15 @@ func TestOAuthHTTPAuthorizationCodeFlowAndMCPIsolation(t *testing.T) {
 	}
 	cookie := &http.Cookie{Name: sessionCookieName, Value: login.Token}
 	pageReq := httptest.NewRequest(http.MethodGet, authorizeURL, nil)
+	pageReq.Header.Set("Accept-Language", "zh-CN, en;q=0.8")
 	pageReq.AddCookie(cookie)
 	pageRes := httptest.NewRecorder()
 	handler.ServeHTTP(pageRes, pageReq)
 	if pageRes.Code != http.StatusOK || !strings.Contains(pageRes.Body.String(), "允许访问") {
 		t.Fatalf("authorize page status=%d body=%s", pageRes.Code, pageRes.Body.String())
+	}
+	if vary := pageRes.Header().Get("Vary"); vary != "Accept-Language" {
+		t.Fatalf("OAuth authorization page Vary=%q want=Accept-Language", vary)
 	}
 	if csp := pageRes.Header().Get("Content-Security-Policy"); strings.Contains(csp, "form-action") {
 		t.Fatalf("OAuth authorization page must not constrain callback redirect with form-action: %s", csp)
@@ -170,6 +174,24 @@ func TestOAuthHTTPAuthorizationCodeFlowAndMCPIsolation(t *testing.T) {
 	if apiRes.Code != http.StatusUnauthorized {
 		body, _ := io.ReadAll(apiRes.Result().Body)
 		t.Fatalf("MCP OAuth token escaped into admin API: status=%d body=%s", apiRes.Code, body)
+	}
+}
+
+func TestOAuthAuthorizeTextFollowsLanguagePreference(t *testing.T) {
+	tests := []struct {
+		header  string
+		lang    string
+		heading string
+	}{
+		{header: "", lang: "en", heading: "Authorize MCP client"},
+		{header: "zh-Hans-CN, en;q=0.8", lang: "zh-CN", heading: "授权 MCP 客户端"},
+		{header: "zh-TW, en-US;q=0.8", lang: "en", heading: "Authorize MCP client"},
+	}
+	for _, test := range tests {
+		text := oauthAuthorizeTextFor(test.header)
+		if text.Lang != test.lang || text.Heading != test.heading {
+			t.Fatalf("oauthAuthorizeTextFor(%q)=(%q,%q) want=(%q,%q)", test.header, text.Lang, text.Heading, test.lang, test.heading)
+		}
 	}
 }
 
