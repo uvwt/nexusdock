@@ -23,9 +23,7 @@ export default function Dialog({ title, description, children, onClose, wide = f
       '[data-dialog-initial-focus], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled):not(.nx-icon-button)',
     );
     initialFocus?.focus();
-    document.body.classList.add('nexus-modal-open');
     return () => {
-      document.body.classList.remove('nexus-modal-open');
       previous?.focus();
     };
   }, []);

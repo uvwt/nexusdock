@@ -228,7 +228,7 @@ export default function WorkflowTemplatesPage({ refreshToken }: { refreshToken: 
         </div>
       </aside>
 
-      <main className="workflow-runtime-viewer mobile-drilldown-detail">
+      <section className="workflow-runtime-viewer mobile-drilldown-detail">
         {mobileBar()}
         {!selectedCurrent ? <div className="empty-state"><span><FileJson size={24} /></span><h3>{t('Select template')}</h3><p>{t('Select a template from the left to view execution steps.')}</p></div>
           : detailMode === 'history' ? <WorkflowHistoryViewer selected={selectedCurrent} versions={historyVersions} loading={historyLoading} onBack={showCurrentDetail} onOpenVersion={(version) => void openHistoryVersion(version)} />
@@ -236,7 +236,7 @@ export default function WorkflowTemplatesPage({ refreshToken }: { refreshToken: 
               {detailMode === 'history-detail' && <div className="workflow-detail-context"><button type="button" className="nx-button is-secondary is-small" onClick={() => setDetailMode('history')}><ArrowLeft size={14} />{t('Back to historical versions')}</button><span>{t('Viewing v{{version}}', { version: visibleDetail.version })}</span></div>}
               <RuntimeTemplateViewer selected={visibleDetail} parsed={parsed} onCopy={copyPath} onOpenHistory={detailMode === 'current' ? () => void openHistory() : undefined} historyLoading={historyLoading} />
             </>}
-      </main>
+      </section>
     </section>
   </section>;
 }

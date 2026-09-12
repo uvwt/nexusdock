@@ -8,7 +8,6 @@ const recall: Record<string, string> = {
   'Vector Recall': '向量召回',
   'Version History': '版本历史',
   'Recall navigation': 'Recall 分类',
-  'Refresh recall library': '刷新召回库',
   'Version recorded': '版本已记录',
   '{{count}} unrecorded changes': '{{count}} 项未记录',
 

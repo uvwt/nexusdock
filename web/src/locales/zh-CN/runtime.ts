@@ -35,7 +35,6 @@ const runtime: Record<string, string> = {
   'Connected': '已连接',
   'Error': '错误',
   'Added MCP “{{name}}”.': '已添加 MCP「{{name}}」。',
-  'MCP Services': 'MCP 服务',
   'Nexus only forwards AgentDock dynamic MCP management interfaces; secret values are never echoed.': 'Nexus 仅转发 AgentDock 的动态 MCP 管理接口；密钥值不会回显。',
   'Add MCP': '添加 MCP',
   'registered services': '个已注册服务',

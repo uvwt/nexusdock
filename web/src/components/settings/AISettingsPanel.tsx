@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { Activity, BrainCircuit, DatabaseZap, RefreshCw, Save, SearchCheck } from 'lucide-react';
+import { Activity, BrainCircuit, DatabaseZap, Save, SearchCheck } from 'lucide-react';
 import { ApiError, api } from '../../api/client';
 
 type SecretForm = { value: string; clear: boolean };
@@ -189,10 +189,6 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
     : t('Recall and Workflow are not using vector search');
 
   return <section className="ai-settings-panel">
-    <header className="ai-settings-heading">
-      <div><span className="nexus-eyebrow">AI & VECTOR</span><h2>{t('Models & vector search')}</h2><p>{t('Manage the Stage 3 model and shared Embedding service. Changes are saved together and applied immediately.')}</p></div>
-      <button type="button" className="nx-button is-secondary" onClick={() => void load()} disabled={loading || saving}><RefreshCw size={15} />{t('Refresh')}</button>
-    </header>
     {notice && <div className={`nx-alert is-${notice.tone}`}>{notice.text}</div>}
 
     <form className="ai-settings-form-page" onSubmit={submit}>

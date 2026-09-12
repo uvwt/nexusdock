@@ -771,9 +771,8 @@ summary::-webkit-details-marker { display: none; }
 
 /* MCP */
 .mcp-page { display: grid; gap: 12px; }
-.mcp-heading { display: flex; justify-content: space-between; gap: 14px; align-items: flex-end; }
-.mcp-heading h2 { margin: 3px 0 4px; font-size: 20px; }
-.mcp-heading p { margin: 0; color: var(--nx-muted); font-size: 11px; }
+.mcp-heading { display: flex; justify-content: space-between; gap: 14px; align-items: center; }
+.mcp-heading p { margin: 0; max-width: 52em; color: var(--nx-muted); font-size: 11px; }
 .mcp-layout { display: grid; grid-template-columns: 300px minmax(0,1fr); gap: 12px; align-items: start; }
 .mcp-list-panel,
 .mcp-detail-card { border: 1px solid var(--nx-line); border-radius: 7px; background: #fff; }
@@ -879,14 +878,10 @@ summary::-webkit-details-marker { display: none; }
 .settings-subnav small { margin-top: 2px; color: var(--nx-muted); font-size: 10px; line-height: 1.35; }
 .settings-content { min-width: 0; }
 .system-settings-page { display: grid; gap: 12px; }
-.settings-section-heading { padding: 2px 2px 1px; }
-.settings-section-heading h2 { margin: 4px 0; font-size: 20px; letter-spacing: -.02em; }
-.settings-section-heading p { margin: 0; color: var(--nx-muted); font-size: 11px; }
 .settings-system-grid { grid-template-columns: 1fr; }
 
 /* MCP 接入：固定凭据单独成页，避免与管理员账号或运行时配置混在一起。 */
 .mcp-access-panel { width: min(100%, 860px); display: grid; gap: 14px; }
-.mcp-access-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
 .mcp-access-card { overflow: hidden; border: 1px solid var(--nx-line); border-radius: 7px; background: #fff; }
 .mcp-access-card > header { padding: 15px 17px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--nx-line); }
 .mcp-access-card > header h3 { margin: 0; font-size: 14px; }
@@ -922,9 +917,6 @@ summary::-webkit-details-marker { display: none; }
 
 /* AI 设置：配置域纵向展开，避免在同一行压缩两套复杂表单。 */
 .ai-settings-panel { width: min(100%, 980px); display: grid; gap: 14px; }
-.ai-settings-heading { display: flex; justify-content: space-between; gap: 18px; align-items: flex-end; }
-.ai-settings-heading h2 { margin: 4px 0; font-size: 21px; letter-spacing: -.02em; }
-.ai-settings-heading p { margin: 0; color: var(--nx-muted); font-size: 11px; line-height: 1.5; }
 .ai-settings-form-page { display: grid; gap: 12px; }
 
 .ai-config-section {
@@ -1052,7 +1044,7 @@ summary::-webkit-details-marker { display: none; }
 .ai-save-bar > span { color: var(--nx-muted); font-size: 10px; }
 .ai-save-bar .nx-button { min-width: 118px; }
 
-/* Dialog */
+/* Dialog：showModal() 已有 ::backdrop，dialog 本身只负责居中，不再铺一层全屏遮罩。 */
 .nx-dialog-backdrop,
 .session-expired-overlay {
   position: fixed;
@@ -1065,7 +1057,7 @@ summary::-webkit-details-marker { display: none; }
   display: grid;
   place-items: center;
   border: 0;
-  background: rgba(0,0,0,.48);
+  background: transparent;
 }
 .nx-dialog-backdrop::backdrop,
 .session-expired-overlay::backdrop { background: rgba(0,0,0,.48); }
@@ -1126,7 +1118,6 @@ summary::-webkit-details-marker { display: none; }
   .settings-subnav-icon { width: 27px; height: 27px; }
   .settings-subnav small { display: none; }
   .settings-subnav strong { font-size: 11px; white-space: nowrap; }
-  .settings-section-heading { padding-top: 2px; }
   .agentdock-nodes-panel > header { display: grid; }
   .agentdock-node-actions { width: 100%; }
   .agentdock-node-actions .nx-button { flex: 1; }
@@ -1203,7 +1194,6 @@ summary::-webkit-details-marker { display: none; }
 
   .agentdock-node-form { grid-template-columns: 1fr; }
   .agentdock-node-form .is-wide { grid-column: auto; }
-  .mcp-access-heading { align-items: flex-start; }
   .mcp-access-value { grid-template-columns: minmax(0, 1fr) auto; }
   .mcp-access-value .nx-button:last-child { grid-column: 1 / -1; width: 100%; }
   .mcp-access-footer { align-items: stretch; display: grid; }
@@ -1212,7 +1202,6 @@ summary::-webkit-details-marker { display: none; }
   .mcp-access-hint code { width: fit-content; white-space: normal; overflow-wrap: anywhere; }
   .mcp-token-reset-dialog footer { display: grid; grid-template-columns: 1fr 1fr; }
   .mcp-token-reset-dialog footer .nx-button { width: 100%; }
-  .ai-settings-heading { align-items: flex-start; }
   .ai-config-head { padding: 14px; display: grid; align-items: start; }
   .ai-config-head-actions { width: 100%; display: grid; gap: 10px; justify-content: stretch; }
   .ai-service-status { padding-bottom: 2px; }

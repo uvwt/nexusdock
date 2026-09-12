@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CirclePlus, Pencil, RefreshCw, Server, Trash2 } from 'lucide-react';
+import { CirclePlus, Pencil, Server, Trash2 } from 'lucide-react';
 import { api } from '../../api/client';
 import Dialog from '../Dialog';
 
@@ -171,7 +171,6 @@ export function AgentDockNodesPanel({ nodes, selectedNodeID, loading, error, onR
     <header>
       <div><span className="nexus-eyebrow">RUNTIME NODES</span><h2>{t('AgentDock nodes')}</h2><p>{t('AgentDock actively connects to Nexus; no public device address needed, and no need to provide AgentDock token to Nexus.')}</p></div>
       <div className="agentdock-node-actions">
-        <button type="button" className="nx-button is-secondary" onClick={onReload} disabled={loading}><RefreshCw size={15} />{t('Refresh')}</button>
         <button type="button" className="nx-button" onClick={() => void createPairingCode()} disabled={busy === 'pair'}><CirclePlus size={15} />{busy === 'pair' ? t('Generating…') : t('Pair device')}</button>
       </div>
     </header>

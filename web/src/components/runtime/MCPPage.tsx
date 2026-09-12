@@ -227,7 +227,7 @@ export default function MCPPage({ nodeID, refreshToken }: { nodeID: string; refr
   return <section className="mcp-page">
     {notice && <div className={`nx-alert is-${notice.tone}`} role="status"><span>{notice.text}</span><button type="button" onClick={() => setNotice(null)}>{t('Close')}</button></div>}
     <header className="mcp-heading">
-      <div><span className="nexus-eyebrow">AGENTDOCK RUNTIME</span><h2>{t('MCP Services')}</h2><p>{t('Nexus only forwards AgentDock dynamic MCP management interfaces; secret values are never echoed.')}</p></div>
+      <p>{t('Nexus only forwards AgentDock dynamic MCP management interfaces; secret values are never echoed.')}</p>
       <button type="button" className="nx-button" onClick={() => setAddOpen(true)}><CirclePlus size={16} />{t('Add MCP')}</button>
     </header>
 
@@ -245,7 +245,7 @@ export default function MCPPage({ nodeID, refreshToken }: { nodeID: string; refr
         </div>
       </aside>
 
-      <main className="mobile-drilldown-detail">
+      <section className="mobile-drilldown-detail">
         {selected && <MobileDrilldownBar label={t('MCP details')} title={selected.name} meta={selected.transport} onBack={() => setMobileDetailOpen(false)} />}
         {selected && detail ? <MCPDetail
           server={detail.server}
@@ -262,7 +262,7 @@ export default function MCPPage({ nodeID, refreshToken }: { nodeID: string; refr
           onToggle={() => void manage(selected.enabled ? 'disable' : 'enable', selected.name)}
           onRemove={() => setRemoveTarget(selected)}
         /> : <div className="mcp-empty is-detail"><Server size={28} /><strong>{t('Select an MCP service')}</strong><span>{t('View connection details, tool counts, and isolated environment variables.')}</span></div>}
-      </main>
+      </section>
     </section>
 
     {addOpen && <Dialog title={t('Add MCP service')} description={t('Configuration is written to AgentDock; save sensitive values to the isolated environment after adding.')} onClose={() => setAddOpen(false)} wide>

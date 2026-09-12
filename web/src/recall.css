@@ -7,34 +7,12 @@
 
 .recall-workspace button { font: inherit; }
 
-.recall-header {
-  min-height: 62px;
-  padding: 10px 14px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  border: 1px solid var(--nx-line);
-  border-radius: 7px;
-  background: #fff;
-  color: var(--nx-text);
-}
-
-.recall-kicker {
-  color: var(--nx-muted);
-  font-size: 10px;
-  font-weight: 650;
-  letter-spacing: .05em;
-}
-
-.recall-header h1 { margin: 2px 0 0; font-size: 20px; letter-spacing: -.02em; }
-.recall-header-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
-
 .recall-subnav {
   padding: 3px;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
   gap: 3px;
+  align-items: center;
   border: 1px solid var(--nx-line);
   border-radius: 7px;
   background: #fff;
@@ -55,7 +33,6 @@
 .recall-subnav button.is-active { border-color: #c7c7c7; background: #ededed; }
 .recall-subnav strong { font-size: 11px; }
 
-.recall-header button,
 .recall-new,
 .recall-editor-actions button,
 .recall-panel-head button,
@@ -78,11 +55,11 @@
   font-size: 11px;
 }
 
-.recall-header button.primary { border-color: #171717; background: #171717; color: #fff; }
-.recall-header button:not(.primary) { border-color: var(--nx-line-strong); background: #fff; color: #333; }
 .recall-workspace button.primary { border-color: #171717; background: #171717; color: #fff; }
 .recall-workspace button.danger { border-color: var(--nx-danger-line); background: #fff; color: var(--nx-danger); }
 .recall-workspace button.danger:hover:not(:disabled) { background: var(--nx-danger-bg); }
+
+.recall-subnav .recall-health { margin: 0 6px; }
 
 .recall-health {
   min-height: 26px;
@@ -516,10 +493,7 @@
 @media (max-width: 820px) {
   .recall-subnav { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .recall-subnav button { padding: 9px 4px; place-items: center; text-align: center; }
-  .recall-header { min-height: 0; padding: 13px; align-items: flex-start; }
-  .recall-header h1 { font-size: 20px; }
-  .recall-header-actions { justify-content: flex-end; }
-  .recall-header-actions button span { display: none; }
+  .recall-subnav .recall-health { grid-column: 1 / -1; margin: 4px 6px 2px; justify-self: start; }
   .recall-stats { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .recall-stats > div:nth-child(2) { border-right: 0; }
   .recall-stats > div:nth-child(-n+2) { border-bottom: 1px solid var(--nx-line); }

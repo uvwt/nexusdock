@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Clock3, KeyRound, Laptop, LogOut, RefreshCw, ShieldCheck, Smartphone, Trash2 } from 'lucide-react';
+import { Clock3, KeyRound, Laptop, LogOut, ShieldCheck, Smartphone, Trash2 } from 'lucide-react';
 import { api, clearCSRFToken, setCSRFToken } from './api/client';
 import { formatTime } from './lib/time';
 import { type WebSession } from './Auth';
@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
 type SessionResponse = { ok: boolean; session: WebSession };
 type SessionsResponse = { ok: boolean; items: WebSession[] };
 
-export default function AccountSecurity() {
+export default function AccountSecurity({ refreshToken }: { refreshToken: number }) {
   const { t } = useTranslation();
   const [session, setSession] = useState<WebSession | null>(null);
   const [sessions, setSessions] = useState<WebSession[]>([]);
@@ -35,7 +35,7 @@ export default function AccountSecurity() {
     }
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => { void load(); }, [refreshToken]);
 
   async function revoke(id: string) {
     setActionBusy(`revoke:${id}`);
@@ -78,7 +78,7 @@ export default function AccountSecurity() {
 
   return (
     <section className="security-panel">
-      <header className="security-head"><div><span className="security-icon"><ShieldCheck size={19} /></span><div><h2>{t('Account & sessions')}</h2><p>{t('Manage the current administrator session and signed-in clients')}</p></div></div><button type="button" className="security-secondary" onClick={() => void load()} disabled={loading || Boolean(actionBusy)}><RefreshCw className={loading ? 'spin' : ''} size={15} />{t('Refresh')}</button></header>
+      <header className="security-head"><div><span className="security-icon"><ShieldCheck size={19} /></span><div><h2>{t('Account & sessions')}</h2><p>{t('Manage the current administrator session and signed-in clients')}</p></div></div></header>
       {error && <div className="auth-error">{error}</div>}
       <div className="security-profile"><div><strong>{session?.display_name || session?.username || 'Administrator'}</strong><span>{session?.username || '—'}</span></div><div className="security-actions"><button type="button" onClick={() => window.location.assign('/change-password?return_to=%2Fui%2F%23settings%2Faccount')} disabled={Boolean(actionBusy)}><KeyRound size={15} />{t('Change password')}</button><button type="button" onClick={() => void logout()} disabled={Boolean(actionBusy)}><LogOut size={15} />{actionBusy === 'logout' ? t('Signing out…') : t('Sign out')}</button></div></div>
       <div className="session-toolbar"><div><strong>{t('Active sessions')}</strong><span>{t('{{count}} sessions', { count: sessions.length })}</span></div><button type="button" onClick={() => void logoutOthers()} disabled={Boolean(actionBusy) || sessions.filter((item) => !item.current).length === 0}>{actionBusy === 'logout-others' ? t('Signing out…') : t('Sign out other sessions')}</button></div>

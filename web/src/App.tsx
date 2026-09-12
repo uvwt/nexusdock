@@ -419,7 +419,7 @@ function SettingsPage({ refreshToken, runtimeNodes }: { refreshToken: number; ru
       })}
     </nav>
     <div className="settings-content">
-      {active === 'account' && <div className="account-settings-stack"><LanguageSettingsPanel /><AccountSecurity /></div>}
+      {active === 'account' && <div className="account-settings-stack"><LanguageSettingsPanel /><AccountSecurity refreshToken={refreshToken} /></div>}
       {active === 'mcp' && <MCPAccessPanel refreshToken={refreshToken} />}
       {active === 'ai' && <AISettingsPanel refreshToken={refreshToken} />}
       {active === 'system' && <SystemSettingsPage refreshToken={refreshToken} runtimeNodes={runtimeNodes} />}
@@ -432,7 +432,6 @@ function SystemSettingsPage({ refreshToken, runtimeNodes }: { refreshToken: numb
   const system = useResource<SystemStatus>('/v1/system/status', { ok: false, service: 'nexusdock', database: 'unknown', schema_version: 0, nexus_data_dir: '', recall_repo_dir: '' }, refreshToken);
 
   return <section className="system-settings-page">
-    <header className="settings-section-heading"><div><span className="nexus-eyebrow">SYSTEM</span><h2>{t('System & nodes')}</h2><p>{t('Manage AgentDock nodes and view NexusDock runtime status.')}</p></div></header>
     <AgentDockNodesPanel
       nodes={runtimeNodes.nodes}
       selectedNodeID={runtimeNodes.selectedNodeID}

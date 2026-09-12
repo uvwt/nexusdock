@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { AppWindow, Cable, Copy, Eye, EyeOff, RefreshCw, RotateCcw, ShieldCheck } from 'lucide-react';
+import { AppWindow, Cable, Copy, Eye, EyeOff, RotateCcw, ShieldCheck } from 'lucide-react';
 import { ApiError, api } from '../../api/client';
 import Dialog from '../Dialog';
 
@@ -114,11 +114,6 @@ export default function MCPAccessPanel({ refreshToken }: { refreshToken: number 
   }
 
   return <section className="mcp-access-panel">
-    <header className="settings-section-heading mcp-access-heading">
-      <div><span className="nexus-eyebrow">MCP ACCESS</span><h2>{t('MCP access')}</h2><p>{t('Provide a fixed Bearer Token for MCP clients that do not use OAuth.')}</p></div>
-      <button type="button" className="nx-button is-secondary" onClick={() => void load()} disabled={loading || resetting}><RefreshCw size={15} />{t('Refresh')}</button>
-    </header>
-
     {notice && <div className={`nx-alert is-${notice.tone}`}>{notice.text}</div>}
 
     <section className="mcp-access-card">

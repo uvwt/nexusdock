@@ -128,7 +128,6 @@
 .auth-check input { width: 15px; height: 15px; margin: 0; }
 
 .auth-primary,
-.security-secondary,
 .security-actions button,
 .session-toolbar button,
 .session-revoke {
@@ -224,7 +223,6 @@
 .security-actions { gap: 10px; }
 .session-toolbar > div { gap: 8px; }
 
-.security-secondary,
 .security-actions button,
 .session-toolbar button,
 .session-revoke {
