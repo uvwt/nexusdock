@@ -77,8 +77,8 @@ func (w *trackedResponseWriter) Flush() {
 type Server struct {
 	mu                   sync.RWMutex
 	cfg                  config.Config
-	aiCfg                config.Config
-	aiCfgSet             bool
+	aiCfg                settings.RuntimeAIConfig
+	mcpAppsEnabledState  bool
 	db                   *sql.DB
 	store                *recall.Store
 	privateNotes         *privatenotes.Store
@@ -130,8 +130,16 @@ func WithRuntimeSettings(store *settings.Store) ServerOption {
 	return func(server *Server) { server.settings = store }
 }
 
+func WithRuntimeAIConfig(cfg settings.RuntimeAIConfig) ServerOption {
+	return func(server *Server) { server.aiCfg = cfg }
+}
+
 func WithMCPSettings(store *settings.MCPStore) ServerOption {
 	return func(server *Server) { server.mcpSettings = store }
+}
+
+func WithMCPAppsEnabled(enabled bool) ServerOption {
+	return func(server *Server) { server.mcpAppsEnabledState = enabled }
 }
 
 func WithPrivateNotes(store *privatenotes.Store) ServerOption {
@@ -144,7 +152,8 @@ func WithMCPTokenStore(store *auth.MCPTokenStore) ServerOption {
 
 func NewServer(cfg config.Config, store *recall.Store, logger *slog.Logger, options ...ServerOption) *Server {
 	server := &Server{
-		cfg: cfg, aiCfg: cfg, aiCfgSet: true, store: store, logger: logger,
+		cfg: cfg, aiCfg: settings.DefaultRuntimeAIConfig(), mcpAppsEnabledState: settings.DefaultMCPAppsEnabled,
+		store: store, logger: logger,
 		stage3Wake: make(chan struct{}, 1), mcpTools: make(map[string]publishedNodeTool), mcpResources: make(map[string]struct{}),
 	}
 	for _, option := range options {

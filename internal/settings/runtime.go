@@ -15,7 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/uvwt/nexusdock/internal/config"
+	"github.com/uvwt/nexusdock/internal/recall"
+	"github.com/uvwt/nexusdock/internal/stage3"
 )
 
 const (
@@ -81,14 +82,38 @@ type View struct {
 	UpdatedAt string        `json:"updated_at,omitempty"`
 }
 
-type Store struct {
-	db       *sql.DB
-	defaults config.Config
-	cipher   cipher.AEAD
-	now      func() time.Time
+type RuntimeAIConfig struct {
+	EmbeddingEnabled  bool
+	EmbeddingEndpoint string
+	EmbeddingModel    string
+	EmbeddingAPIKey   string
+	EmbeddingTimeout  time.Duration
+	Stage3Enabled     bool
+	Stage3Endpoint    string
+	Stage3Model       string
+	Stage3APIKey      string
+	Stage3Timeout     time.Duration
+	Stage3Interval    time.Duration
 }
 
-func NewStore(db *sql.DB, dataDir string, defaults config.Config) (*Store, error) {
+const DefaultStage3Interval = 6 * time.Hour
+
+func DefaultRuntimeAIConfig() RuntimeAIConfig {
+	return RuntimeAIConfig{
+		EmbeddingModel:   recall.DefaultEmbeddingModel,
+		EmbeddingTimeout: recall.DefaultEmbeddingTimeout,
+		Stage3Timeout:    stage3.DefaultRequestTimeout,
+		Stage3Interval:   DefaultStage3Interval,
+	}
+}
+
+type Store struct {
+	db     *sql.DB
+	cipher cipher.AEAD
+	now    func() time.Time
+}
+
+func NewStore(db *sql.DB, dataDir string) (*Store, error) {
 	if db == nil {
 		return nil, ErrUnavailable
 	}
@@ -104,14 +129,14 @@ func NewStore(db *sql.DB, dataDir string, defaults config.Config) (*Store, error
 	if err != nil {
 		return nil, fmt.Errorf("初始化运行时 AI 设置 GCM: %w", err)
 	}
-	return &Store{db: db, defaults: defaults, cipher: aead, now: time.Now}, nil
+	return &Store{db: db, cipher: aead, now: time.Now}, nil
 }
 
-func (s *Store) Load(ctx context.Context) (config.Config, View, error) {
+func (s *Store) Load(ctx context.Context) (RuntimeAIConfig, View, error) {
 	if s == nil || s.db == nil {
-		return config.Config{}, View{}, ErrUnavailable
+		return RuntimeAIConfig{}, View{}, ErrUnavailable
 	}
-	cfg := s.defaults
+	cfg := DefaultRuntimeAIConfig()
 	var embeddingEnabled, stage3Enabled int
 	var embeddingTimeout, stage3Timeout, interval int
 	var updatedAt string
@@ -119,46 +144,46 @@ func (s *Store) Load(ctx context.Context) (config.Config, View, error) {
 		stage3_enabled, stage3_endpoint, stage3_model, stage3_timeout_seconds, stage3_interval_minutes, updated_at
 		FROM runtime_ai_settings WHERE singleton_id = 1`).Scan(
 		&embeddingEnabled, &cfg.EmbeddingEndpoint, &cfg.EmbeddingModel, &embeddingTimeout,
-		&stage3Enabled, &cfg.ModelEndpoint, &cfg.ModelName, &stage3Timeout, &interval, &updatedAt,
+		&stage3Enabled, &cfg.Stage3Endpoint, &cfg.Stage3Model, &stage3Timeout, &interval, &updatedAt,
 	)
 	persisted := true
 	if errors.Is(err, sql.ErrNoRows) {
 		persisted = false
 	} else if err != nil {
-		return config.Config{}, View{}, fmt.Errorf("读取运行时 AI 设置: %w", err)
+		return RuntimeAIConfig{}, View{}, fmt.Errorf("读取运行时 AI 设置: %w", err)
 	} else {
 		cfg.EmbeddingEnabled = embeddingEnabled == 1
 		cfg.EmbeddingTimeout = time.Duration(embeddingTimeout) * time.Second
-		cfg.EvolutionEnabled = stage3Enabled == 1
-		cfg.ModelTimeout = time.Duration(stage3Timeout) * time.Second
-		cfg.EvolutionInterval = time.Duration(interval) * time.Minute
+		cfg.Stage3Enabled = stage3Enabled == 1
+		cfg.Stage3Timeout = time.Duration(stage3Timeout) * time.Second
+		cfg.Stage3Interval = time.Duration(interval) * time.Minute
 	}
 
 	if value, found, err := s.loadSecret(ctx, "embedding_api_key"); err != nil {
-		return config.Config{}, View{}, err
+		return RuntimeAIConfig{}, View{}, err
 	} else if found {
 		cfg.EmbeddingAPIKey = value
 	}
 	if value, found, err := s.loadSecret(ctx, "stage3_api_key"); err != nil {
-		return config.Config{}, View{}, err
+		return RuntimeAIConfig{}, View{}, err
 	} else if found {
-		cfg.ModelAPIKey = value
+		cfg.Stage3APIKey = value
 	}
 	return cfg, viewOf(cfg, persisted, updatedAt), nil
 }
 
-func (s *Store) Update(ctx context.Context, input UpdateInput) (config.Config, View, error) {
+func (s *Store) Update(ctx context.Context, input UpdateInput) (RuntimeAIConfig, View, error) {
 	if s == nil || s.db == nil {
-		return config.Config{}, View{}, ErrUnavailable
+		return RuntimeAIConfig{}, View{}, ErrUnavailable
 	}
 	normalized, err := normalizeInput(input)
 	if err != nil {
-		return config.Config{}, View{}, err
+		return RuntimeAIConfig{}, View{}, err
 	}
 	now := s.now().UTC().Format(time.RFC3339Nano)
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
-		return config.Config{}, View{}, fmt.Errorf("开始更新运行时 AI 设置: %w", err)
+		return RuntimeAIConfig{}, View{}, fmt.Errorf("开始更新运行时 AI 设置: %w", err)
 	}
 	defer tx.Rollback()
 
@@ -176,18 +201,18 @@ func (s *Store) Update(ctx context.Context, input UpdateInput) (config.Config, V
 		boolInt(normalized.Stage3.Enabled), normalized.Stage3.Endpoint, normalized.Stage3.Model, normalized.Stage3.TimeoutSeconds,
 		normalized.Stage3.IntervalMinutes, now)
 	if err != nil {
-		return config.Config{}, View{}, fmt.Errorf("保存运行时 AI 设置: %w", err)
+		return RuntimeAIConfig{}, View{}, fmt.Errorf("保存运行时 AI 设置: %w", err)
 	}
 	for name, secret := range map[string]SecretInput{
 		"embedding_api_key": normalized.Embedding.APIKey,
 		"stage3_api_key":    normalized.Stage3.APIKey,
 	} {
 		if err := s.applySecret(ctx, tx, name, secret, now); err != nil {
-			return config.Config{}, View{}, err
+			return RuntimeAIConfig{}, View{}, err
 		}
 	}
 	if err := tx.Commit(); err != nil {
-		return config.Config{}, View{}, fmt.Errorf("提交运行时 AI 设置: %w", err)
+		return RuntimeAIConfig{}, View{}, fmt.Errorf("提交运行时 AI 设置: %w", err)
 	}
 	return s.Load(ctx)
 }
@@ -367,17 +392,17 @@ func loadOrCreateKey(path string) ([]byte, error) {
 	return key, nil
 }
 
-func viewOf(cfg config.Config, persisted bool, updatedAt string) View {
+func viewOf(cfg RuntimeAIConfig, persisted bool, updatedAt string) View {
 	return View{
 		Embedding: EmbeddingView{
 			Enabled: cfg.EmbeddingEnabled, Endpoint: cfg.EmbeddingEndpoint, Model: cfg.EmbeddingModel,
 			TimeoutSeconds: int(cfg.EmbeddingTimeout / time.Second), APIKeyConfigured: strings.TrimSpace(cfg.EmbeddingAPIKey) != "",
 		},
 		Stage3: Stage3View{
-			Enabled: cfg.EvolutionEnabled, Endpoint: cfg.ModelEndpoint, Model: cfg.ModelName,
-			TimeoutSeconds: int(cfg.ModelTimeout / time.Second), IntervalMinutes: int(cfg.EvolutionInterval / time.Minute),
-			APIKeyConfigured: strings.TrimSpace(cfg.ModelAPIKey) != "",
-			Configured:       cfg.EvolutionEnabled && strings.TrimSpace(cfg.ModelEndpoint) != "" && strings.TrimSpace(cfg.ModelName) != "",
+			Enabled: cfg.Stage3Enabled, Endpoint: cfg.Stage3Endpoint, Model: cfg.Stage3Model,
+			TimeoutSeconds: int(cfg.Stage3Timeout / time.Second), IntervalMinutes: int(cfg.Stage3Interval / time.Minute),
+			APIKeyConfigured: strings.TrimSpace(cfg.Stage3APIKey) != "",
+			Configured:       cfg.Stage3Enabled && strings.TrimSpace(cfg.Stage3Endpoint) != "" && strings.TrimSpace(cfg.Stage3Model) != "",
 		},
 		Persisted: persisted,
 		UpdatedAt: updatedAt,

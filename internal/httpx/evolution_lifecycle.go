@@ -54,7 +54,7 @@ func evolutionDetail(record recall.LifecycleRecord) evolutionLifecycleDetail {
 }
 
 func (s *Server) registerEvolutionLifecycleRoutes(mux *http.ServeMux, protected func(http.HandlerFunc) http.HandlerFunc) {
-	// 浏览器只获得只读视图；生命周期写入继续只允许 AgentDock / 程序化 API 走 internal transition。
+	// 浏览器只获得只读视图；生命周期读写的 internal 接口只允许已配对且启用的 AgentDock 设备访问。
 	mux.HandleFunc("GET /v1/evolution/lifecycle", protected(s.evolutionLifecycleList))
 	mux.HandleFunc("GET /v1/evolution/lifecycle/{evolutionID}", protected(s.evolutionLifecycleRead))
 	mux.HandleFunc("POST /internal/recall/lifecycle/query", s.withEvolutionAccess(s.lifecycleQuery))
@@ -91,24 +91,17 @@ func (s *Server) evolutionLifecycleRead(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) withEvolutionAccess(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if s.auth != nil {
-			principal, err := s.auth.Authenticate(r.Context(), bearerToken(r.Header.Get("Authorization")))
-			if err == nil && principal.Actor.Type == core.ActorDevice && principal.TokenKind == "device_token" {
-				node, lookupErr := s.agentDock.Get(r.Context(), principal.Actor.ID)
-				if lookupErr == nil && node.Enabled {
-					next(w, r)
-					return
-				}
-			}
-		}
-		s.mu.RLock()
-		token := strings.TrimSpace(s.cfg.AuthToken)
-		s.mu.RUnlock()
-		if token == "" {
-			writeError(w, http.StatusServiceUnavailable, "EVOLUTION_NOT_CONFIGURED", "Nexus programmatic API token is not configured")
+		if s.auth == nil || s.agentDock == nil {
+			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing or invalid evolution credentials")
 			return
 		}
-		if !bearerMatches(r.Header.Get("Authorization"), token) {
+		principal, err := s.auth.Authenticate(r.Context(), bearerToken(r.Header.Get("Authorization")))
+		if err != nil || principal.Actor.Type != core.ActorDevice || principal.TokenKind != "device_token" {
+			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing or invalid evolution credentials")
+			return
+		}
+		node, err := s.agentDock.Get(r.Context(), principal.Actor.ID)
+		if err != nil || !node.Enabled {
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing or invalid evolution credentials")
 			return
 		}

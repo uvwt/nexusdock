@@ -18,7 +18,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/uvwt/nexusdock/internal/config"
+	"github.com/uvwt/nexusdock/internal/recall"
+	"github.com/uvwt/nexusdock/internal/settings"
 )
 
 type workflowTemplateStatus string
@@ -519,7 +520,7 @@ type workflowTemplateVector struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
-func workflowTemplateVectorEnabled(cfg config.Config) bool {
+func workflowTemplateVectorEnabled(cfg settings.RuntimeAIConfig) bool {
 	return cfg.EmbeddingEnabled && strings.TrimSpace(cfg.EmbeddingEndpoint) != ""
 }
 
@@ -528,10 +529,10 @@ func (s *Server) workflowTemplateVectorIndexPath() string {
 }
 
 func (s *Server) workflowTemplateVectorIndexInfo() (string, int) {
-	return s.workflowTemplateVectorIndexInfoForConfig(s.currentConfig())
+	return s.workflowTemplateVectorIndexInfoForConfig(s.currentAIConfig())
 }
 
-func (s *Server) workflowTemplateVectorIndexInfoForConfig(cfg config.Config) (string, int) {
+func (s *Server) workflowTemplateVectorIndexInfoForConfig(cfg settings.RuntimeAIConfig) (string, int) {
 	if !workflowTemplateVectorEnabled(cfg) {
 		return "not_configured", 0
 	}
@@ -549,7 +550,7 @@ func (s *Server) workflowTemplateVectorIndexInfoForConfig(cfg config.Config) (st
 }
 
 func (s *Server) reindexWorkflowTemplateVectors(ctx context.Context) (map[string]any, error) {
-	cfg := s.currentConfig()
+	cfg := s.currentAIConfig()
 	if !workflowTemplateVectorEnabled(cfg) {
 		return nil, errors.New("workflow template vector search is disabled; configure and enable vector search")
 	}
@@ -590,7 +591,7 @@ func (s *Server) reindexWorkflowTemplateVectors(ctx context.Context) (map[string
 }
 
 func (s *Server) workflowTemplateVectorScores(ctx context.Context, goal, device, taskType string) map[string]float64 {
-	cfg := s.currentConfig()
+	cfg := s.currentAIConfig()
 	if !workflowTemplateVectorEnabled(cfg) || strings.TrimSpace(goal) == "" {
 		return nil
 	}
@@ -669,7 +670,7 @@ func validateWorkflowTemplateVectorIndex(idx workflowTemplateVectorIndex, model 
 	return nil
 }
 
-func (s *Server) embedWorkflowTemplateTexts(ctx context.Context, cfg config.Config, texts []string) ([][]float64, error) {
+func (s *Server) embedWorkflowTemplateTexts(ctx context.Context, cfg settings.RuntimeAIConfig, texts []string) ([][]float64, error) {
 	if len(texts) == 0 {
 		return nil, nil
 	}
@@ -682,7 +683,7 @@ func (s *Server) embedWorkflowTemplateTexts(ctx context.Context, cfg config.Conf
 	}
 	model := strings.TrimSpace(cfg.EmbeddingModel)
 	if model == "" {
-		model = "BAAI/bge-m3"
+		model = recall.DefaultEmbeddingModel
 	}
 	payload, err := json.Marshal(map[string]any{"model": model, "input": texts})
 	if err != nil {
@@ -690,7 +691,7 @@ func (s *Server) embedWorkflowTemplateTexts(ctx context.Context, cfg config.Conf
 	}
 	timeout := cfg.EmbeddingTimeout
 	if timeout <= 0 {
-		timeout = 30 * time.Second
+		timeout = recall.DefaultEmbeddingTimeout
 	}
 	reqCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()

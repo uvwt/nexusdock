@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/uvwt/nexusdock/internal/config"
+	"github.com/uvwt/nexusdock/internal/settings"
 )
 
 func TestStage3SchedulerRunsImmediatelyAndWakeKeepsOriginalDeadline(t *testing.T) {
@@ -14,11 +14,11 @@ func TestStage3SchedulerRunsImmediatelyAndWakeKeepsOriginalDeadline(t *testing.T
 	var nowNanos atomic.Int64
 	nowNanos.Store(base.UnixNano())
 	now := func() time.Time { return time.Unix(0, nowNanos.Load()).UTC() }
-	cfg := config.Config{
-		EvolutionEnabled: true, ModelEndpoint: "http://model.invalid", ModelName: "test", EvolutionInterval: 2 * time.Hour,
+	cfg := settings.RuntimeAIConfig{
+		Stage3Enabled: true, Stage3Endpoint: "http://model.invalid", Stage3Model: "test", Stage3Interval: 2 * time.Hour,
 	}
-	server := &Server{cfg: cfg, aiCfg: cfg, aiCfgSet: true, stage3Wake: make(chan struct{}, 1)}
-	runs := make(chan config.Config, 8)
+	server := &Server{aiCfg: cfg, stage3Wake: make(chan struct{}, 1)}
+	runs := make(chan settings.RuntimeAIConfig, 8)
 	delays := make(chan time.Duration, 8)
 	ticks := make(chan time.Time, 8)
 	newTimer := func(wait time.Duration) evolutionStage3Timer {
@@ -27,7 +27,7 @@ func TestStage3SchedulerRunsImmediatelyAndWakeKeepsOriginalDeadline(t *testing.T
 	}
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
-	go server.evolutionStage3Loop(ctx, now, newTimer, func(_ context.Context, got config.Config) { runs <- got })
+	go server.evolutionStage3Loop(ctx, now, newTimer, func(_ context.Context, got settings.RuntimeAIConfig) { runs <- got })
 
 	select {
 	case <-runs:
@@ -56,19 +56,19 @@ func TestStage3SchedulerRunsImmediatelyAndWakeKeepsOriginalDeadline(t *testing.T
 }
 
 func TestStage3SchedulerRunsImmediatelyWhenReenabled(t *testing.T) {
-	cfg := config.Config{
-		EvolutionEnabled: false, ModelEndpoint: "http://model.invalid", ModelName: "test", EvolutionInterval: 2 * time.Hour,
+	cfg := settings.RuntimeAIConfig{
+		Stage3Enabled: false, Stage3Endpoint: "http://model.invalid", Stage3Model: "test", Stage3Interval: 2 * time.Hour,
 	}
-	server := &Server{cfg: cfg, aiCfg: cfg, aiCfgSet: true, stage3Wake: make(chan struct{}, 1)}
+	server := &Server{aiCfg: cfg, stage3Wake: make(chan struct{}, 1)}
 	runs := make(chan struct{}, 2)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	go server.evolutionStage3Loop(ctx, time.Now, func(time.Duration) evolutionStage3Timer {
 		return evolutionStage3Timer{c: make(chan time.Time), stop: func() {}}
-	}, func(context.Context, config.Config) { runs <- struct{}{} })
+	}, func(context.Context, settings.RuntimeAIConfig) { runs <- struct{}{} })
 
 	server.mu.Lock()
-	server.aiCfg.EvolutionEnabled = true
+	server.aiCfg.Stage3Enabled = true
 	server.mu.Unlock()
 	server.stage3Wake <- struct{}{}
 	select {

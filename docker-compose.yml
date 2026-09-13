@@ -17,8 +17,5 @@ services:
       - ${NEXUS_DATA_DIR:-./nexus-data}:/var/lib/nexus
       - ${RECALL_REPO_DIR:-./recall}:/recall
     environment:
-      NEXUS_AUTH_TOKEN: ${NEXUS_AUTH_TOKEN:?set NEXUS_AUTH_TOKEN for programmatic API access}
       NEXUS_PUBLIC_URL: ${NEXUS_PUBLIC_URL:-}
-      NEXUS_DATA_DIR: /var/lib/nexus
-      RECALL_REPO_DIR: /recall
-      NEXUS_TRUSTED_PROXIES: "${NEXUS_TRUSTED_PROXIES:-127.0.0.1,::1,172.16.0.0/12,192.168.0.0/16}"
+      NEXUS_TRUSTED_PROXIES: "${NEXUS_TRUSTED_PROXIES:-127.0.0.1,::1}"

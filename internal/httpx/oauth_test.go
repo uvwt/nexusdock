@@ -35,7 +35,7 @@ func newOAuthHTTPTestServer(t *testing.T) (*Server, *auth.Service) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := NewServer(config.Config{AuthToken: "ops-secret"}, nil, slog.Default(), WithSystemDatabase(db), WithWebAuthentication(authService), WithMCPTokenStore(mcpTokenStore))
+	server := NewServer(config.Config{}, nil, slog.Default(), WithSystemDatabase(db), WithWebAuthentication(authService), WithMCPTokenStore(mcpTokenStore))
 	return server, authService
 }
 
@@ -255,12 +255,12 @@ func TestDedicatedMCPTokenAuthorizesOnlyMCP(t *testing.T) {
 	}
 
 	called = false
-	opsReq := httptest.NewRequest(http.MethodPost, "https://nexus.example/mcp", nil)
-	opsReq.Header.Set("Authorization", "Bearer ops-secret")
-	opsRes := httptest.NewRecorder()
-	wrapped(opsRes, opsReq)
-	if called || opsRes.Code != http.StatusUnauthorized {
-		t.Fatalf("operations token should not authorize MCP: called=%v status=%d", called, opsRes.Code)
+	unrelatedReq := httptest.NewRequest(http.MethodPost, "https://nexus.example/mcp", nil)
+	unrelatedReq.Header.Set("Authorization", "Bearer unrelated-secret")
+	unrelatedRes := httptest.NewRecorder()
+	wrapped(unrelatedRes, unrelatedReq)
+	if called || unrelatedRes.Code != http.StatusUnauthorized {
+		t.Fatalf("unrelated bearer should not authorize MCP: called=%v status=%d", called, unrelatedRes.Code)
 	}
 }
 

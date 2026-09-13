@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/uvwt/nexusdock/internal/config"
+	"github.com/uvwt/nexusdock/internal/settings"
 )
 
 func TestWorkflowTemplateLifecycleMaintainsContentHashes(t *testing.T) {
@@ -223,16 +224,12 @@ func TestWorkflowTemplateMatchStopsWithClientCancellation(t *testing.T) {
 	t.Cleanup(func() { close(release) })
 
 	dataDir := t.TempDir()
-	handler := newTestHandler(t, config.Config{
-		NexusDataDir:      dataDir,
-		EmbeddingEnabled:  true,
-		EmbeddingEndpoint: embedding.URL,
-		EmbeddingModel:    "test-model",
-		EmbeddingTimeout:  5 * time.Second,
-	})
+	handler := newTestHandler(t, config.Config{NexusDataDir: dataDir}, WithRuntimeAIConfig(settings.RuntimeAIConfig{
+		EmbeddingEnabled: true, EmbeddingEndpoint: embedding.URL, EmbeddingModel: "test-model", EmbeddingTimeout: 5 * time.Second,
+	}))
 	publishWorkflowTemplate(t, handler, "development.demo", "1.0.0")
 
-	server := &Server{cfg: config.Config{NexusDataDir: dataDir, EmbeddingModel: "test-model"}}
+	server := &Server{cfg: config.Config{NexusDataDir: dataDir}, aiCfg: settings.RuntimeAIConfig{EmbeddingModel: "test-model"}}
 	index := workflowTemplateVectorIndex{
 		Model:     "test-model",
 		Dimension: 1,

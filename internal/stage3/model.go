@@ -16,6 +16,7 @@ import (
 )
 
 const (
+	DefaultRequestTimeout = 60 * time.Second
 	maxModelResponseBytes = 4 << 20
 	maxSnapshotBytes      = 96 << 10
 	maxCandidateCount     = 12
@@ -105,7 +106,7 @@ func NewClient(cfg Config) (*Client, error) {
 		return nil, errors.New("Stage 3 model name is required")
 	}
 	if cfg.Timeout <= 0 {
-		cfg.Timeout = 60 * time.Second
+		cfg.Timeout = DefaultRequestTimeout
 	}
 	return &Client{cfg: cfg, client: &http.Client{
 		Timeout:       cfg.Timeout,

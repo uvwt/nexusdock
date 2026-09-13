@@ -16,7 +16,7 @@ NexusDock 是个人多设备 AgentDock 汇总入口。一级产品区域保持�
 ## 认证与秘密
 
 - 浏览器管理员账号只存储在 Nexus SQLite 中，通过本地 `nexusdock admin` 命令初始化或重置。
-- `NEXUS_AUTH_TOKEN` 仅用于程序化 `/v1` API，不得用于 `/mcp`；不要恢复 `NEXUS_USERNAME`、`NEXUS_PASSWORD`、`NEXUS_PASSWORD_HASH` 或 `NEXUS_ACCESS_FILE`。
+- 受保护的管理 `/v1` API 使用管理员 Web Session；不要新增独立固定管理 Bearer Token，也不要恢复旧用户名、密码或 access-file 环境变量认证。
 - NexusDock 固定 MCP Token 独立存放在 `NEXUS_DATA_DIR/secrets/mcp-access-token`，仅允许 `/mcp`，可由管理员设置页查看和重置；重置后旧 Token 必须立即失效。
 - AgentDock 配对使用短时单次码；Device Token 只保存在 AgentDock，Nexus 仅保存哈希。不得要求用户向 Nexus 提供 AgentDock 的 `/mcp` Token 或公网地址。
 

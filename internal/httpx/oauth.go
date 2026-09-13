@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -397,11 +398,8 @@ func (s *Server) oauthToken(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) withMCPAccess(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		s.mu.RLock()
-		cfg := s.cfg
-		s.mu.RUnlock()
 		header := strings.TrimSpace(r.Header.Get("Authorization"))
-		if s.mcpToken != nil && bearerMatches(header, s.mcpToken.Token()) {
+		if s.mcpToken != nil && mcpTokenMatches(header, s.mcpToken.Token()) {
 			next(w, r)
 			return
 		}
@@ -419,12 +417,20 @@ func (s *Server) withMCPAccess(next http.HandlerFunc) http.HandlerFunc {
 				return
 			}
 		}
-		if cfg.AuthToken == "" && s.auth == nil && s.isLocalAPIRequest(r) {
+		if s.auth == nil && s.isLocalAPIRequest(r) {
 			next(w, r)
 			return
 		}
 		s.writeMCPBearerChallenge(w, r, false)
 	}
+}
+
+func mcpTokenMatches(header, expected string) bool {
+	if expected == "" || !strings.HasPrefix(strings.ToLower(header), "bearer ") {
+		return false
+	}
+	actual := strings.TrimSpace(header[7:])
+	return len(actual) == len(expected) && subtle.ConstantTimeCompare([]byte(actual), []byte(expected)) == 1
 }
 
 func (s *Server) writeMCPBearerChallenge(w http.ResponseWriter, r *http.Request, invalid bool) {

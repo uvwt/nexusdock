@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/uvwt/nexusdock/internal/agentdock"
-	"github.com/uvwt/nexusdock/internal/config"
 	"github.com/uvwt/nexusdock/internal/recall"
+	"github.com/uvwt/nexusdock/internal/settings"
 	"github.com/uvwt/nexusdock/internal/stage3"
 )
 
@@ -33,13 +33,13 @@ func (s *Server) evolutionStage3Loop(
 	ctx context.Context,
 	now func() time.Time,
 	newTimer func(time.Duration) evolutionStage3Timer,
-	run func(context.Context, config.Config),
+	run func(context.Context, settings.RuntimeAIConfig),
 ) {
 	var lastAttempt time.Time
 	wasRunnable := false
 	for {
-		cfg := s.currentConfig()
-		runnable := cfg.EvolutionEnabled && strings.TrimSpace(cfg.ModelEndpoint) != "" && strings.TrimSpace(cfg.ModelName) != ""
+		cfg := s.currentAIConfig()
+		runnable := cfg.Stage3Enabled && strings.TrimSpace(cfg.Stage3Endpoint) != "" && strings.TrimSpace(cfg.Stage3Model) != ""
 		if !runnable {
 			// Re-enabling Stage 3 is a new runnable period, so it should run immediately once.
 			lastAttempt = time.Time{}
@@ -52,7 +52,7 @@ func (s *Server) evolutionStage3Loop(
 			}
 		}
 
-		interval := cfg.EvolutionInterval
+		interval := cfg.Stage3Interval
 		if interval < time.Hour {
 			interval = time.Hour
 		}
@@ -104,12 +104,12 @@ func newEvolutionStage3Timer(wait time.Duration) evolutionStage3Timer {
 	}
 }
 
-func (s *Server) runEvolutionStage3Configured(ctx context.Context, cfg config.Config) {
+func (s *Server) runEvolutionStage3Configured(ctx context.Context, cfg settings.RuntimeAIConfig) {
 	client, err := stage3.NewClient(stage3.Config{
-		Endpoint: cfg.ModelEndpoint,
-		Model:    cfg.ModelName,
-		APIKey:   cfg.ModelAPIKey,
-		Timeout:  cfg.ModelTimeout,
+		Endpoint: cfg.Stage3Endpoint,
+		Model:    cfg.Stage3Model,
+		APIKey:   cfg.Stage3APIKey,
+		Timeout:  cfg.Stage3Timeout,
 	})
 	if err != nil {
 		if s.logger != nil {

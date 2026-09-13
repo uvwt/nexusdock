@@ -51,12 +51,6 @@ type FormState = {
   stage3: Stage3Settings;
 };
 
-const emptySettings: RuntimeAISettings = {
-  embedding: { enabled: false, endpoint: '', model: 'BAAI/bge-m3', timeout_seconds: 30, api_key_configured: false },
-  stage3: { enabled: false, endpoint: '', model: '', timeout_seconds: 60, interval_minutes: 360, api_key_configured: false, configured: false },
-  persisted: false,
-};
-
 function errorMessage(error: unknown, t: TFunction): string {
   if (error instanceof ApiError) return error.message;
   return error instanceof Error ? error.message : t('Request failed');
@@ -70,7 +64,7 @@ function secretAction(secret: SecretForm) {
 
 export default function AISettingsPanel({ refreshToken }: { refreshToken: number }) {
   const { t } = useTranslation();
-  const [form, setForm] = useState<FormState>({ embedding: emptySettings.embedding, stage3: emptySettings.stage3 });
+  const [form, setForm] = useState<FormState | null>(null);
   const [embeddingSecret, setEmbeddingSecret] = useState<SecretForm>({ value: '', clear: false });
   const [stage3Secret, setStage3Secret] = useState<SecretForm>({ value: '', clear: false });
   const [embeddingStatus, setEmbeddingStatus] = useState<EmbeddingStatus | null>(null);
@@ -82,11 +76,11 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
   const [embeddingTest, setEmbeddingTest] = useState<ConnectionTestResult | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'error' | 'info'; text: string } | null>(null);
 
-  async function refreshEmbeddingStatus() {
+  async function refreshEmbeddingStatus(enabled = form?.embedding.enabled ?? false) {
     try {
       setEmbeddingStatus(await api<EmbeddingStatus>('/v1/embeddings/status', { timeoutMs: 35_000 }));
     } catch (error) {
-      setEmbeddingStatus({ ok: false, enabled: form.embedding.enabled, configured: false, reachable: false, error: errorMessage(error, t) });
+      setEmbeddingStatus({ ok: false, enabled, configured: false, reachable: false, error: errorMessage(error, t) });
     }
   }
 
@@ -100,7 +94,7 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
       setStage3Test(null);
       setEmbeddingTest(null);
       setNotice(null);
-      void refreshEmbeddingStatus();
+      void refreshEmbeddingStatus(settingsResult.settings.embedding.enabled);
     } catch (error) {
       setNotice({ tone: 'error', text: errorMessage(error, t) });
     } finally {
@@ -112,6 +106,7 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (!form) return;
     setSaving(true);
     setNotice(null);
     try {
@@ -141,7 +136,7 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
       setStage3Test(null);
       setEmbeddingTest(null);
       setNotice({ tone: 'success', text: t('Configuration saved and applied. Nexus does not need to restart.') });
-      void refreshEmbeddingStatus();
+      void refreshEmbeddingStatus(result.settings.embedding.enabled);
     } catch (error) {
       setNotice({ tone: 'error', text: errorMessage(error, t) });
     } finally {
@@ -179,6 +174,12 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
     } finally {
       setTestingTarget(null);
     }
+  }
+
+  if (!form) {
+    return <section className="ai-settings-panel">
+      {notice ? <div className={`nx-alert is-${notice.tone}`}>{notice.text}</div> : <div className="nx-alert is-info">{t('Loading…')}</div>}
+    </section>;
   }
 
   const reachableTone = embeddingStatus?.reachable === true ? 'is-ok' : embeddingStatus?.enabled ? 'is-warn' : 'is-muted';
@@ -228,7 +229,7 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
         <div className="ai-config-body">
           <div className="ai-field-grid ai-embedding-fields">
             <label className="ai-field is-wide"><span>{t('Embeddings endpoint')}</span><input type="url" required={form.embedding.enabled} value={form.embedding.endpoint} onChange={(event) => setForm({ ...form, embedding: { ...form.embedding, endpoint: event.target.value } })} placeholder="http://embedding-service:8000/v1/embeddings" /></label>
-            <label className="ai-field"><span>{t('Embedding model')}</span><input required={form.embedding.enabled} value={form.embedding.model} onChange={(event) => setForm({ ...form, embedding: { ...form.embedding, model: event.target.value } })} placeholder="BAAI/bge-m3" /></label>
+            <label className="ai-field"><span>{t('Embedding model')}</span><input required={form.embedding.enabled} value={form.embedding.model} onChange={(event) => setForm({ ...form, embedding: { ...form.embedding, model: event.target.value } })} /></label>
             <label className="ai-field"><span>{t('Request timeout (seconds)')}</span><input type="number" min={1} max={300} value={form.embedding.timeout_seconds} onChange={(event) => setForm({ ...form, embedding: { ...form.embedding, timeout_seconds: Number(event.target.value) } })} /></label>
             <label className="ai-field is-wide"><span>API Key {form.embedding.api_key_configured ? t('· Configured; leave blank to keep') : t('· Not configured')}</span><input type="password" autoComplete="new-password" disabled={embeddingSecret.clear} value={embeddingSecret.value} onChange={(event) => setEmbeddingSecret({ value: event.target.value, clear: false })} placeholder={form.embedding.api_key_configured ? '••••••••' : t('Local Embedding can leave this blank')} /></label>
             {form.embedding.api_key_configured && <label className="ai-clear-secret"><input type="checkbox" checked={embeddingSecret.clear} onChange={(event) => setEmbeddingSecret({ value: '', clear: event.target.checked })} /><span>{t('Clear saved API Key')}</span></label>}

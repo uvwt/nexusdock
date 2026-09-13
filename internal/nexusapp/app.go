@@ -70,18 +70,20 @@ func run(args []string) error {
 	if err := core.EnsureSchema(ctx, controlDB); err != nil {
 		return fmt.Errorf("ensure control plane schema: %w", err)
 	}
-	runtimeSettings, err := settings.NewStore(controlDB, controlDir, cfg)
+	runtimeSettings, err := settings.NewStore(controlDB, controlDir)
 	if err != nil {
 		return fmt.Errorf("initialize runtime AI settings: %w", err)
 	}
-	if cfg, _, err = runtimeSettings.Load(ctx); err != nil {
+	aiCfg, _, err := runtimeSettings.Load(ctx)
+	if err != nil {
 		return fmt.Errorf("load runtime AI settings: %w", err)
 	}
-	mcpSettings, err := settings.NewMCPStore(controlDB, cfg.MCPAppsEnabled)
+	mcpSettings, err := settings.NewMCPStore(controlDB)
 	if err != nil {
 		return fmt.Errorf("initialize MCP settings: %w", err)
 	}
-	if cfg.MCPAppsEnabled, _, err = mcpSettings.Load(ctx); err != nil {
+	mcpAppsEnabled, _, err := mcpSettings.Load(ctx)
+	if err != nil {
 		return fmt.Errorf("load MCP settings: %w", err)
 	}
 	agentDockNodes, err := agentdock.NewStore(controlDB)
@@ -104,8 +106,8 @@ func run(args []string) error {
 	}
 
 	embeddingService := recall.NewEmbeddingService(store, recall.EmbeddingConfig{
-		Enabled: cfg.EmbeddingEnabled, Endpoint: cfg.EmbeddingEndpoint, Model: cfg.EmbeddingModel, APIKey: cfg.EmbeddingAPIKey,
-		IndexPath: cfg.EmbeddingIndexFile, Timeout: cfg.EmbeddingTimeout,
+		Enabled: aiCfg.EmbeddingEnabled, Endpoint: aiCfg.EmbeddingEndpoint, Model: aiCfg.EmbeddingModel, APIKey: aiCfg.EmbeddingAPIKey,
+		Timeout: aiCfg.EmbeddingTimeout,
 	})
 
 	server := httpx.NewServer(
@@ -117,7 +119,9 @@ func run(args []string) error {
 		httpx.WithWebAuthentication(authService),
 		httpx.WithEmbeddingService(embeddingService),
 		httpx.WithRuntimeSettings(runtimeSettings),
+		httpx.WithRuntimeAIConfig(aiCfg),
 		httpx.WithMCPSettings(mcpSettings),
+		httpx.WithMCPAppsEnabled(mcpAppsEnabled),
 		httpx.WithMCPTokenStore(mcpTokenStore),
 		httpx.WithPrivateNotes(privateNoteStore),
 	)
@@ -131,7 +135,7 @@ func run(args []string) error {
 	}
 
 	server.StartEvolutionStage3(ctx)
-	logger.Info("nexusdock starting", "addr", cfg.Addr(), "nexus_data_dir", cfg.NexusDataDir, "recall_repo_dir", cfg.RecallRepoDir, "mcp_apps_enabled", cfg.MCPAppsEnabled, "embedding_enabled", cfg.EmbeddingEnabled, "embedding_model", cfg.EmbeddingModel, "stage3_evolution_enabled", cfg.EvolutionEnabled && cfg.ModelEndpoint != "" && cfg.ModelName != "")
+	logger.Info("nexusdock starting", "addr", cfg.Addr(), "nexus_data_dir", cfg.NexusDataDir, "recall_repo_dir", cfg.RecallRepoDir, "mcp_apps_enabled", mcpAppsEnabled, "embedding_enabled", aiCfg.EmbeddingEnabled, "embedding_model", aiCfg.EmbeddingModel, "stage3_evolution_enabled", aiCfg.Stage3Enabled && aiCfg.Stage3Endpoint != "" && aiCfg.Stage3Model != "")
 	serveErr := serveHTTP(ctx, httpServer)
 	cancel()
 	if serveErr != nil {

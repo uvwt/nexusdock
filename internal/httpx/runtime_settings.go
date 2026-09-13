@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/uvwt/nexusdock/internal/config"
 	"github.com/uvwt/nexusdock/internal/recall"
 	"github.com/uvwt/nexusdock/internal/settings"
 	"github.com/uvwt/nexusdock/internal/stage3"
@@ -56,14 +55,14 @@ func (s *Server) updateRuntimeAISettings(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) testStage3Connection(w http.ResponseWriter, r *http.Request) {
-	cfg := s.currentConfig()
+	cfg := s.currentAIConfig()
 	started := time.Now()
-	result := runtimeAITestResult{Target: "stage3", Model: cfg.ModelName}
+	result := runtimeAITestResult{Target: "stage3", Model: cfg.Stage3Model}
 	client, err := stage3.NewClient(stage3.Config{
-		Endpoint: cfg.ModelEndpoint,
-		Model:    cfg.ModelName,
-		APIKey:   cfg.ModelAPIKey,
-		Timeout:  cfg.ModelTimeout,
+		Endpoint: cfg.Stage3Endpoint,
+		Model:    cfg.Stage3Model,
+		APIKey:   cfg.Stage3APIKey,
+		Timeout:  cfg.Stage3Timeout,
 	})
 	if err == nil {
 		err = client.Probe(r.Context())
@@ -108,12 +107,9 @@ func (s *Server) testEmbeddingConnection(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, result)
 }
 
-func (s *Server) currentConfig() config.Config {
+func (s *Server) currentAIConfig() settings.RuntimeAIConfig {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if !s.aiCfgSet {
-		return s.cfg
-	}
 	return s.aiCfg
 }
 
@@ -123,15 +119,14 @@ func (s *Server) currentEmbedding() *recall.EmbeddingService {
 	return s.embedding
 }
 
-func (s *Server) applyRuntimeAIConfig(cfg config.Config) {
+func (s *Server) applyRuntimeAIConfig(cfg settings.RuntimeAIConfig) {
 	embedding := recall.NewEmbeddingService(s.store, recall.EmbeddingConfig{
 		Enabled: cfg.EmbeddingEnabled, Endpoint: cfg.EmbeddingEndpoint, Model: cfg.EmbeddingModel, APIKey: cfg.EmbeddingAPIKey,
-		IndexPath: cfg.EmbeddingIndexFile, Timeout: cfg.EmbeddingTimeout,
+		Timeout: cfg.EmbeddingTimeout,
 	})
 
 	s.mu.Lock()
 	s.aiCfg = cfg
-	s.aiCfgSet = true
 	s.embedding = embedding
 	s.mu.Unlock()
 

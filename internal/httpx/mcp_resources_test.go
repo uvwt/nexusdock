@@ -36,8 +36,8 @@ func TestSyncMCPAppResourcesPublishesAdvertisedUIResources(t *testing.T) {
 
 	sdk := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "test", Version: "1"}, nil)
 	server := &Server{
-		cfg: config.Config{PublicURL: domain, MCPAppsEnabled: true}, agentDock: store, mcpServer: sdk,
-		mcpResources: make(map[string]struct{}),
+		cfg: config.Config{PublicURL: domain}, agentDock: store, mcpServer: sdk,
+		mcpAppsEnabledState: true, mcpResources: make(map[string]struct{}),
 	}
 	server.syncMCPAppResources()
 
@@ -90,8 +90,8 @@ func TestNexusOwnedMCPAppResourcesDoNotRequireAgentDockProvider(t *testing.T) {
 	const domain = "https://nexus.example.test"
 	sdk := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "local-app-test", Version: "1"}, nil)
 	server := &Server{
-		cfg: config.Config{PublicURL: domain, MCPAppsEnabled: true}, mcpServer: sdk,
-		mcpResources: make(map[string]struct{}),
+		cfg: config.Config{PublicURL: domain}, mcpServer: sdk,
+		mcpAppsEnabledState: true, mcpResources: make(map[string]struct{}),
 	}
 	server.syncMCPAppResources()
 
@@ -157,7 +157,7 @@ func TestMCPAppsToggleRemovesRelayButKeepsPersistedCapabilities(t *testing.T) {
 
 	sdk := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "toggle-test", Version: "1"}, nil)
 	server := &Server{
-		cfg: config.Config{MCPAppsEnabled: true}, agentDock: store, mcpServer: sdk,
+		mcpAppsEnabledState: true, agentDock: store, mcpServer: sdk,
 		mcpTools: make(map[string]publishedNodeTool), mcpResources: make(map[string]struct{}),
 	}
 	server.syncMCPAppResources()
@@ -199,7 +199,7 @@ func TestPublishedMCPAppResourcesRecoverFromPersistedCapabilities(t *testing.T) 
 	}
 
 	// A new Server has no in-memory tool/provider state; its resource catalog must recover solely from persisted ui_resources.
-	restarted := &Server{cfg: config.Config{MCPAppsEnabled: true}, agentDock: store}
+	restarted := &Server{mcpAppsEnabledState: true, agentDock: store}
 	resources, err := restarted.publishedMCPAppResourceURIs(t.Context())
 	if err != nil {
 		t.Fatal(err)

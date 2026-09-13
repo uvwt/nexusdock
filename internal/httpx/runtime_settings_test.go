@@ -17,7 +17,7 @@ import (
 	"github.com/uvwt/nexusdock/internal/settings"
 )
 
-func newRuntimeSettingsHTTPServer(t *testing.T, cfg config.Config) *Server {
+func newRuntimeSettingsHTTPServer(t *testing.T) *Server {
 	t.Helper()
 	dataDir := t.TempDir()
 	db, err := core.OpenSQLite(t.Context(), filepath.Join(dataDir, "nexus.db"), 1)
@@ -32,20 +32,23 @@ func newRuntimeSettingsHTTPServer(t *testing.T, cfg config.Config) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.NexusDataDir = dataDir
-	cfg.RecallRepoDir = store.Root()
-	runtimeSettings, err := settings.NewStore(db, dataDir, cfg)
+	cfg := config.Config{NexusDataDir: dataDir, RecallRepoDir: store.Root()}
+	runtimeSettings, err := settings.NewStore(db, dataDir)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return NewServer(cfg, store, slog.Default(), WithSystemDatabase(db), WithRuntimeSettings(runtimeSettings))
 }
 
+func loopbackHTTPHandler(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.RemoteAddr = "127.0.0.1:51234"
+		next.ServeHTTP(w, r)
+	})
+}
+
 func TestRuntimeAISettingsAPIProtectsSecretsAndAppliesEmbeddingConfiguration(t *testing.T) {
-	const (
-		authToken      = "nexus-settings-test-token"
-		embeddingToken = "embedding-settings-secret"
-	)
+	const embeddingToken = "embedding-settings-secret"
 	var embeddingAuthorization string
 	embedding := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		embeddingAuthorization = r.Header.Get("Authorization")
@@ -53,18 +56,8 @@ func TestRuntimeAISettingsAPIProtectsSecretsAndAppliesEmbeddingConfiguration(t *
 	}))
 	defer embedding.Close()
 
-	server := newRuntimeSettingsHTTPServer(t, config.Config{
-		AuthToken: authToken, RequireAuth: true,
-		EmbeddingModel: recall.DefaultEmbeddingModel, EmbeddingTimeout: 30 * time.Second,
-		ModelTimeout: 60 * time.Second, EvolutionInterval: 6 * time.Hour,
-	})
-	handler := server.Handler()
-
-	unauthorized := httptest.NewRecorder()
-	handler.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodGet, "/v1/settings/ai", nil))
-	if unauthorized.Code != http.StatusUnauthorized {
-		t.Fatalf("unauthenticated settings status = %d, want 401", unauthorized.Code)
-	}
+	server := newRuntimeSettingsHTTPServer(t)
+	handler := loopbackHTTPHandler(server.Handler())
 
 	body := map[string]any{
 		"embedding": map[string]any{
@@ -79,7 +72,6 @@ func TestRuntimeAISettingsAPIProtectsSecretsAndAppliesEmbeddingConfiguration(t *
 	payload, _ := json.Marshal(body)
 	update := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/v1/settings/ai", bytes.NewReader(payload))
-	req.Header.Set("Authorization", "Bearer "+authToken)
 	req.Header.Set("Content-Type", "application/json")
 	handler.ServeHTTP(update, req)
 	if update.Code != http.StatusOK {
@@ -91,7 +83,6 @@ func TestRuntimeAISettingsAPIProtectsSecretsAndAppliesEmbeddingConfiguration(t *
 
 	read := httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/v1/settings/ai", nil)
-	req.Header.Set("Authorization", "Bearer "+authToken)
 	handler.ServeHTTP(read, req)
 	if read.Code != http.StatusOK || strings.Contains(read.Body.String(), embeddingToken) {
 		t.Fatalf("settings read response invalid or leaked secret: status=%d body=%s", read.Code, read.Body.String())
@@ -108,7 +99,6 @@ func TestRuntimeAISettingsAPIProtectsSecretsAndAppliesEmbeddingConfiguration(t *
 
 	status := httptest.NewRecorder()
 	req = httptest.NewRequest(http.MethodGet, "/v1/embeddings/status", nil)
-	req.Header.Set("Authorization", "Bearer "+authToken)
 	handler.ServeHTTP(status, req)
 	if status.Code != http.StatusOK || !strings.Contains(status.Body.String(), `"reachable":true`) {
 		t.Fatalf("embedding status=%d body=%s", status.Code, status.Body.String())
@@ -128,7 +118,7 @@ func TestWorkflowEmbeddingUsesRuntimeAPIKey(t *testing.T) {
 	defer embedding.Close()
 
 	server := &Server{}
-	vectors, err := server.embedWorkflowTemplateTexts(t.Context(), config.Config{
+	vectors, err := server.embedWorkflowTemplateTexts(t.Context(), settings.RuntimeAIConfig{
 		EmbeddingEndpoint: embedding.URL,
 		EmbeddingModel:    "test-embedding",
 		EmbeddingAPIKey:   token,
@@ -145,9 +135,8 @@ func TestWorkflowEmbeddingUsesRuntimeAPIKey(t *testing.T) {
 	}
 }
 
-func TestRuntimeAIConnectionTestsUseSavedSecretsAndStayAuthenticated(t *testing.T) {
+func TestRuntimeAIConnectionTestsUseSavedSecrets(t *testing.T) {
 	const (
-		authToken      = "nexus-test-token"
 		stage3Token    = "stage3-test-secret"
 		embeddingToken = "embedding-test-secret"
 	)
@@ -164,12 +153,8 @@ func TestRuntimeAIConnectionTestsUseSavedSecretsAndStayAuthenticated(t *testing.
 	}))
 	defer embedding.Close()
 
-	server := newRuntimeSettingsHTTPServer(t, config.Config{
-		AuthToken: authToken, RequireAuth: true,
-		EmbeddingModel: recall.DefaultEmbeddingModel, EmbeddingTimeout: time.Second,
-		ModelTimeout: time.Second, EvolutionInterval: 6 * time.Hour,
-	})
-	handler := server.Handler()
+	server := newRuntimeSettingsHTTPServer(t)
+	handler := loopbackHTTPHandler(server.Handler())
 	body := map[string]any{
 		"embedding": map[string]any{
 			"enabled": true, "endpoint": embedding.URL, "model": "embed-test", "timeout_seconds": 5,
@@ -183,7 +168,6 @@ func TestRuntimeAIConnectionTestsUseSavedSecretsAndStayAuthenticated(t *testing.
 	payload, _ := json.Marshal(body)
 	update := httptest.NewRecorder()
 	req := httptest.NewRequest(http.MethodPut, "/v1/settings/ai", bytes.NewReader(payload))
-	req.Header.Set("Authorization", "Bearer "+authToken)
 	req.Header.Set("Content-Type", "application/json")
 	handler.ServeHTTP(update, req)
 	if update.Code != http.StatusOK {
@@ -197,15 +181,8 @@ func TestRuntimeAIConnectionTestsUseSavedSecretsAndStayAuthenticated(t *testing.
 		{path: "/v1/settings/ai/test/stage3", target: "stage3"},
 		{path: "/v1/settings/ai/test/embedding", target: "embedding"},
 	} {
-		unauthorized := httptest.NewRecorder()
-		handler.ServeHTTP(unauthorized, httptest.NewRequest(http.MethodPost, test.path, nil))
-		if unauthorized.Code != http.StatusUnauthorized {
-			t.Fatalf("%s unauthenticated status=%d, want 401", test.target, unauthorized.Code)
-		}
-
 		response := httptest.NewRecorder()
 		req = httptest.NewRequest(http.MethodPost, test.path, nil)
-		req.Header.Set("Authorization", "Bearer "+authToken)
 		handler.ServeHTTP(response, req)
 		if response.Code != http.StatusOK {
 			t.Fatalf("%s test status=%d body=%s", test.target, response.Code, response.Body.String())

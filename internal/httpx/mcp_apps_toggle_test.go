@@ -7,7 +7,6 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	protocol "github.com/uvwt/agentdock-protocol"
 	"github.com/uvwt/nexusdock/internal/agentdock"
-	"github.com/uvwt/nexusdock/internal/config"
 )
 
 func TestNexusMCPAppsDisabledRemovesCentralAndNodePresentationOnly(t *testing.T) {
@@ -41,7 +40,7 @@ func TestNexusMCPAppsDisabledRemovesCentralAndNodePresentationOnly(t *testing.T)
 }
 
 func TestNexusMCPAppsDisabledStripsProxiedResultUIOnly(t *testing.T) {
-	server := &Server{cfg: config.Config{MCPAppsEnabled: false}}
+	server := &Server{mcpAppsEnabledState: false}
 	result, err := server.gatewayToolResult("demo", map[string]any{
 		"isError":           false,
 		"structuredContent": map[string]any{"value": "ok"},
@@ -64,9 +63,9 @@ func TestNexusMCPAppsDisabledStripsProxiedResultUIOnly(t *testing.T) {
 
 func TestNexusMCPAppsToggleUpdatesActiveSessionToolPresentation(t *testing.T) {
 	server := &Server{
-		cfg:          config.Config{MCPAppsEnabled: true},
-		mcpTools:     make(map[string]publishedNodeTool),
-		mcpResources: make(map[string]struct{}),
+		mcpAppsEnabledState: true,
+		mcpTools:            make(map[string]publishedNodeTool),
+		mcpResources:        make(map[string]struct{}),
 	}
 	server.initializeMCPGateway()
 

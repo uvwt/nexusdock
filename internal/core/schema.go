@@ -18,9 +18,9 @@ var currentSchema = []string{
 )`,
 	`CREATE TABLE IF NOT EXISTS auth_tokens (
     id TEXT PRIMARY KEY,
-    subject_type TEXT NOT NULL CHECK (subject_type IN ('user', 'agent', 'device', 'system')),
+    subject_type TEXT NOT NULL CHECK (subject_type IN ('user', 'agent', 'device')),
     subject_id TEXT NOT NULL,
-    token_kind TEXT NOT NULL CHECK (token_kind IN ('session', 'agent_token', 'device_token', 'system_token')),
+    token_kind TEXT NOT NULL CHECK (token_kind IN ('session', 'agent_token', 'device_token')),
     token_hash TEXT NOT NULL UNIQUE,
     scopes_json TEXT NOT NULL,
     issued_at TEXT NOT NULL,

@@ -110,7 +110,7 @@ jobs:
             echo "Verifying ${image}"
             docker pull "$image"
             name="nexus-verify-${RANDOM}"
-            docker run -d --name "$name" -e NEXUS_AUTH_TOKEN=release-verification "$image"
+            docker run -d --name "$name" "$image"
             ready=false
             for _ in $(seq 1 30); do
               status="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$name")"

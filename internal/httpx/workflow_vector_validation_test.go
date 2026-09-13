@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/uvwt/nexusdock/internal/config"
+	"github.com/uvwt/nexusdock/internal/settings"
 )
 
 func TestParseWorkflowEmbeddingResponseRespectsOpenAIIndexes(t *testing.T) {
@@ -48,10 +49,10 @@ func TestWorkflowTemplateReindexRejectsDimensionMismatch(t *testing.T) {
 	}))
 	defer embedding.Close()
 
-	server := &Server{cfg: config.Config{
-		NexusDataDir: t.TempDir(), EmbeddingEnabled: true, EmbeddingEndpoint: embedding.URL,
-		EmbeddingModel: "test-model", EmbeddingTimeout: time.Second,
-	}}
+	server := &Server{
+		cfg:   config.Config{NexusDataDir: t.TempDir()},
+		aiCfg: settings.RuntimeAIConfig{EmbeddingEnabled: true, EmbeddingEndpoint: embedding.URL, EmbeddingModel: "test-model", EmbeddingTimeout: time.Second},
+	}
 	if err := server.ensureWorkflowRegistryDirs(); err != nil {
 		t.Fatal(err)
 	}
@@ -73,10 +74,10 @@ func TestWorkflowTemplateReindexRejectsDimensionMismatch(t *testing.T) {
 }
 
 func TestWorkflowVectorIndexInfoDistinguishesStaleAndInvalid(t *testing.T) {
-	server := &Server{cfg: config.Config{
-		NexusDataDir: t.TempDir(), EmbeddingEnabled: true,
-		EmbeddingEndpoint: "http://example.invalid", EmbeddingModel: "new-model",
-	}}
+	server := &Server{
+		cfg:   config.Config{NexusDataDir: t.TempDir()},
+		aiCfg: settings.RuntimeAIConfig{EmbeddingEnabled: true, EmbeddingEndpoint: "http://example.invalid", EmbeddingModel: "new-model"},
+	}
 	if err := server.ensureWorkflowRegistryDirs(); err != nil {
 		t.Fatal(err)
 	}
@@ -106,10 +107,10 @@ func TestWorkflowVectorScoresRejectQueryDimensionMismatch(t *testing.T) {
 	}))
 	defer embedding.Close()
 
-	server := &Server{cfg: config.Config{
-		NexusDataDir: t.TempDir(), EmbeddingEnabled: true, EmbeddingEndpoint: embedding.URL,
-		EmbeddingModel: "test-model", EmbeddingTimeout: time.Second,
-	}}
+	server := &Server{
+		cfg:   config.Config{NexusDataDir: t.TempDir()},
+		aiCfg: settings.RuntimeAIConfig{EmbeddingEnabled: true, EmbeddingEndpoint: embedding.URL, EmbeddingModel: "test-model", EmbeddingTimeout: time.Second},
+	}
 	if err := server.ensureWorkflowRegistryDirs(); err != nil {
 		t.Fatal(err)
 	}

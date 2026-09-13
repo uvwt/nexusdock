@@ -17,16 +17,17 @@ type MCPView struct {
 }
 
 type MCPStore struct {
-	db             *sql.DB
-	defaultEnabled bool
-	now            func() time.Time
+	db  *sql.DB
+	now func() time.Time
 }
 
-func NewMCPStore(db *sql.DB, defaultEnabled bool) (*MCPStore, error) {
+const DefaultMCPAppsEnabled = true
+
+func NewMCPStore(db *sql.DB) (*MCPStore, error) {
 	if db == nil {
 		return nil, ErrMCPUnavailable
 	}
-	return &MCPStore{db: db, defaultEnabled: defaultEnabled, now: time.Now}, nil
+	return &MCPStore{db: db, now: time.Now}, nil
 }
 
 func (s *MCPStore) Load(ctx context.Context) (bool, MCPView, error) {
@@ -37,7 +38,7 @@ func (s *MCPStore) Load(ctx context.Context) (bool, MCPView, error) {
 	var updatedAt string
 	err := s.db.QueryRowContext(ctx, `SELECT mcp_apps_enabled, updated_at FROM mcp_settings WHERE singleton_id = 1`).Scan(&enabled, &updatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
-		return s.defaultEnabled, MCPView{MCPAppsEnabled: s.defaultEnabled}, nil
+		return DefaultMCPAppsEnabled, MCPView{MCPAppsEnabled: DefaultMCPAppsEnabled}, nil
 	}
 	if err != nil {
 		return false, MCPView{}, fmt.Errorf("读取 MCP 设置: %w", err)

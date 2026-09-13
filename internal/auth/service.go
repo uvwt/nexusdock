@@ -59,33 +59,6 @@ type Service struct {
 
 func NewService(db *sql.DB) *Service { return &Service{db: db, now: time.Now} }
 
-func (s *Service) EnsureBootstrapSystemToken(ctx context.Context, secret string) error {
-	secret = strings.TrimSpace(secret)
-	if secret == "" {
-		return nil
-	}
-	var count int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM auth_tokens WHERE token_hash = ?`, tokenHash(secret)).Scan(&count); err != nil {
-		return fmt.Errorf("check bootstrap token: %w", err)
-	}
-	if count > 0 {
-		return nil
-	}
-	id, err := core.NewID("tok")
-	if err != nil {
-		return err
-	}
-	scopes, _ := json.Marshal([]string{"*"})
-	_, err = s.db.ExecContext(ctx, `INSERT INTO auth_tokens(
-		id, subject_type, subject_id, token_kind, token_hash, scopes_json, issued_at
-	) VALUES(?, 'system', 'bootstrap', 'system_token', ?, ?, ?)`,
-		id, tokenHash(secret), string(scopes), s.now().UTC().Format(time.RFC3339Nano))
-	if err != nil {
-		return fmt.Errorf("insert bootstrap token: %w", err)
-	}
-	return nil
-}
-
 func (s *Service) IssueToken(ctx context.Context, actor core.Actor, kind string, scopes []string, ttl time.Duration) (IssuedToken, error) {
 	if !actor.Valid() {
 		return IssuedToken{}, core.NewError(core.CodeValidation, "valid token subject is required", nil)
@@ -216,8 +189,6 @@ func validKind(actorType core.ActorType, kind string) bool {
 		return kind == "agent_token"
 	case core.ActorDevice:
 		return kind == "device_token"
-	case core.ActorSystem:
-		return kind == "system_token"
 	default:
 		return false
 	}

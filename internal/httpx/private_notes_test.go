@@ -8,7 +8,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/uvwt/nexusdock/internal/agentdock"
 	"github.com/uvwt/nexusdock/internal/config"
+	"github.com/uvwt/nexusdock/internal/core"
+	"github.com/uvwt/nexusdock/internal/privatenotes"
 	"github.com/uvwt/nexusdock/internal/recall"
 )
 
@@ -24,8 +27,27 @@ func TestPrivateNoteRoutesAreAbsentWithoutConfiguredStore(t *testing.T) {
 	}
 }
 
-func TestPrivateNoteAPIRequiresBearerToken(t *testing.T) {
-	h := newTestHandler(t, config.Config{AuthToken: "private-token"})
+func TestPrivateNoteAPIRequiresDeviceToken(t *testing.T) {
+	server := newNodeTestServer(t)
+	privateNotes, err := privatenotes.New(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	server.privateNotes = privateNotes
+	pairing, err := server.agentDock.CreatePairingCode(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	node, err := server.agentDock.Pair(t.Context(), agentdock.PairInput{Code: pairing.Code, DeviceID: "device_private_notes_12345678", Name: "DockMini"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	issued, err := server.auth.IssueToken(t.Context(), core.Actor{Type: core.ActorDevice, ID: node.ID}, "device_token", nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := server.Handler()
+
 	response := doJSON(t, h, http.MethodPost, "/v1/private-notes/status", `{"action":"check"}`)
 	if response.Code != http.StatusUnauthorized {
 		t.Fatalf("status without token = %d body=%s", response.Code, response.Body.String())
@@ -33,7 +55,7 @@ func TestPrivateNoteAPIRequiresBearerToken(t *testing.T) {
 
 	request := httptest.NewRequest(http.MethodPost, "/v1/private-notes/status", strings.NewReader(`{"action":"check"}`))
 	request.Header.Set("Content-Type", "application/json")
-	request.Header.Set("Authorization", "Bearer private-token")
+	request.Header.Set("Authorization", "Bearer "+issued.Token)
 	response = httptest.NewRecorder()
 	h.ServeHTTP(response, request)
 	if response.Code != http.StatusOK {

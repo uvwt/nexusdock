@@ -7,13 +7,11 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
-	"github.com/uvwt/nexusdock/internal/config"
 	"github.com/uvwt/nexusdock/internal/core"
 )
 
-func newRuntimeSettingsTestStore(t *testing.T, defaults config.Config) (*Store, *sql.DB) {
+func newRuntimeSettingsTestStore(t *testing.T) (*Store, *sql.DB) {
 	t.Helper()
 	db, err := core.OpenSQLite(t.Context(), filepath.Join(t.TempDir(), "nexus.db"), 1)
 	if err != nil {
@@ -24,7 +22,7 @@ func newRuntimeSettingsTestStore(t *testing.T, defaults config.Config) (*Store, 
 		t.Fatal(err)
 	}
 	dataDir := t.TempDir()
-	store, err := NewStore(db, dataDir, defaults)
+	store, err := NewStore(db, dataDir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,29 +33,22 @@ func newRuntimeSettingsTestStore(t *testing.T, defaults config.Config) (*Store, 
 	return store, db
 }
 
-func TestRuntimeSettingsFallsBackToEnvironmentDefaults(t *testing.T) {
-	defaults := config.Config{
-		EmbeddingEnabled: true, EmbeddingEndpoint: "http://embedding.local/v1/embeddings", EmbeddingModel: "default-embedding",
-		EmbeddingAPIKey: "env-embedding-key", EmbeddingTimeout: 25 * time.Second,
-		EvolutionEnabled: true, ModelEndpoint: "https://model.local/v1/chat/completions", ModelName: "default-model",
-		ModelAPIKey: "env-model-key", ModelTimeout: 45 * time.Second, EvolutionInterval: 6 * time.Hour,
-	}
-	store, _ := newRuntimeSettingsTestStore(t, defaults)
+func TestRuntimeSettingsUsesFixedDefaultsBeforeFirstSave(t *testing.T) {
+	store, _ := newRuntimeSettingsTestStore(t)
 	cfg, view, err := store.Load(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if view.Persisted || cfg.EmbeddingModel != "default-embedding" || cfg.ModelName != "default-model" {
-		t.Fatalf("unexpected fallback settings: cfg=%#v view=%#v", cfg, view)
+	if view.Persisted || cfg != DefaultRuntimeAIConfig() {
+		t.Fatalf("unexpected default settings: cfg=%#v view=%#v", cfg, view)
 	}
-	if !view.Embedding.APIKeyConfigured || !view.Stage3.APIKeyConfigured {
-		t.Fatalf("environment secrets should only be exposed as configured flags: %#v", view)
+	if cfg.EmbeddingEnabled || cfg.Stage3Enabled || view.Embedding.APIKeyConfigured || view.Stage3.APIKeyConfigured {
+		t.Fatalf("product settings should be disabled and secret-free before first save: %#v", view)
 	}
 }
 
 func TestRuntimeSettingsEncryptsSecretsAndSupportsKeepReplaceClear(t *testing.T) {
-	defaults := config.Config{EmbeddingModel: "BAAI/bge-m3", EmbeddingTimeout: 30 * time.Second, ModelTimeout: 60 * time.Second, EvolutionInterval: 6 * time.Hour}
-	store, db := newRuntimeSettingsTestStore(t, defaults)
+	store, db := newRuntimeSettingsTestStore(t)
 	input := UpdateInput{
 		Embedding: EmbeddingInput{Enabled: true, Endpoint: "http://embedding.local/v1/embeddings", Model: "bge-m3", TimeoutSeconds: 20, APIKey: SecretInput{Action: "replace", Value: "embedding-secret-value"}},
 		Stage3:    Stage3Input{Enabled: true, Endpoint: "https://model.local/v1/chat/completions", Model: "gpt-example", TimeoutSeconds: 40, IntervalMinutes: 360, APIKey: SecretInput{Action: "replace", Value: "model-secret-value"}},
@@ -66,7 +57,7 @@ func TestRuntimeSettingsEncryptsSecretsAndSupportsKeepReplaceClear(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.EmbeddingAPIKey != "embedding-secret-value" || cfg.ModelAPIKey != "model-secret-value" || !view.Persisted {
+	if cfg.EmbeddingAPIKey != "embedding-secret-value" || cfg.Stage3APIKey != "model-secret-value" || !view.Persisted {
 		t.Fatalf("updated settings mismatch: cfg=%#v view=%#v", cfg, view)
 	}
 	if !view.Embedding.APIKeyConfigured || !view.Stage3.APIKeyConfigured {
@@ -95,8 +86,8 @@ func TestRuntimeSettingsEncryptsSecretsAndSupportsKeepReplaceClear(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.EmbeddingAPIKey != "embedding-secret-value" || cfg.ModelAPIKey != "" {
-		t.Fatalf("keep/clear semantics failed: embedding=%q model=%q", cfg.EmbeddingAPIKey, cfg.ModelAPIKey)
+	if cfg.EmbeddingAPIKey != "embedding-secret-value" || cfg.Stage3APIKey != "" {
+		t.Fatalf("keep/clear semantics failed: embedding=%q model=%q", cfg.EmbeddingAPIKey, cfg.Stage3APIKey)
 	}
 	if !view.Embedding.APIKeyConfigured || view.Stage3.APIKeyConfigured {
 		t.Fatalf("configured flags after clear mismatch: %#v", view)
@@ -104,7 +95,7 @@ func TestRuntimeSettingsEncryptsSecretsAndSupportsKeepReplaceClear(t *testing.T)
 }
 
 func TestRuntimeSettingsRejectsInvalidInput(t *testing.T) {
-	store, _ := newRuntimeSettingsTestStore(t, config.Config{})
+	store, _ := newRuntimeSettingsTestStore(t)
 	_, _, err := store.Update(context.Background(), UpdateInput{
 		Embedding: EmbeddingInput{Enabled: true, Endpoint: "file:///tmp/embed", Model: "bge", TimeoutSeconds: 30, APIKey: SecretInput{Action: "keep"}},
 		Stage3:    Stage3Input{Enabled: false, TimeoutSeconds: 60, IntervalMinutes: 360, APIKey: SecretInput{Action: "keep"}},

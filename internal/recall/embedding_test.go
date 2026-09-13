@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -54,7 +53,7 @@ func TestEmbeddingReindexAndSearchWithOpenAICompatibleEndpoint(t *testing.T) {
 	}))
 	defer server.Close()
 
-	svc := NewEmbeddingService(store, EmbeddingConfig{Enabled: true, Endpoint: server.URL, IndexPath: filepath.Join(t.TempDir(), "embedding-index.json")})
+	svc := NewEmbeddingService(store, EmbeddingConfig{Enabled: true, Endpoint: server.URL})
 	indexed, err := svc.Reindex(context.Background(), EmbeddingReindexRequest{Prefix: "recall/managed/cards"})
 	if err != nil {
 		t.Fatal(err)
@@ -139,7 +138,7 @@ func TestEmbeddingReindexBatchesLargeCardSets(t *testing.T) {
 	}))
 	defer server.Close()
 
-	svc := NewEmbeddingService(store, EmbeddingConfig{Enabled: true, Endpoint: server.URL, IndexPath: filepath.Join(t.TempDir(), "embedding-index.json")})
+	svc := NewEmbeddingService(store, EmbeddingConfig{Enabled: true, Endpoint: server.URL})
 	indexed, err := svc.Reindex(context.Background(), EmbeddingReindexRequest{Prefix: "recall/managed/cards"})
 	if err != nil {
 		t.Fatal(err)
@@ -208,7 +207,7 @@ func TestEmbeddingPendingDocumentsGroupsSimilarLengths(t *testing.T) {
 	}))
 	defer server.Close()
 
-	svc := NewEmbeddingService(store, EmbeddingConfig{Enabled: true, Endpoint: server.URL, IndexPath: filepath.Join(t.TempDir(), "embedding-index.json")})
+	svc := NewEmbeddingService(store, EmbeddingConfig{Enabled: true, Endpoint: server.URL})
 	lengths := []int{1000, 10, 1100, 20, 1200, 30, 1300, 40, 1400, 50}
 	docs := make([]embeddingDocument, len(lengths))
 	pending := make([]int, len(lengths))
@@ -268,7 +267,7 @@ func TestEmbeddingReindexReusesUnchangedVectors(t *testing.T) {
 	}))
 	defer server.Close()
 
-	svc := NewEmbeddingService(store, EmbeddingConfig{Enabled: true, Endpoint: server.URL, IndexPath: filepath.Join(t.TempDir(), "embedding-index.json")})
+	svc := NewEmbeddingService(store, EmbeddingConfig{Enabled: true, Endpoint: server.URL})
 	if _, err := svc.Reindex(context.Background(), EmbeddingReindexRequest{}); err != nil {
 		t.Fatal(err)
 	}
@@ -333,7 +332,7 @@ func TestEmbeddingReindexDefaultsToAllRecallDocuments(t *testing.T) {
 	}))
 	defer server.Close()
 
-	svc := NewEmbeddingService(store, EmbeddingConfig{Enabled: true, Endpoint: server.URL, IndexPath: filepath.Join(t.TempDir(), "embedding-index.json")})
+	svc := NewEmbeddingService(store, EmbeddingConfig{Enabled: true, Endpoint: server.URL})
 	indexed, err := svc.Reindex(context.Background(), EmbeddingReindexRequest{})
 	if err != nil {
 		t.Fatal(err)
@@ -385,7 +384,7 @@ func TestEmbeddingPartialReindexPreservesOutsidePrefixAndPrunesDeletedTarget(t *
 	}))
 	defer server.Close()
 
-	svc := NewEmbeddingService(store, EmbeddingConfig{Enabled: true, Endpoint: server.URL, IndexPath: filepath.Join(t.TempDir(), "embedding-index.json")})
+	svc := NewEmbeddingService(store, EmbeddingConfig{Enabled: true, Endpoint: server.URL})
 	if _, err := svc.Reindex(context.Background(), EmbeddingReindexRequest{}); err != nil {
 		t.Fatal(err)
 	}
@@ -422,7 +421,7 @@ func TestHybridSearchFallsBackWhenEmbeddingsAreDisabled(t *testing.T) {
 	}
 
 	// Enabled=false 代表根本没有配置向量能力；这里也故意不给任何索引文件。
-	svc := NewEmbeddingService(store, EmbeddingConfig{Enabled: false, IndexPath: filepath.Join(t.TempDir(), "missing-index.json")})
+	svc := NewEmbeddingService(store, EmbeddingConfig{Enabled: false})
 	results, err := svc.HybridSearch(context.Background(), SearchOptions{Query: "lexical-disabled-embedding-marker", MaxResults: 5})
 	if err != nil {
 		t.Fatal(err)
@@ -457,7 +456,7 @@ func TestHybridSearchUsesSemanticEnhancementAndLexicalFallback(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
 	}))
 
-	svc := NewEmbeddingService(store, EmbeddingConfig{Enabled: true, Endpoint: server.URL, IndexPath: filepath.Join(t.TempDir(), "embedding-index.json")})
+	svc := NewEmbeddingService(store, EmbeddingConfig{Enabled: true, Endpoint: server.URL})
 	if _, err := svc.Reindex(context.Background(), EmbeddingReindexRequest{}); err != nil {
 		t.Fatal(err)
 	}

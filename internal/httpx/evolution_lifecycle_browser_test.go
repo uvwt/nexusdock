@@ -6,12 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
-
-	"github.com/uvwt/nexusdock/internal/config"
 )
 
 func TestEvolutionLifecycleBrowserRoutesAreProtectedReadOnlyViews(t *testing.T) {
-	h := newTestHandler(t, config.Config{AuthToken: "nexus-secret"})
+	server, deviceToken, browserCookie := newEvolutionLifecycleTestServer(t)
+	h := server.Handler()
 	payload := map[string]any{
 		"operation_id": "op_browser_read_01234567", "expected_revision": 0, "policy_version": "v1", "next_state": "active",
 		"record": map[string]any{
@@ -21,7 +20,7 @@ func TestEvolutionLifecycleBrowserRoutesAreProtectedReadOnlyViews(t *testing.T) 
 	}
 	body, _ := json.Marshal(payload)
 	seedRequest := httptest.NewRequest(http.MethodPost, "/internal/recall/lifecycle/transition", bytes.NewReader(body))
-	seedRequest.Header.Set("Authorization", "Bearer nexus-secret")
+	seedRequest.Header.Set("Authorization", "Bearer "+deviceToken)
 	seedRequest.Header.Set("Content-Type", "application/json")
 	seedResponse := httptest.NewRecorder()
 	h.ServeHTTP(seedResponse, seedRequest)
@@ -36,7 +35,7 @@ func TestEvolutionLifecycleBrowserRoutesAreProtectedReadOnlyViews(t *testing.T) 
 	}
 
 	listRequest := httptest.NewRequest(http.MethodGet, "/v1/evolution/lifecycle", nil)
-	listRequest.Header.Set("Authorization", "Bearer nexus-secret")
+	listRequest.AddCookie(browserCookie)
 	listResponse := httptest.NewRecorder()
 	h.ServeHTTP(listResponse, listRequest)
 	if listResponse.Code != http.StatusOK {
@@ -51,7 +50,7 @@ func TestEvolutionLifecycleBrowserRoutesAreProtectedReadOnlyViews(t *testing.T) 
 	}
 
 	detailRequest := httptest.NewRequest(http.MethodGet, "/v1/evolution/lifecycle/evo_aaaaaaaaaaaaaaaa", nil)
-	detailRequest.Header.Set("Authorization", "Bearer nexus-secret")
+	detailRequest.AddCookie(browserCookie)
 	detailResponse := httptest.NewRecorder()
 	h.ServeHTTP(detailResponse, detailRequest)
 	if detailResponse.Code != http.StatusOK || !bytes.Contains(detailResponse.Body.Bytes(), []byte(`"statement":"发布前执行构建和真实验证"`)) {
@@ -62,7 +61,7 @@ func TestEvolutionLifecycleBrowserRoutesAreProtectedReadOnlyViews(t *testing.T) 
 	}
 
 	missingRequest := httptest.NewRequest(http.MethodGet, "/v1/evolution/lifecycle/evo_bbbbbbbbbbbbbbbb", nil)
-	missingRequest.Header.Set("Authorization", "Bearer nexus-secret")
+	missingRequest.AddCookie(browserCookie)
 	missingResponse := httptest.NewRecorder()
 	h.ServeHTTP(missingResponse, missingRequest)
 	if missingResponse.Code != http.StatusNotFound {

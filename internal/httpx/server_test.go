@@ -18,7 +18,7 @@ import (
 	"github.com/uvwt/nexusdock/internal/recall"
 )
 
-func newTestHandler(t *testing.T, cfg config.Config) http.Handler {
+func newTestHandler(t *testing.T, cfg config.Config, options ...ServerOption) http.Handler {
 	t.Helper()
 	db, err := core.OpenSQLite(t.Context(), ":memory:", 1)
 	if err != nil {
@@ -40,7 +40,9 @@ func newTestHandler(t *testing.T, cfg config.Config) http.Handler {
 	if err != nil {
 		t.Fatalf("New private notes store: %v", err)
 	}
-	handler := NewServer(cfg, store, slog.Default(), WithSystemDatabase(db), WithAgentDockNodes(nodes), WithPrivateNotes(privateNotes)).Handler()
+	serverOptions := []ServerOption{WithSystemDatabase(db), WithAgentDockNodes(nodes), WithPrivateNotes(privateNotes)}
+	serverOptions = append(serverOptions, options...)
+	handler := NewServer(cfg, store, slog.Default(), serverOptions...).Handler()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.RemoteAddr = "127.0.0.1:51234"
 		handler.ServeHTTP(w, r)
@@ -57,8 +59,8 @@ func doJSON(t *testing.T, h http.Handler, method, path string, body string) *htt
 	return res
 }
 
-func TestHealthDoesNotRequireAuth(t *testing.T) {
-	h := newTestHandler(t, config.Config{AuthToken: "token"})
+func TestHealthEndpointIsPublic(t *testing.T) {
+	h := newTestHandler(t, config.Config{})
 	res := httptest.NewRecorder()
 	h.ServeHTTP(res, httptest.NewRequest(http.MethodGet, "/health", nil))
 	if res.Code != http.StatusOK {
@@ -120,8 +122,8 @@ func TestHSTSOnlyAppliesToHTTPS(t *testing.T) {
 }
 
 func TestRequestBoundaryAddsRequestIDToErrors(t *testing.T) {
-	h := newTestHandler(t, config.Config{AuthToken: "required-token"})
-	res := doJSON(t, h, http.MethodGet, "/v1/recall", "")
+	h := newTestHandler(t, config.Config{})
+	res := doJSON(t, h, http.MethodPost, "/v1/recall", `{`)
 	requestID := res.Header().Get("X-Request-ID")
 	if !strings.HasPrefix(requestID, "req_") {
 		t.Fatalf("request ID header=%q", requestID)
@@ -160,24 +162,7 @@ func TestRequestBoundaryRecoversPanic(t *testing.T) {
 	}
 }
 
-func TestV1BearerTokenOnly(t *testing.T) {
-	h := newTestHandler(t, config.Config{AuthToken: "token"})
-
-	res := doJSON(t, h, http.MethodGet, "/v1/recall", "")
-	if res.Code != http.StatusUnauthorized {
-		t.Fatalf("missing credentials status = %d", res.Code)
-	}
-
-	req := httptest.NewRequest(http.MethodGet, "/v1/recall", nil)
-	req.Header.Set("Authorization", "Bearer token")
-	res = httptest.NewRecorder()
-	h.ServeHTTP(res, req)
-	if res.Code != http.StatusOK {
-		t.Fatalf("bearer authorized status=%d body=%s", res.Code, res.Body.String())
-	}
-}
-
-func TestV1LocalhostAPIAccessWhenTokenEmpty(t *testing.T) {
+func TestV1LocalhostAPIAccessWithoutWebAuthentication(t *testing.T) {
 	h := newTestHandler(t, config.Config{})
 
 	res := httptest.NewRecorder()

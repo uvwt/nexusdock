@@ -88,7 +88,7 @@ func (s *Server) mcpAppsEnabled() bool {
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.cfg.MCPAppsEnabled
+	return s.mcpAppsEnabledState
 }
 
 func (s *Server) setMCPAppsEnabled(enabled bool) {
@@ -96,8 +96,8 @@ func (s *Server) setMCPAppsEnabled(enabled bool) {
 		return
 	}
 	s.mu.Lock()
-	changed := s.cfg.MCPAppsEnabled != enabled
-	s.cfg.MCPAppsEnabled = enabled
+	changed := s.mcpAppsEnabledState != enabled
+	s.mcpAppsEnabledState = enabled
 	s.mu.Unlock()
 	if !changed || s.mcpServer == nil {
 		return

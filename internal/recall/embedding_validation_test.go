@@ -56,8 +56,8 @@ func TestEmbeddingReindexRejectsDimensionMismatch(t *testing.T) {
 	}))
 	defer server.Close()
 
-	indexPath := filepath.Join(t.TempDir(), "embedding-index.json")
-	svc := NewEmbeddingService(store, EmbeddingConfig{Enabled: true, Endpoint: server.URL, IndexPath: indexPath})
+	indexPath := filepath.Join(store.Root(), ".recall", "embedding-index.json")
+	svc := NewEmbeddingService(store, EmbeddingConfig{Enabled: true, Endpoint: server.URL})
 	if _, err := svc.Reindex(context.Background(), EmbeddingReindexRequest{Prefix: "recall/managed/cards"}); err == nil || !strings.Contains(err.Error(), "dimension mismatch") {
 		t.Fatalf("dimension mismatch was not rejected: %v", err)
 	}
@@ -72,7 +72,7 @@ func TestEmbeddingSearchRejectsStaleModelBeforeQuery(t *testing.T) {
 	defer server.Close()
 
 	svc := NewEmbeddingService(newTestStore(t), EmbeddingConfig{
-		Enabled: true, Endpoint: server.URL, Model: "new-model", IndexPath: filepath.Join(t.TempDir(), "embedding-index.json"),
+		Enabled: true, Endpoint: server.URL, Model: "new-model",
 	})
 	index := embeddingIndex{Model: "old-model", Dimension: 2, UpdatedAt: time.Now().UTC(), Documents: map[string]embeddingDocument{
 		"recall/managed/cards/demo.md": {
@@ -97,7 +97,7 @@ func TestEmbeddingSearchRejectsQueryDimensionMismatch(t *testing.T) {
 	defer server.Close()
 
 	svc := NewEmbeddingService(newTestStore(t), EmbeddingConfig{
-		Enabled: true, Endpoint: server.URL, Model: "test-model", IndexPath: filepath.Join(t.TempDir(), "embedding-index.json"),
+		Enabled: true, Endpoint: server.URL, Model: "test-model",
 	})
 	index := embeddingIndex{Model: "test-model", Dimension: 2, UpdatedAt: time.Now().UTC(), Documents: map[string]embeddingDocument{
 		"recall/managed/cards/demo.md": {

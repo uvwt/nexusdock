@@ -89,6 +89,55 @@ func TestSecureRequestRequiresTLSOrTrustedForwardedProto(t *testing.T) {
 	}
 }
 
+func TestLoginTransportAllowsHTTPSOrDirectLoopbackOnly(t *testing.T) {
+	server := &Server{cfg: config.Config{TrustedProxies: []string{"10.0.0.0/8", "127.0.0.1", "::1"}}}
+
+	directTLS := httptest.NewRequest(http.MethodPost, "https://nexus.example/v1/auth/login", nil)
+	if !server.loginTransportAllowed(directTLS) {
+		t.Fatal("direct HTTPS login was rejected")
+	}
+
+	trustedHTTPSProxy := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/v1/auth/login", nil)
+	trustedHTTPSProxy.RemoteAddr = "10.1.2.3:4567"
+	trustedHTTPSProxy.Header.Set("X-Forwarded-Proto", "https")
+	if !server.loginTransportAllowed(trustedHTTPSProxy) {
+		t.Fatal("trusted HTTPS reverse proxy login was rejected")
+	}
+
+	directLoopback := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:18777/v1/auth/login", nil)
+	directLoopback.RemoteAddr = "127.0.0.1:4567"
+	if !server.loginTransportAllowed(directLoopback) {
+		t.Fatal("direct loopback HTTP login was rejected")
+	}
+
+	directIPv6Loopback := httptest.NewRequest(http.MethodPost, "http://localhost:18777/v1/auth/login", nil)
+	directIPv6Loopback.RemoteAddr = "[::1]:4567"
+	if !server.loginTransportAllowed(directIPv6Loopback) {
+		t.Fatal("direct IPv6 loopback HTTP login was rejected")
+	}
+
+	remoteWithLoopbackHost := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:18777/v1/auth/login", nil)
+	remoteWithLoopbackHost.RemoteAddr = "203.0.113.8:4567"
+	if server.loginTransportAllowed(remoteWithLoopbackHost) {
+		t.Fatal("remote HTTP client bypassed the HTTPS requirement with a loopback Host")
+	}
+
+	proxiedHTTP := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:18777/v1/auth/login", nil)
+	proxiedHTTP.RemoteAddr = "127.0.0.1:4567"
+	proxiedHTTP.Header.Set("X-Forwarded-For", "203.0.113.8")
+	proxiedHTTP.Header.Set("X-Forwarded-Host", "nexus.example")
+	proxiedHTTP.Header.Set("X-Forwarded-Proto", "http")
+	if server.loginTransportAllowed(proxiedHTTP) {
+		t.Fatal("proxied HTTP login was mistaken for a direct loopback request")
+	}
+
+	localClientToLANHost := httptest.NewRequest(http.MethodPost, "http://192.168.1.10:18777/v1/auth/login", nil)
+	localClientToLANHost.RemoteAddr = "127.0.0.1:4567"
+	if server.loginTransportAllowed(localClientToLANHost) {
+		t.Fatal("HTTP login to a non-loopback Host was allowed")
+	}
+}
+
 func TestAPIAccessDoesNotTrustClientControlledHost(t *testing.T) {
 	server := &Server{cfg: config.Config{}, logger: slog.Default()}
 	next := server.withAPIAccess(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })

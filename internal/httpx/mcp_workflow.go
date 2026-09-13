@@ -190,7 +190,7 @@ func (s *Server) workflowTemplateMatchResult(ctx context.Context, goal, device, 
 	if err != nil {
 		return nil, err
 	}
-	cfg := s.currentConfig()
+	cfg := s.currentAIConfig()
 	vectorStatus, vectorItems := s.workflowTemplateVectorIndexInfoForConfig(cfg)
 	result := map[string]any{
 		"ok": true, "action": "match", "candidates": candidates, "count": len(candidates),
@@ -205,7 +205,7 @@ func (s *Server) workflowTemplateMatchResult(ctx context.Context, goal, device, 
 }
 
 func (s *Server) workflowTemplateVectorIndexResult() (map[string]any, error) {
-	cfg := s.currentConfig()
+	cfg := s.currentAIConfig()
 	if !workflowTemplateVectorEnabled(cfg) {
 		return map[string]any{"ok": true, "available": false, "source": "nexus-registry", "vector_index_status": "not_configured"}, nil
 	}

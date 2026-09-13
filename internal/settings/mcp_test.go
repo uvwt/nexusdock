@@ -18,7 +18,7 @@ func TestMCPSettingsDefaultAndPersistence(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	store, err := NewMCPStore(db, true)
+	store, err := NewMCPStore(db)
 	if err != nil {
 		t.Fatal(err)
 	}

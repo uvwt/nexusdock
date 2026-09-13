@@ -2,7 +2,6 @@ package httpx
 
 import (
 	"context"
-	"crypto/subtle"
 	"errors"
 	"net"
 	"net/http"
@@ -217,22 +216,13 @@ func (s *Server) withWebSession(next http.HandlerFunc, allowCredentialUpdate boo
 
 func (s *Server) withAPIAccess(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		s.mu.RLock()
-		cfg := s.cfg
-		s.mu.RUnlock()
-		if bearerMatches(r.Header.Get("Authorization"), cfg.AuthToken) {
-			next(w, r)
-			return
-		}
 		if s.auth != nil {
 			s.withWebSession(next, false)(w, r)
 			return
 		}
-		if cfg.AuthToken == "" {
-			if s.isLocalAPIRequest(r) {
-				next(w, r)
-				return
-			}
+		if s.isLocalAPIRequest(r) {
+			next(w, r)
+			return
 		}
 		writeAuthError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing or invalid API credentials")
 	}
@@ -254,14 +244,6 @@ func (s *Server) withDeviceOrAPIAccess(next http.HandlerFunc) http.HandlerFunc {
 		}
 		s.withAPIAccess(next)(w, r)
 	}
-}
-
-func bearerMatches(header, expected string) bool {
-	if expected == "" || !strings.HasPrefix(strings.ToLower(header), "bearer ") {
-		return false
-	}
-	actual := strings.TrimSpace(header[7:])
-	return len(actual) == len(expected) && subtle.ConstantTimeCompare([]byte(actual), []byte(expected)) == 1
 }
 
 func (s *Server) authenticateCookie(r *http.Request) (auth.WebSession, error) {
@@ -306,10 +288,15 @@ func (s *Server) loginTransportAllowed(r *http.Request) bool {
 	if s.secureRequest(r) {
 		return true
 	}
-	s.mu.RLock()
-	allowInsecure := s.cfg.AuthAllowInsecureHTTP
-	s.mu.RUnlock()
-	return allowInsecure
+	// HTTP 登录只允许浏览器直接访问本机回环地址。反向代理后的请求必须通过 HTTPS，
+	// 避免代理与后端之间的回环连接把公网 HTTP 误判成本机访问。
+	if !isLoopbackHostPort(r.RemoteAddr) || !isLoopbackHostPort(r.Host) {
+		return false
+	}
+	return r.Header.Get("Forwarded") == "" &&
+		r.Header.Get("X-Forwarded-For") == "" &&
+		r.Header.Get("X-Forwarded-Host") == "" &&
+		r.Header.Get("X-Forwarded-Proto") == ""
 }
 
 func (s *Server) sameOrigin(r *http.Request) bool {

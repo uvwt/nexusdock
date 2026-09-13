@@ -9,18 +9,22 @@ import (
 	"testing"
 
 	"github.com/uvwt/nexusdock/internal/auth"
-	"github.com/uvwt/nexusdock/internal/config"
 	"github.com/uvwt/nexusdock/internal/core"
 	"github.com/uvwt/nexusdock/internal/settings"
 )
 
 func TestMCPAccessTokenSettingsReadAndReset(t *testing.T) {
-	server, _ := newOAuthHTTPTestServer(t)
+	server, authService := newOAuthHTTPTestServer(t)
 	handler := server.Handler()
 	oldToken := server.mcpToken.Token()
+	login, err := authService.Login(t.Context(), "owner", "correct horse battery staple", "192.0.2.0/24", "test", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cookie := &http.Cookie{Name: sessionCookieName, Value: login.Token}
 
 	readReq := httptest.NewRequest(http.MethodGet, "https://nexus.example/v1/settings/mcp-token", nil)
-	readReq.Header.Set("Authorization", "Bearer ops-secret")
+	readReq.AddCookie(cookie)
 	readRes := httptest.NewRecorder()
 	handler.ServeHTTP(readRes, readReq)
 	if readRes.Code != http.StatusOK {
@@ -38,7 +42,9 @@ func TestMCPAccessTokenSettingsReadAndReset(t *testing.T) {
 	}
 
 	resetReq := httptest.NewRequest(http.MethodPost, "https://nexus.example/v1/settings/mcp-token/reset", nil)
-	resetReq.Header.Set("Authorization", "Bearer ops-secret")
+	resetReq.Header.Set("Origin", "https://nexus.example")
+	resetReq.Header.Set("X-CSRF-Token", login.Session.CSRFToken)
+	resetReq.AddCookie(cookie)
 	resetRes := httptest.NewRecorder()
 	handler.ServeHTTP(resetRes, resetReq)
 	if resetRes.Code != http.StatusOK {
@@ -86,7 +92,7 @@ func TestMCPSettingsAPIUpdatesGatewayAndPersists(t *testing.T) {
 	if err := core.EnsureSchema(t.Context(), db); err != nil {
 		t.Fatal(err)
 	}
-	store, err := settings.NewMCPStore(db, true)
+	store, err := settings.NewMCPStore(db)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +101,7 @@ func TestMCPSettingsAPIUpdatesGatewayAndPersists(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := &Server{
-		cfg: config.Config{MCPAppsEnabled: true}, mcpSettings: store, mcpToken: tokenStore,
+		mcpAppsEnabledState: true, mcpSettings: store, mcpToken: tokenStore,
 	}
 
 	getRecorder := httptest.NewRecorder()

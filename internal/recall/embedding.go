@@ -18,29 +18,31 @@ import (
 	"time"
 )
 
-const DefaultEmbeddingModel = "BAAI/bge-m3"
-const DefaultEmbeddingEndpoint = "http://host.docker.internal:18788/v1/embeddings"
-const embeddingBatchSize = 5
-const embeddingBatchConcurrency = 2
-const embeddingTextMaxBytes = 1536
-const embeddingFrontmatterMaxBytes = 512
-const embeddingHeadingsMaxBytes = 640
-const maxEmbeddingResponseBytes = 32 << 20
+const (
+	DefaultEmbeddingModel        = "BAAI/bge-m3"
+	DefaultEmbeddingTimeout      = 30 * time.Second
+	embeddingBatchSize           = 5
+	embeddingBatchConcurrency    = 2
+	embeddingTextMaxBytes        = 1536
+	embeddingFrontmatterMaxBytes = 512
+	embeddingHeadingsMaxBytes    = 640
+	maxEmbeddingResponseBytes    = 32 << 20
+)
 
 type EmbeddingConfig struct {
-	Enabled   bool
-	Endpoint  string
-	Model     string
-	APIKey    string
-	IndexPath string
-	Timeout   time.Duration
+	Enabled  bool
+	Endpoint string
+	Model    string
+	APIKey   string
+	Timeout  time.Duration
 }
 
 type EmbeddingService struct {
-	store  *Store
-	cfg    EmbeddingConfig
-	client *http.Client
-	mu     sync.Mutex
+	store     *Store
+	cfg       EmbeddingConfig
+	indexPath string
+	client    *http.Client
+	mu        sync.Mutex
 }
 
 type EmbeddingReindexRequest struct {
@@ -108,32 +110,18 @@ type embeddingDocument struct {
 	UpdatedAt   time.Time         `json:"updated_at"`
 }
 
-func firstNonEmptyEnv(keys ...string) string {
-	for _, key := range keys {
-		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-			return value
-		}
-	}
-	return ""
-}
-
 func NewEmbeddingService(store *Store, cfg EmbeddingConfig) *EmbeddingService {
-	if strings.TrimSpace(cfg.Endpoint) == "" {
-		cfg.Endpoint = strings.TrimSpace(os.Getenv("RECALL_EMBEDDING_ENDPOINT"))
-	}
-	if strings.TrimSpace(cfg.Endpoint) == "" {
-		cfg.Endpoint = DefaultEmbeddingEndpoint
-	}
 	if strings.TrimSpace(cfg.Model) == "" {
 		cfg.Model = DefaultEmbeddingModel
 	}
 	if cfg.Timeout <= 0 {
-		cfg.Timeout = 30 * time.Second
+		cfg.Timeout = DefaultEmbeddingTimeout
 	}
-	if strings.TrimSpace(cfg.IndexPath) == "" && store != nil {
-		cfg.IndexPath = filepath.Join(store.Root(), ".recall", "embedding-index.json")
+	indexPath := ""
+	if store != nil {
+		indexPath = filepath.Join(store.Root(), ".recall", "embedding-index.json")
 	}
-	return &EmbeddingService{store: store, cfg: cfg, client: &http.Client{Timeout: cfg.Timeout}}
+	return &EmbeddingService{store: store, cfg: cfg, indexPath: indexPath, client: &http.Client{Timeout: cfg.Timeout}}
 }
 
 func (s *EmbeddingService) Enabled() bool {
@@ -155,7 +143,7 @@ func (s *EmbeddingService) Status(ctx context.Context) map[string]any {
 	status["configured"] = strings.TrimSpace(s.cfg.Endpoint) != ""
 	status["model"] = s.cfg.Model
 	status["endpoint"] = s.cfg.Endpoint
-	status["index_path"] = s.cfg.IndexPath
+	status["index_path"] = s.indexPath
 	idx, err := s.loadIndex()
 	if err == nil {
 		status["index"] = EmbeddingIndexSummarize{Model: idx.Model, Dimension: idx.Dimension, Count: len(idx.Documents), UpdatedAt: idx.UpdatedAt}
@@ -170,7 +158,7 @@ func (s *EmbeddingService) Status(ctx context.Context) map[string]any {
 			status["reachable"] = true
 		}
 	} else {
-		status["reason"] = "set RECALL_EMBEDDING_ENABLED=true and RECALL_EMBEDDING_ENDPOINT to enable BGE-M3 indexing"
+		status["reason"] = "enable vector search and configure an endpoint in NexusDock settings"
 	}
 	return status
 }
@@ -258,7 +246,7 @@ func (s *EmbeddingService) Reindex(ctx context.Context, req EmbeddingReindexRequ
 	if err := s.writeIndex(index); err != nil {
 		return EmbeddingReindexResult{}, err
 	}
-	return EmbeddingReindexResult{OK: true, Enabled: true, Model: s.cfg.Model, Endpoint: s.cfg.Endpoint, IndexPath: s.cfg.IndexPath, Prefix: prefix, Count: len(index.Documents), Dimension: dimension, UpdatedAt: index.UpdatedAt}, nil
+	return EmbeddingReindexResult{OK: true, Enabled: true, Model: s.cfg.Model, Endpoint: s.cfg.Endpoint, IndexPath: s.indexPath, Prefix: prefix, Count: len(index.Documents), Dimension: dimension, UpdatedAt: index.UpdatedAt}, nil
 }
 
 func pathWithinPrefix(path, prefix string) bool {
@@ -655,7 +643,7 @@ func vectorFromAny(value any) ([]float64, error) {
 }
 
 func (s *EmbeddingService) loadIndex() (embeddingIndex, error) {
-	data, err := os.ReadFile(s.cfg.IndexPath)
+	data, err := os.ReadFile(s.indexPath)
 	if err != nil {
 		return embeddingIndex{}, err
 	}
@@ -710,14 +698,14 @@ func (s *EmbeddingService) writeIndex(idx embeddingIndex) error {
 	if err := validateEmbeddingIndex(idx); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(s.cfg.IndexPath), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(s.indexPath), 0o700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(idx, "", "  ")
 	if err != nil {
 		return err
 	}
-	return atomicWriteFile(s.cfg.IndexPath, append(data, '\n'), 0o600)
+	return atomicWriteFile(s.indexPath, append(data, '\n'), 0o600)
 }
 
 func embeddingText(mem Recall) string {
