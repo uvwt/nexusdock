@@ -8,6 +8,62 @@ import (
 	"testing"
 )
 
+func TestOpenSQLiteUsesCrashSafeJournalForFileDatabase(t *testing.T) {
+	t.Parallel()
+	db, err := OpenSQLite(t.Context(), filepath.Join(t.TempDir(), "nexus.db"), 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	var journalMode string
+	if err := db.QueryRowContext(t.Context(), `PRAGMA journal_mode`).Scan(&journalMode); err != nil {
+		t.Fatal(err)
+	}
+	if journalMode != "delete" {
+		t.Fatalf("journal_mode = %q, want delete", journalMode)
+	}
+
+	var synchronous int
+	if err := db.QueryRowContext(t.Context(), `PRAGMA synchronous`).Scan(&synchronous); err != nil {
+		t.Fatal(err)
+	}
+	if synchronous != 2 {
+		t.Fatalf("synchronous = %d, want FULL (2)", synchronous)
+	}
+}
+
+func TestOpenSQLiteConvertsExistingWALDatabase(t *testing.T) {
+	t.Parallel()
+	ctx := t.Context()
+	path := filepath.Join(t.TempDir(), "nexus.db")
+	raw, err := sql.Open("sqlite", "file:"+path+"?_pragma=journal_mode(WAL)")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := raw.ExecContext(ctx, `CREATE TABLE sample(id INTEGER PRIMARY KEY)`); err != nil {
+		_ = raw.Close()
+		t.Fatal(err)
+	}
+	if err := raw.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	db, err := OpenSQLite(ctx, path, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	var journalMode string
+	if err := db.QueryRowContext(ctx, `PRAGMA journal_mode`).Scan(&journalMode); err != nil {
+		t.Fatal(err)
+	}
+	if journalMode != "delete" {
+		t.Fatalf("journal_mode = %q, want existing WAL database converted to delete", journalMode)
+	}
+}
+
 func TestEnsureSchemaIsIdempotentAndPersistent(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
