@@ -1,7 +1,6 @@
-# 唯一结构源：生产部署也使用本文件，站点差异（数据路径、端口、公网地址、Trusted Proxies、镜像）
-# 一律通过 --env-file 传入的站点 env 表达，不要再手工维护第二份 Compose。
-# 固定 project name：runbook 用 -f 指向仓库内文件，project name 不能依赖 compose 文件所在目录名；
-# 固定为 nexusdock 同时让默认网络稳定为 nexusdock_default，与生产现网名称一致（迁移步骤见 docs/deploy.zh-CN.md）。
+# 官方仓库 Compose 模板：适合 clone 仓库后通过 .env 管理数据路径、端口、公网地址、Trusted Proxies 与镜像。
+# README 的快速开始和已有自定义 Compose 同样受支持，不要求迁移到本模板。
+# 固定 project name 为 nexusdock，使仓库模板生成的默认网络名称保持稳定。
 name: nexusdock
 
 services:

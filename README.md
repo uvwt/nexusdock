@@ -197,9 +197,9 @@ curl http://127.0.0.1:18777/health
 
 Do not run two NexusDock instances that write to the same Nexus data store.
 
-## Docker Compose configuration
+## Optional: repository Compose template
 
-The repository Compose file reads these values from `.env`:
+The Quick Start above is the default recommended path. You do not need to use the repository Compose file. If you clone the repository and want to manage additional site settings through `.env`, the repository Compose template reads these values:
 
 | Variable | Example default | Description |
 | --- | --- | --- |
@@ -213,7 +213,7 @@ The repository Compose file reads these values from `.env`:
 
 `NEXUS_DATA_DIR` and `RECALL_REPO_DIR` above are host bind-mount sources. Inside the official image, NexusDock always uses `/var/lib/nexus` and `/recall`.
 
-See [`.env.example`](./.env.example) for the repository Compose values. The full production runbook for deployment, backup, rollback and retention is [docs/deploy.zh-CN.md](./docs/deploy.zh-CN.md) (Chinese).
+See [`.env.example`](./.env.example) for the repository Compose values. Existing custom Compose deployments can keep using their own configuration; no migration to the repository template is required.
 
 ### Direct binary and advanced deployment
 

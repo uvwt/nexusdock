@@ -197,9 +197,9 @@ curl http://127.0.0.1:18777/health
 
 不要运行两个 NexusDock 实例同时写同一份 Nexus 数据。
 
-## Docker Compose 配置
+## 可选：仓库 Compose 模板
 
-仓库里的 Compose 文件只从 `.env` 读取这些值：
+README 上面的“快速开始”是默认推荐方式，不要求使用仓库里的 Compose 文件。需要 clone 仓库并通过 `.env` 管理更多站点参数时，可以使用仓库 Compose 模板；它读取这些值：
 
 | 变量 | 示例默认值 | 说明 |
 | --- | --- | --- |
@@ -213,7 +213,7 @@ curl http://127.0.0.1:18777/health
 
 这里的 `NEXUS_DATA_DIR` 与 `RECALL_REPO_DIR` 是宿主机 bind mount 来源；官方镜像内部固定使用 `/var/lib/nexus` 和 `/recall`。
 
-仓库 Compose 的示例值见 [`.env.example`](./.env.example)；生产部署、备份、回滚与清理的完整 runbook 见 [docs/deploy.zh-CN.md](./docs/deploy.zh-CN.md)。
+仓库 Compose 的示例值见 [`.env.example`](./.env.example)。已有自定义 Compose 可以继续使用，不需要迁移到仓库模板。
 
 ### 裸二进制与高级部署
 
