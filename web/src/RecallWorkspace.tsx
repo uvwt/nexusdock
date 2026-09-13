@@ -4,7 +4,7 @@ import type { RecallPage } from './components/recall/types';
 import { useRecallWorkspaceController } from './components/recall/useRecallWorkspaceController';
 import './recall.css';
 
-const recallPages: RecallPage[] = ['library', 'cards', 'evolution', 'vectors', 'history'];
+const recallPages: RecallPage[] = ['library', 'cards', 'evolution', 'vectors'];
 
 function recallPageFromHash(): RecallPage {
   const [, page] = window.location.hash.replace(/^#\/?/, '').split('/');

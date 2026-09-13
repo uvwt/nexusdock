@@ -20,14 +20,14 @@ func newTestStore(t *testing.T) *Store {
 
 func TestResolveRejectsTraversalAbsoluteAndGitPaths(t *testing.T) {
 	store := newTestStore(t)
-	bad := []string{"../x", "/abs", ".git/config", "recall/docs/projects/a/../../x.md"}
+	bad := []string{"../x", "/abs", ".hidden/config", "recall/docs/projects/a/../../x.md"}
 	for _, path := range bad {
 		if _, err := store.resolve(path); err == nil {
 			t.Fatalf("resolve(%q) unexpectedly succeeded", path)
 		}
 	}
-	if IsAllowedRecallPath(".git/config") {
-		t.Fatalf(".git/config must not be allowed")
+	if IsAllowedRecallPath(".hidden/config") {
+		t.Fatalf("hidden paths must not be allowed")
 	}
 
 	for _, path := range []string{"cards/demo/inbox/runbook/old.md", "notes/questions/index.md", "projects/demo/project.md", "devices/dockmini.md", "ops/nexusdock.md", "inbox/old.md"} {
@@ -93,11 +93,11 @@ func TestMoveAndDeleteProtection(t *testing.T) {
 	if err := store.Delete("recall/docs/projects/demo/project.md", true); err != nil {
 		t.Fatalf("delete confirmed: %v", err)
 	}
-	if err := os.MkdirAll(filepath.Join(store.Root(), ".git"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(store.Root(), ".hidden"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Delete(".git", true); !errors.Is(err, ErrInvalidPath) {
-		t.Fatalf("delete .git got %v", err)
+	if err := store.Delete(".hidden", true); !errors.Is(err, ErrInvalidPath) {
+		t.Fatalf("delete hidden directory got %v", err)
 	}
 }
 

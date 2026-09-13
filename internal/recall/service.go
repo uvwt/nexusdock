@@ -7,13 +7,10 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 	"unicode/utf8"
 )
-
-type ChangeNotifier interface {
-	MarkChanged(context.Context)
-}
 
 type MutationEvent struct {
 	Action   string    `json:"action"`
@@ -37,10 +34,6 @@ func WithConflictRepository(repo ConflictRepository) ServiceOption {
 	}
 }
 
-func WithChangeNotifier(notifier ChangeNotifier) ServiceOption {
-	return func(s *Service) { s.notifier = notifier }
-}
-
 func WithMutationObserver(observer MutationObserver) ServiceOption {
 	return func(s *Service) { s.observer = observer }
 }
@@ -48,7 +41,6 @@ func WithMutationObserver(observer MutationObserver) ServiceOption {
 type Service struct {
 	store     *Store
 	conflicts ConflictRepository
-	notifier  ChangeNotifier
 	observer  MutationObserver
 	now       func() time.Time
 }
@@ -190,9 +182,6 @@ func (s *Service) ApplyUpdate(ctx context.Context, req ApplyUpdateRequest) (Reco
 	if err != nil {
 		return Record{}, err
 	}
-	if s.notifier != nil {
-		s.notifier.MarkChanged(ctx)
-	}
 	if s.observer != nil {
 		if err := s.observer.RecordMemoryMutation(ctx, MutationEvent{
 			Action: "recall.update.applied", Path: proposal.Path, Source: proposal.Metadata.Source,
@@ -255,7 +244,7 @@ func SnapshotFiles(root string) (map[string]string, error) {
 			return walkErr
 		}
 		if entry.IsDir() {
-			if entry.Name() == ".git" {
+			if strings.HasPrefix(entry.Name(), ".") {
 				return filepath.SkipDir
 			}
 			return nil

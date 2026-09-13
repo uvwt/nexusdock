@@ -203,7 +203,7 @@ def build_schemas() -> dict[str, dict[str, Any]]:
             "database": scalar("string", "SQLite 健康状态。"),
             "schema_version": scalar("integer", "数据库 Schema 版本。", minimum=0),
             "nexus_data_dir": scalar("string", "Nexus 系统状态目录。"),
-            "recall_repo_dir": scalar("string", "Recall Git Markdown 仓库目录。"),
+            "recall_repo_dir": scalar("string", "Recall Markdown 数据目录。"),
         },
         ("ok", "service", "database", "schema_version", "nexus_data_dir", "recall_repo_dir"),
     )
@@ -1164,22 +1164,6 @@ def build_openapi(schemas: dict[str, Any]) -> dict[str, Any]:
                 request=body(ref("PrivateNoteMaintenanceRequest")),
                 success=ok(ref("PrivateNoteMaintenanceResponse")),
             )
-        },
-        "/v1/git/diff": {"get": operation("getGitDiff", "读取召回仓库变更")},
-        "/v1/git/log": {
-            "get": operation(
-                "getGitLog",
-                "读取召回仓库提交历史",
-                params=[q("limit", "最大提交数量；无效值使用服务默认值。", "integer", minimum=1)],
-            )
-        },
-        "/v1/git/commit": {
-            "get": operation(
-                "getGitCommit",
-                "读取召回仓库提交详情",
-                params=[q("hash", "Git 提交哈希。", required=True, minLength=1)],
-            ),
-            "post": operation("recordGitVersion", "记录当前 Recall 本地版本", request=body()),
         },
         "/v1/runtime/nodes": {
             "get": operation("listAgentDockNodes", "列出 Nexus 管理的 AgentDock 节点", success=ok(ref("AgentDockNodeListResponse"))),

@@ -27,7 +27,6 @@ import (
 	"github.com/uvwt/nexusdock/internal/privatenotes"
 	"github.com/uvwt/nexusdock/internal/recall"
 	"github.com/uvwt/nexusdock/internal/settings"
-	"github.com/uvwt/nexusdock/internal/versioning"
 )
 
 const maxJSONRequestBytes = 2 << 20
@@ -85,7 +84,6 @@ type Server struct {
 	privateNotes         *privatenotes.Store
 	agentDock            *agentdock.Store
 	agentDockHub         *agentdock.Hub
-	versions             *versioning.Manager
 	logger               *slog.Logger
 	auth                 *auth.Service
 	oauth                *auth.OAuthService
@@ -144,9 +142,9 @@ func WithMCPTokenStore(store *auth.MCPTokenStore) ServerOption {
 	return func(server *Server) { server.mcpToken = store }
 }
 
-func NewServer(cfg config.Config, store *recall.Store, versions *versioning.Manager, logger *slog.Logger, options ...ServerOption) *Server {
+func NewServer(cfg config.Config, store *recall.Store, logger *slog.Logger, options ...ServerOption) *Server {
 	server := &Server{
-		cfg: cfg, aiCfg: cfg, aiCfgSet: true, store: store, versions: versions, logger: logger,
+		cfg: cfg, aiCfg: cfg, aiCfgSet: true, store: store, logger: logger,
 		stage3Wake: make(chan struct{}, 1), mcpTools: make(map[string]publishedNodeTool), mcpResources: make(map[string]struct{}),
 	}
 	for _, option := range options {
@@ -193,10 +191,6 @@ func (s *Server) Handler() http.Handler {
 		s.registerPrivateNoteRoutes(mux, deviceProtected)
 	}
 	s.registerWebAuthRoutes(mux)
-	mux.HandleFunc("GET /v1/git/diff", protected(s.gitDiff))
-	mux.HandleFunc("GET /v1/git/log", protected(s.gitLog))
-	mux.HandleFunc("GET /v1/git/commit", protected(s.gitCommit))
-	mux.HandleFunc("POST /v1/git/commit", protected(s.gitRecordVersion))
 	mux.HandleFunc("GET /v1/recall", deviceProtected(s.listMemories))
 	mux.HandleFunc("POST /v1/recall", deviceProtected(s.writeRecall))
 	mux.HandleFunc("POST /v1/recall/preview", deviceProtected(s.previewRecall))
@@ -300,42 +294,6 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "service": "nexusdock"})
 }
 
-func (s *Server) gitDiff(w http.ResponseWriter, r *http.Request) {
-	diff, err := s.versions.Diff(r.Context())
-	if err != nil {
-		writeError(w, http.StatusConflict, "GIT_DIFF_FAILED", err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, diff)
-}
-
-func (s *Server) gitLog(w http.ResponseWriter, r *http.Request) {
-	log, err := s.versions.Log(r.Context(), queryInt(r, "limit", 50))
-	if err != nil {
-		writeError(w, http.StatusConflict, "GIT_LOG_FAILED", err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, log)
-}
-
-func (s *Server) gitCommit(w http.ResponseWriter, r *http.Request) {
-	detail, err := s.versions.CommitDetail(r.Context(), r.URL.Query().Get("hash"))
-	if err != nil {
-		writeError(w, http.StatusBadRequest, "GIT_COMMIT_FAILED", err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, detail)
-}
-
-func (s *Server) gitRecordVersion(w http.ResponseWriter, r *http.Request) {
-	result, err := s.versions.Record(r.Context())
-	if err != nil {
-		writeError(w, http.StatusConflict, "GIT_VERSION_FAILED", err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, result)
-}
-
 func (s *Server) listMemories(w http.ResponseWriter, r *http.Request) {
 	entries, err := s.store.List(r.URL.Query().Get("prefix"), queryInt(r, "max_entries", 200))
 	if err != nil {
@@ -389,7 +347,6 @@ func (s *Server) writeRecall(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, "WRITE_FAILED", err.Error())
 		return
 	}
-	s.versions.MarkChanged(r.Context())
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "recall": mem})
 }
 
@@ -410,7 +367,6 @@ func (s *Server) patchRecall(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "PATCH_FAILED", err.Error())
 		return
 	}
-	s.versions.MarkChanged(r.Context())
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "recall": mem})
 }
 
@@ -433,7 +389,6 @@ func (s *Server) moveRecall(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, "MOVE_FAILED", err.Error())
 		return
 	}
-	s.versions.MarkChanged(r.Context())
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "recall": mem})
 }
 
@@ -448,7 +403,6 @@ func (s *Server) deleteRecall(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "DELETE_FAILED", err.Error())
 		return
 	}
-	s.versions.MarkChanged(r.Context())
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "path": path})
 }
 
@@ -535,7 +489,6 @@ func (s *Server) writeCard(w http.ResponseWriter, r *http.Request) {
 		writeError(w, status, "WRITE_CARD_FAILED", err.Error())
 		return
 	}
-	s.versions.MarkChanged(r.Context())
 	writeJSON(w, http.StatusOK, result)
 }
 

@@ -13,7 +13,7 @@
 
 - **管理多台 AgentDock**：查看在线状态、版本和能力，完成设备配对、重命名、停用或移除。
 - **查看设备运行时**：选择具体节点后查看它的任务、Skill 和动态 MCP；这些状态仍保留在 AgentDock 本机。
-- **集中使用 Recall 与 Workflow**：管理长期记忆、经验卡片、版本历史和可复用工作流模板。
+- **集中使用 Recall 与 Workflow**：管理长期记忆、经验卡片和可复用工作流模板。
 - **提供统一 MCP 入口**：支持 OAuth，也可以为不支持 OAuth 的客户端使用独立 MCP Access Token。
 - **集中配置 AI 与向量能力**：在 Web 中配置 Embedding 和可选模型，并用于 Recall 与 Workflow 的语义能力。
 
@@ -197,13 +197,13 @@ NexusDock 中常见的三类凭据用途不同：
 
 ## Recall、Workflow 与 AI
 
-Recall 是 NexusDock 的长期记忆工作区，可以在 Web 中浏览、搜索和编辑内容，也可以查看本地 Git 版本历史。NexusDock 不会自动配置或操作 Recall 仓库的 Git remote，远端备份方式由你自己决定。
+Recall 是 NexusDock 的长期记忆工作区，可以在 Web 中浏览、搜索和编辑内容。
 
 Workflow 用于集中保存和匹配可复用任务模板。即使没有配置 Embedding，也可以正常使用基本模板能力。
 
 需要语义召回或语义匹配时，进入 **设置 → AI 与向量** 配置兼容的 Embedding 服务；如有需要，也可以配置可选的外部模型。Web 中可以测试连接和重建索引，保存后的配置会直接应用，无需重启容器。
 
-不配置 AI 或 Embedding 时，NexusDock 的节点管理、MCP、Recall 文件浏览、关键词搜索、版本历史和基础 Workflow 仍然可以使用。
+不配置 AI 或 Embedding 时，NexusDock 的节点管理、MCP、Recall 文件浏览、关键词搜索和基础 Workflow 仍然可以使用。
 
 ## 节点文件下载
 
@@ -220,7 +220,7 @@ nexus-data/
 recall/
 ```
 
-不要只备份 SQLite 数据库或单个密钥文件。`nexus-data` 中还包含账号、设备、会话和 NexusDock 自身需要的密钥；`recall` 中包含长期记忆和本地版本历史。
+不要只备份 SQLite 数据库或单个密钥文件。`nexus-data` 中还包含账号、设备、会话和 NexusDock 自身需要的密钥；`recall` 中包含长期记忆。
 
 升级：
 

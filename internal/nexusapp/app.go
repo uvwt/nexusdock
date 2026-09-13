@@ -21,7 +21,6 @@ import (
 	"github.com/uvwt/nexusdock/internal/privatenotes"
 	"github.com/uvwt/nexusdock/internal/recall"
 	"github.com/uvwt/nexusdock/internal/settings"
-	"github.com/uvwt/nexusdock/internal/versioning"
 )
 
 func Main(args []string) int {
@@ -52,8 +51,6 @@ func run(args []string) error {
 	if err != nil {
 		return fmt.Errorf("initialize private notes: %w", err)
 	}
-
-	versionManager := versioning.NewManager(cfg.RecallRepoDir, logger)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -114,7 +111,6 @@ func run(args []string) error {
 	server := httpx.NewServer(
 		cfg,
 		store,
-		versionManager,
 		logger,
 		httpx.WithSystemDatabase(controlDB),
 		httpx.WithAgentDockNodes(agentDockNodes),

@@ -12,11 +12,11 @@ import (
 
 func TestBuildContextIndex_LongProfileDoesNotMonopolizeBudget(t *testing.T) {
 	store := newTestStore(t)
-	writeFixture(t, store, "profile.md", "---\nscope: profile\nstatus: active\n---\n\n# 用户长期偏好\n\n## Git 协作\n\n"+strings.Repeat("长期偏好内容", 1200)+"\n")
+	writeFixture(t, store, "profile.md", "---\nscope: profile\nstatus: active\n---\n\n# 用户长期偏好\n\n## 协作偏好\n\n"+strings.Repeat("长期偏好内容", 1200)+"\n")
 	writeFixture(t, store, "recall/docs/projects/agentdock/project.md", "---\nscope: project\nstatus: active\nproject: agentdock\n---\n\n# AgentDock\n\n## 当前架构\n\n项目事实。\n")
 	writeFixture(t, store, "recall/docs/projects/agentdock/environment.md", "---\nscope: project\nstatus: active\nproject: agentdock\n---\n\n# Environment\n\n生产环境说明。\n")
 	writeFixture(t, store, "recall/docs/projects/agentdock/runbooks/deploy.md", "---\nscope: project\nstatus: active\nproject: agentdock\nkeywords: deploy,macos\naliases: deployment\nupdated_at: 2026-08-28T06:00:00Z\n---\n\n# AgentDock 部署\n\n完整步骤必须按需读取。\n")
-	writeFixture(t, store, "recall/managed/cards/global/active/preference/git.md", "---\ntype: recall-card\ncard_type: preference\nscope: global\nproject: global\nstatus: active\nconfidence: high\ntags: git,commit\nupdated_at: 2026-08-28T07:00:00Z\n---\n\n# Git 提交偏好\n\n同类修改优先整理。\n")
+	writeFixture(t, store, "recall/managed/cards/global/active/preference/commit-style.md", "---\ntype: recall-card\ncard_type: preference\nscope: global\nproject: global\nstatus: active\nconfidence: high\ntags: workflow,commit\nupdated_at: 2026-08-28T07:00:00Z\n---\n\n# 提交偏好\n\n同类修改优先整理。\n")
 
 	index, err := store.BuildContextIndex(ContextIndexRequest{Project: "agentdock", MaxBytes: 3000})
 	if err != nil {

@@ -136,7 +136,7 @@ func (s *Store) BuildContextIndex(req ContextIndexRequest) (ContextIndex, error)
 	// verified_fact 只从独立运维事实中补充。Runbook/Card 只作为“需要继续读取”的索引，
 	// 不把它们的局部正文摘要误当成可以直接据此执行的完整事实。
 	// ops 里的 verified fact 先完整读取候选 frontmatter 再筛选，不能按文件 mtime 预筛；
-	// Git checkout 会重置 mtime，而稳定事实本来就可能长期不修改。
+	// 文件复制或恢复可能重置 mtime，而稳定事实本来就可能长期不修改。
 	verifiedFacts, skipped, err := s.contextIndexCandidates("recall/docs/ops", 0)
 	if err != nil {
 		markCategoryUnavailable()

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 )
 
 type MigrationRequest struct {
@@ -28,8 +29,8 @@ type MigrationReport struct {
 }
 
 // MigrateRepository either validates an existing Recall repository in
-// place or copies it byte-for-byte to a new data root. Service code is never
-// copied; .git metadata is intentionally left with the repository owner.
+// place or copies its visible data to a new root. Hidden metadata directories
+// remain outside the migrated Recall content.
 func MigrateRepository(req MigrationRequest) (MigrationReport, error) {
 	source, err := filepath.Abs(req.SourceRoot)
 	if err != nil {
@@ -121,7 +122,7 @@ func migrationInventory(root string) ([]string, int64, error) {
 			return nil
 		}
 		if entry.IsDir() {
-			if entry.Name() == ".git" {
+			if strings.HasPrefix(entry.Name(), ".") {
 				return filepath.SkipDir
 			}
 			return nil

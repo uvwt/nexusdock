@@ -11,7 +11,7 @@ export default function RecallActionDialog({ state, actions }: Props) {
   const pendingError = 'error' in pending ? pending.error : undefined;
   return <Dialog
     title={pending.kind === 'move' ? t('Move recall entry') : t('Delete recall entry')}
-    description={pending.kind === 'move' ? t('Changing the path preserves file content and refreshes the currently open recall entry.') : t('Deleting generates a local Git change that will not reach remote until synced.')}
+    description={pending.kind === 'move' ? t('Changing the path preserves file content and refreshes the currently open recall entry.') : t('This permanently deletes the selected recall entry.')}
     onClose={() => { if (!state.busy) actions.closePendingAction(); }}
   >
     <div className="recall-dialog-body">

@@ -505,9 +505,6 @@ func (s *Server) callRecallWriteOperation(ctx context.Context, args map[string]a
 			return nil, errors.New("card only supports plan and create")
 		}
 		result, err := s.store.WriteCard(request)
-		if err == nil {
-			s.versions.MarkChanged(ctx)
-		}
 		return asMap(result, err)
 	}
 	if target != "markdown" {
@@ -526,9 +523,6 @@ func (s *Server) callRecallWriteOperation(ctx context.Context, args map[string]a
 			return nil, recall.ErrConfirmationNeeded
 		}
 		err := s.store.Delete(path, true)
-		if err == nil {
-			s.versions.MarkChanged(ctx)
-		}
 		return asMap(map[string]any{"path": path, "deleted": err == nil}, err)
 	}
 	if action == "update_fact" {
@@ -627,9 +621,6 @@ func (s *Server) callRecallWriteOperation(ctx context.Context, args map[string]a
 		return asMap(result)
 	}
 	result, err := s.store.Write(request)
-	if err == nil {
-		s.versions.MarkChanged(ctx)
-	}
 	return asMap(map[string]any{"recall": result, "recall_store": "NexusDock Recall"}, err)
 }
 
@@ -715,9 +706,6 @@ func (s *Server) updateRecallFacts(ctx context.Context, path string, args map[st
 		return asMap(preview)
 	}
 	result, err := s.store.Write(recall.WriteRequest{Path: path, Content: updated, Confirmed: true, Overwrite: true})
-	if err == nil {
-		s.versions.MarkChanged(ctx)
-	}
 	return asMap(map[string]any{
 		"path": path, "changed": true, "confirmed": true, "written": err == nil,
 		"updates": updates, "diff": diff, "truncated": len(diff) >= maxBytes, "recall": result,

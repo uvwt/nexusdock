@@ -14,7 +14,6 @@ import (
 	"github.com/uvwt/nexusdock/internal/config"
 	"github.com/uvwt/nexusdock/internal/httpx"
 	"github.com/uvwt/nexusdock/internal/recall"
-	"github.com/uvwt/nexusdock/internal/versioning"
 )
 
 func newHandler(t *testing.T) http.Handler {
@@ -24,8 +23,7 @@ func newHandler(t *testing.T) http.Handler {
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	manager := versioning.NewManager(root, slog.Default())
-	handler := httpx.NewServer(config.Config{RecallRepoDir: root}, store, manager, slog.Default()).Handler()
+	handler := httpx.NewServer(config.Config{RecallRepoDir: root}, store, slog.Default()).Handler()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		r.RemoteAddr = "127.0.0.1:51234"
 		handler.ServeHTTP(w, r)

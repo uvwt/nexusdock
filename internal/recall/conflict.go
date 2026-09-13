@@ -17,13 +17,12 @@ const (
 	ConflictSourceRuntimeObservation ConflictSource = "runtime_observation"
 	ConflictSourceSkillRun           ConflictSource = "skill_run"
 	ConflictSourceUserEdit           ConflictSource = "user_edit"
-	ConflictSourceGitMerge           ConflictSource = "git_merge"
 	ConflictSourceAgentRepair        ConflictSource = "agent_repair"
 )
 
 func (s ConflictSource) Valid() bool {
 	switch s {
-	case ConflictSourceRuntimeObservation, ConflictSourceSkillRun, ConflictSourceUserEdit, ConflictSourceGitMerge, ConflictSourceAgentRepair:
+	case ConflictSourceRuntimeObservation, ConflictSourceSkillRun, ConflictSourceUserEdit, ConflictSourceAgentRepair:
 		return true
 	default:
 		return false

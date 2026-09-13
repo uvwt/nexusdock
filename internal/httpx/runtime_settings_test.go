@@ -38,7 +38,7 @@ func newRuntimeSettingsHTTPServer(t *testing.T, cfg config.Config) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return NewServer(cfg, store, nil, slog.Default(), WithSystemDatabase(db), WithRuntimeSettings(runtimeSettings))
+	return NewServer(cfg, store, slog.Default(), WithSystemDatabase(db), WithRuntimeSettings(runtimeSettings))
 }
 
 func TestRuntimeAISettingsAPIProtectsSecretsAndAppliesEmbeddingConfiguration(t *testing.T) {

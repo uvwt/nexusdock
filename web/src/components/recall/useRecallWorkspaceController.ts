@@ -4,7 +4,7 @@ import { api } from '../../api/client';
 import { clearRecallDraft, loadRecallDraft, saveRecallDraft } from '../../lib/drafts';
 import { initialRecallState, recallReducer } from './recallState';
 import type {
-  EmbeddingSearchResponse, EmbeddingStatus, GitCommit, GitDiff, Recall, RecallCardSummary, RecallEntry, RecallWorkspaceViewModel
+  EmbeddingSearchResponse, EmbeddingStatus, Recall, RecallCardSummary, RecallEntry, RecallWorkspaceViewModel
 } from './types';
 import {
   createNewRecallTemplate, initialPath, usesSinglePaneRecallLayout,
@@ -44,8 +44,6 @@ export function useRecallWorkspaceController(refreshToken: number): RecallWorksp
     }
     return directories.size;
   }, [libraryFileEntries]);
-  const changedCount = state.gitDiff?.files?.length ?? 0;
-  const dirty = Boolean(state.gitDiff?.dirty);
   const hasUnsavedChanges = state.editing && (state.draftPath !== (state.current?.path || '') || state.draftContent !== (state.current?.content || ''));
   const detailOpen = Boolean(state.current || state.editing);
   draftSnapshotRef.current = { editing: state.editing, path: state.draftPath, content: state.draftContent };
@@ -131,16 +129,6 @@ export function useRecallWorkspaceController(refreshToken: number): RecallWorksp
     }
   }
 
-  async function loadVersionState() {
-    const gitDiff = await api<GitDiff>('/v1/git/diff');
-    dispatch({ type: 'gitDiff', gitDiff });
-  }
-
-  async function loadHistory() {
-    const response = await api<{ commits: GitCommit[] }>('/v1/git/log?limit=12');
-    dispatch({ type: 'commits', commits: response.commits || [] });
-  }
-
   async function loadEmbeddingStatus() {
     const response = await api<EmbeddingStatus>('/v1/embeddings/status');
     dispatch({ type: 'embedding:status', status: response });
@@ -192,7 +180,7 @@ export function useRecallWorkspaceController(refreshToken: number): RecallWorksp
     const loadingID = ++loadingRequestRef.current;
     dispatch({ type: 'load:start' });
     try {
-      const [entriesCurrent] = await Promise.all([refreshEntries(), loadVersionState(), loadHistory(), loadEmbeddingStatus()]);
+      const [entriesCurrent] = await Promise.all([refreshEntries(), loadEmbeddingStatus()]);
       if (path && entriesCurrent && loadingID === loadingRequestRef.current) {
         try {
           await openRecall(path);
@@ -315,7 +303,7 @@ export function useRecallWorkspaceController(refreshToken: number): RecallWorksp
       });
       clearRecallDraft();
       dispatch({ type: 'draftAvailable', available: false });
-      await Promise.all([refreshEntries(), loadVersionState(), loadHistory()]);
+      await refreshEntries();
       await openRecall(response.recall.path);
       dispatch({ type: 'notice', notice: { text: t('Recall entry saved') } });
     } catch (reason) {
@@ -364,7 +352,7 @@ export function useRecallWorkspaceController(refreshToken: number): RecallWorksp
       dispatch({ type: 'pending', pendingAction: null });
       dispatch({ type: 'clearSelection' });
       updateRoute('', state.appliedQuery);
-      await Promise.all([refreshEntries(), loadVersionState(), loadHistory()]);
+      await refreshEntries();
       dispatch({ type: 'notice', notice: { text: t('Recall entry deleted') } });
     } catch (reason) {
       dispatch({ type: 'pendingError', error: messageOf(reason) });
@@ -412,29 +400,10 @@ export function useRecallWorkspaceController(refreshToken: number): RecallWorksp
     }
   }
 
-  async function recordVersion() {
-    dispatch({ type: 'busy', busy: true });
-    try {
-      const response = await api<{ created: boolean }>('/v1/git/commit', { method: 'POST', body: '{}' });
-      await Promise.all([loadVersionState(), loadHistory()]);
-      dispatch({ type: 'notice', notice: { text: response.created ? t('Recorded local version') : t('No local changes to record') } });
-    } catch (reason) {
-      dispatch({ type: 'notice', notice: { text: messageOf(reason), danger: true } });
-    } finally {
-      dispatch({ type: 'busy', busy: false });
-    }
-  }
-
   function refreshAllFromUI() {
     if (blockIfUnsaved()) return;
     dispatch({ type: 'notice', notice: null });
     void refreshAll();
-  }
-
-  function recordVersionFromUI() {
-    if (blockIfUnsaved()) return;
-    dispatch({ type: 'notice', notice: null });
-    void recordVersion();
   }
 
   useEffect(() => {
@@ -445,7 +414,6 @@ export function useRecallWorkspaceController(refreshToken: number): RecallWorksp
 
   const actions = {
     refreshAll: refreshAllFromUI,
-    recordVersion: recordVersionFromUI,
     restoreDraft: () => { void restoreDraft(); },
     discardDraft: () => dispatch({ type: 'draftAvailable', available: false }),
     clearNotice: () => dispatch({ type: 'notice', notice: null }),
@@ -472,5 +440,5 @@ export function useRecallWorkspaceController(refreshToken: number): RecallWorksp
     reindexCards: () => { void reindexCards(); },
   };
 
-  return { state, fileEntries, libraryFileCount, directoryCount, changedCount, dirty, hasUnsavedChanges, detailOpen, editorRef, actions };
+  return { state, fileEntries, libraryFileCount, directoryCount, hasUnsavedChanges, detailOpen, editorRef, actions };
 }

@@ -147,9 +147,6 @@ func (s *Store) List(prefix string, maxEntries int) ([]Entry, error) {
 			}
 			return nil
 		}
-		if d.IsDir() && name == ".git" {
-			return filepath.SkipDir
-		}
 		rel, _ := filepath.Rel(s.root, path)
 		entry := Entry{Path: filepath.ToSlash(rel), Name: name, Type: "file"}
 		if d.IsDir() {
@@ -236,7 +233,7 @@ func (s *Store) SearchWithOptions(options SearchOptions) ([]SearchResult, error)
 			if isPrivateNotesPath(filepath.ToSlash(rel)) {
 				return filepath.SkipDir
 			}
-			if d.Name() == ".git" || strings.HasPrefix(d.Name(), ".") {
+			if strings.HasPrefix(d.Name(), ".") {
 				return filepath.SkipDir
 			}
 			return nil
@@ -522,7 +519,7 @@ func (s *Store) Delete(path string, confirmed bool) error {
 		return err
 	}
 	if info.IsDir() {
-		if abs == s.root || strings.HasSuffix(abs, string(filepath.Separator)+".git") {
+		if abs == s.root {
 			return ErrInvalidPath
 		}
 		if err := os.RemoveAll(abs); err != nil {

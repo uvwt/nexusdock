@@ -1,7 +1,6 @@
 package httpx
 
 import (
-	"log/slog"
 	"reflect"
 	"strings"
 	"testing"
@@ -10,7 +9,6 @@ import (
 	"github.com/uvwt/nexusdock/internal/agentdock"
 	"github.com/uvwt/nexusdock/internal/core"
 	"github.com/uvwt/nexusdock/internal/recall"
-	"github.com/uvwt/nexusdock/internal/versioning"
 )
 
 func TestInitializeMCPGatewayAdvertisesFixedInstructions(t *testing.T) {
@@ -90,8 +88,7 @@ func TestRecallUpdateFactPreviewsAndWrites(t *testing.T) {
 	if _, err := store.Write(recall.WriteRequest{Path: "profile.md", Content: "# Profile\n\neditor: old\n", Confirmed: true}); err != nil {
 		t.Fatal(err)
 	}
-	manager := versioning.NewManager(store.Root(), slog.Default())
-	server := &Server{store: store, versions: manager}
+	server := &Server{store: store}
 	preview, err := server.updateRecallFacts(t.Context(), "profile.md", map[string]any{"key": "editor", "value": "new"})
 	if err != nil || preview["dry_run"] != true {
 		t.Fatalf("preview=%#v err=%v", preview, err)

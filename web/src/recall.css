@@ -10,7 +10,7 @@
 .recall-subnav {
   padding: 3px;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr)) auto;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 3px;
   align-items: center;
   border: 1px solid var(--nx-line);
@@ -36,7 +36,6 @@
 .recall-new,
 .recall-editor-actions button,
 .recall-panel-head button,
-.recall-version-actions button,
 .recall-dialog-actions button,
 .recall-card-actions button,
 .recall-vector-results button,
@@ -58,8 +57,6 @@
 .recall-workspace button.primary { border-color: #171717; background: #171717; color: #fff; }
 .recall-workspace button.danger { border-color: var(--nx-danger-line); background: #fff; color: var(--nx-danger); }
 .recall-workspace button.danger:hover:not(:disabled) { background: var(--nx-danger-bg); }
-
-.recall-subnav .recall-health { margin: 0 6px; }
 
 .recall-health {
   min-height: 26px;
@@ -94,7 +91,7 @@
 
 .recall-stats {
   display: grid;
-  grid-template-columns: repeat(4,minmax(0,1fr));
+  grid-template-columns: repeat(2,minmax(0,1fr));
   border: 1px solid var(--nx-line);
   border-radius: 7px;
   background: #fff;
@@ -282,8 +279,7 @@
 .recall-preview h3 { margin: 1em 0 .5em; }
 .recall-preview pre { padding: 10px; overflow: auto; border-radius: 5px; background: #f5f5f5; }
 
-.recall-tool-page,
-.recall-version-page { min-width: 0; display: grid; gap: 8px; }
+.recall-tool-page { min-width: 0; display: grid; gap: 8px; }
 
 .recall-card-browser { min-width: 0; display: grid; grid-template-columns: 330px minmax(0,1fr); gap: 8px; align-items: start; }
 .recall-card-list-panel,
@@ -358,18 +354,6 @@
 .recall-vector-results button strong,
 .recall-vector-results button small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .recall-vector-results button em { grid-column: 2; grid-row: 1 / 3; align-self: center; color: #555; font-size: 10px; font-style: normal; }
-
-.recall-version-state { padding: 14px; display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
-.recall-version-state > div { padding: 10px; border: 1px solid var(--nx-line); border-radius: 5px; background: #fafafa; }
-.recall-version-state span { display: block; color: var(--nx-muted); font-size: 10px; }
-.recall-version-state strong { display: block; margin-top: 3px; font-size: 11px; }
-.recall-version-actions { padding: 0 14px 14px; display: flex; gap: 6px; flex-wrap: wrap; }
-.recall-commits { padding: 7px 14px 14px; display: grid; gap: 5px; }
-.recall-commits > div { padding: 9px 0; border-bottom: 1px solid #ededed; }
-.recall-commits > div:last-child { border-bottom: 0; }
-.recall-commits strong,
-.recall-commits small { display: block; }
-.recall-commits small { margin-top: 3px; color: var(--nx-muted); font-size: 10px; }
 
 /* Evolution 是 Recall 的只读生命周期视图；状态色只承担语义，不参与主体装饰。 */
 .recall-evolution-page { min-width: 0; display: grid; gap: 8px; }
@@ -491,12 +475,8 @@
 }
 
 @media (max-width: 820px) {
-  .recall-subnav { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .recall-subnav { grid-template-columns: repeat(4, minmax(0, 1fr)); }
   .recall-subnav button { padding: 9px 4px; place-items: center; text-align: center; }
-  .recall-subnav .recall-health { grid-column: 1 / -1; margin: 4px 6px 2px; justify-self: start; }
-  .recall-stats { grid-template-columns: repeat(2,minmax(0,1fr)); }
-  .recall-stats > div:nth-child(2) { border-right: 0; }
-  .recall-stats > div:nth-child(-n+2) { border-bottom: 1px solid var(--nx-line); }
   .recall-grid { display: block; min-height: 0; }
   .recall-browser,
   .recall-editor { min-height: 420px; }
@@ -532,7 +512,6 @@
   .recall-vector-status { grid-template-columns: 1fr; }
   .recall-vector-search { grid-template-columns: auto minmax(0,1fr) auto; }
   .recall-vector-search > :last-child { grid-column: 2 / -1; }
-  .recall-version-state { grid-template-columns: repeat(2,minmax(0,1fr)); }
   .evolution-overview { align-items: flex-start; }
   .evolution-stage3-state { align-items: flex-end; flex-direction: column; }
   .evolution-stats { grid-template-columns: repeat(2,minmax(0,1fr)); }

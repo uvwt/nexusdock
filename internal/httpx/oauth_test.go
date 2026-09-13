@@ -35,7 +35,7 @@ func newOAuthHTTPTestServer(t *testing.T) (*Server, *auth.Service) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	server := NewServer(config.Config{AuthToken: "ops-secret"}, nil, nil, slog.Default(), WithSystemDatabase(db), WithWebAuthentication(authService), WithMCPTokenStore(mcpTokenStore))
+	server := NewServer(config.Config{AuthToken: "ops-secret"}, nil, slog.Default(), WithSystemDatabase(db), WithWebAuthentication(authService), WithMCPTokenStore(mcpTokenStore))
 	return server, authService
 }
 

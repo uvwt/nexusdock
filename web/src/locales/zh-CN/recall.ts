@@ -6,16 +6,11 @@ const recall: Record<string, string> = {
   'Experience Cards': '经验卡片',
   'Evolution': '进化',
   'Vector Recall': '向量召回',
-  'Version History': '版本历史',
   'Recall navigation': 'Recall 分类',
-  'Version recorded': '版本已记录',
-  '{{count}} unrecorded changes': '{{count}} 项未记录',
 
   // Stats
   'Files': '文件',
   'Directories': '目录',
-  'Local changes': '本地变更',
-  'Recent versions': '最近版本',
 
   // Notices & Action Dialog
   'Close notification': '关闭提示',
@@ -26,7 +21,7 @@ const recall: Record<string, string> = {
   'Move recall entry': '移动召回内容',
   'Delete recall entry': '删除召回内容',
   'Changing the path preserves file content and refreshes the currently open recall entry.': '修改路径后会保留文件内容，并刷新当前打开的召回内容。',
-  'Deleting generates a local Git change that will not reach remote until synced.': '删除后会产生本地 Git 变更，需要同步后才会进入远端。',
+  'This permanently deletes the selected recall entry.': '此操作会永久删除所选 Recall 内容。',
   'New recall path': '新的召回路径',
   'Are you sure you want to delete this recall entry?': '确认删除这条召回内容？',
   'Cancel': '取消',
@@ -196,16 +191,6 @@ const recall: Record<string, string> = {
   'Rebuild index': '重建索引',
   'No vector search results.': '暂无向量搜索结果。',
 
-  // Version History Page
-  'Local Versions': '本地版本',
-  'Recall only tracks local Git versions; data protection is managed by the host.': 'Recall 仅记录本地 Git 版本，数据保护由宿主机负责。',
-  'Repository': '版本库',
-  'Not enabled': '未启用',
-  'Record current version': '记录当前版本',
-  'Display recent local version history.': '展示最近的本地版本记录。',
-  'No version history yet.': '暂无版本记录。',
-  '(No description)': '(无说明)',
-
   // Controller notices / errors
   'Please restore or discard the detected draft first.': '请先恢复或丢弃检测到的草稿。',
   'Please save or cancel the current edit first.': '请先保存或取消当前编辑。',
@@ -221,8 +206,6 @@ const recall: Record<string, string> = {
   'Cards vector index rebuilt.': 'cards 向量索引已重建。',
   'Please enter an experience query to search.': '请输入要搜索的经验问题。',
   'Vector search returned {{count}} results.': '向量搜索返回 {{count}} 条结果。',
-  'Recorded local version': '已记录本地版本',
-  'No local changes to record': '没有需要记录的本地变更',
   'Operation failed': '操作失败',
 };
 

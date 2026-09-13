@@ -1,7 +1,7 @@
 import type { FormEvent, RefObject } from 'react';
 
 export type EntryType = 'file' | 'directory';
-export type RecallPage = 'library' | 'cards' | 'evolution' | 'vectors' | 'history';
+export type RecallPage = 'library' | 'cards' | 'evolution' | 'vectors';
 export type RecallEntry = { path: string; name?: string; type: EntryType; size_bytes?: number; modified?: string };
 export type Recall = {
   path: string;
@@ -22,9 +22,6 @@ export type RecallCardSummary = {
   size_bytes?: number;
   modified?: string;
 };
-export type GitCommit = { hash: string; short_hash: string; date: string; author: string; subject: string };
-export type ChangedFile = { status: string; path: string };
-export type GitDiff = { ok?: boolean; git_repo?: boolean; dirty?: boolean; status?: string; stat?: string; files?: ChangedFile[] };
 export type Notice = { text: string; danger?: boolean } | null;
 export type PendingRecallAction =
   | { kind: 'move'; path: string; nextPath: string; error?: string }
@@ -62,8 +59,6 @@ export type RecallWorkspaceState = {
   creating: boolean;
   query: string;
   appliedQuery: string;
-  gitDiff: GitDiff | null;
-  commits: GitCommit[];
   loading: boolean;
   busy: boolean;
   notice: Notice;
@@ -74,7 +69,6 @@ export type RecallWorkspaceState = {
 
 export type RecallWorkspaceActions = {
   refreshAll: () => void;
-  recordVersion: () => void;
   restoreDraft: () => void;
   discardDraft: () => void;
   clearNotice: () => void;
@@ -106,8 +100,6 @@ export type RecallWorkspaceViewModel = {
   fileEntries: RecallEntry[];
   libraryFileCount: number;
   directoryCount: number;
-  changedCount: number;
-  dirty: boolean;
   hasUnsavedChanges: boolean;
   detailOpen: boolean;
   editorRef: RefObject<HTMLElement | null>;
