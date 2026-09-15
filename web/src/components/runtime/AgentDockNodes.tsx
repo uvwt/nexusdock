@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CirclePlus, Pencil, Server, Trash2 } from 'lucide-react';
+import { CirclePlus, Copy, Pencil, Server, Trash2 } from 'lucide-react';
 import { api } from '../../api/client';
 import Dialog from '../Dialog';
 
@@ -193,7 +193,15 @@ export function AgentDockNodesPanel({ nodes, selectedNodeID, loading, error, onR
     </div>
 
     {pairing && <Dialog title={t('Pair AgentDock')} description={t('Pairing code expires at {{time}} and can only be used once.', { time: new Date(pairing.expires_at).toLocaleString() })} onClose={() => setPairing(null)} wide>
-      <div className="agentdock-node-delete"><p>{t('Run the following command on the target device, then restart AgentDock:')}</p><code>{pairCommand}</code><footer><button type="button" className="nx-button" onClick={() => void navigator.clipboard.writeText(pairCommand)}>{t('Copy command')}</button></footer></div>
+      <div className="agentdock-pairing">
+        <p>{t('Run the following command on the target device, then restart AgentDock:')}</p>
+        <div className="agentdock-pair-command">
+          <span aria-hidden="true">$</span>
+          <code>{pairCommand}</code>
+          <button type="button" aria-label={t('Copy command')} title={t('Copy command')} onClick={() => void navigator.clipboard.writeText(pairCommand)}><Copy size={18} /></button>
+        </div>
+        <p className="agentdock-pairing-hint">{t('Windows and Mac users can fill this in directly in the AgentDock control panel.')}</p>
+      </div>
     </Dialog>}
 
     {editing && <Dialog title={t('Edit {{name}}', { name: editing.name })} description={t('Device identity and connection credentials are managed by the pairing process.')} onClose={() => setEditing(null)}>

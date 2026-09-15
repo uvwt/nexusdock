@@ -502,6 +502,44 @@ summary::-webkit-details-marker { display: none; }
 .agentdock-node-check input { width: 15px; height: 15px; margin: 0; }
 .agentdock-node-form input { height: 36px; padding: 0 10px; border: 1px solid var(--nx-line-strong); border-radius: 6px; }
 .agentdock-node-form .is-wide { grid-column: 1 / -1; }
+.agentdock-pairing > p { margin: 0 0 7px; color: var(--nx-text); }
+.agentdock-pairing-hint { margin-top: 10px !important; margin-bottom: 0 !important; color: var(--nx-muted) !important; font-size: 11px; text-align: right; }
+.agentdock-pair-command {
+  min-width: 0;
+  padding: 11px 10px 11px 14px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid var(--nx-line-strong);
+  border-radius: 8px;
+  background: var(--nx-surface-soft);
+}
+.agentdock-pair-command > span {
+  color: var(--nx-muted);
+  font: 600 15px/1 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.agentdock-pair-command code {
+  min-width: 0;
+  overflow-x: auto;
+  color: var(--nx-text);
+  font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  white-space: nowrap;
+}
+.agentdock-pair-command button {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--nx-muted);
+  cursor: pointer;
+}
+.agentdock-pair-command button:hover { background: var(--nx-soft); color: var(--nx-text); }
+.agentdock-pair-command button:focus-visible { outline: 2px solid var(--nx-text); outline-offset: 2px; }
 .agentdock-node-delete { padding: 10px 14px; border-top: 1px solid var(--nx-line); }
 
 /* Runtime：任务与 Skill */

@@ -19,6 +19,7 @@ const runtime: Record<string, string> = {
   'Pair AgentDock': '配对 AgentDock',
   'Pairing code expires at {{time}} and can only be used once.': '配对码将在 {{time}} 失效，且只能使用一次。',
   'Run the following command on the target device, then restart AgentDock:': '在目标设备执行以下命令，然后重启 AgentDock：',
+  'Windows and Mac users can fill this in directly in the AgentDock control panel.': 'Windows 和 Mac 用户可以直接在 AgentDock 控制面板填写',
   'Copy command': '复制命令',
   'Edit {{name}}': '编辑 {{name}}',
   'Device identity and connection credentials are managed by the pairing process.': '设备身份和连接凭据由配对流程管理。',
