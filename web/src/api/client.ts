@@ -82,7 +82,7 @@ export async function api<T>(path: string, options: ApiOptions = {}): Promise<T>
   try {
     const headers = new Headers(options.headers);
     headers.set('Accept', 'application/json');
-    if (options.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
+    if (options.body && !(options.body instanceof FormData) && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
     if (csrfToken && isUnsafeMethod(options.method) && !headers.has('X-CSRF-Token')) {
       headers.set('X-CSRF-Token', csrfToken);
     }

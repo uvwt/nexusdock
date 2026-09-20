@@ -1224,6 +1224,32 @@ def build_openapi(schemas: dict[str, Any]) -> dict[str, Any]:
         "/v1/workflow-templates/{templateID}/{version}/retire": {"post": operation("retireWorkflowTemplate", "退役 Nexus 工作流模板", params=[p("WorkflowTemplateId"), p("WorkflowTemplateVersion")])},
     }
 
+    catalog_params = [
+        {"name": "name", "in": "path", "required": True, "schema": {"type": "string"}, "description": "技能名称。"},
+        {"name": "version", "in": "path", "required": True, "schema": {"type": "string"}, "description": "不可变语义版本。"},
+    ]
+    paths.update({
+        "/v1/skill-catalog": {
+            "get": operation("listSkillCatalog", "列出中央技能库及历史版本"),
+            "post": operation("uploadSkillCatalog", "上传不可变 ZIP 或 tar.gz 技能包", success_code="201", request={
+                "required": True, "content": {"multipart/form-data": {"schema": obj("技能上传表单", {
+                    "package": scalar("string", "最大 32 MiB 的完整技能包", format="binary"),
+                    "metadata": scalar("string", "来源、支持平台与依赖说明的 JSON 对象"),
+                }, ("package",))}},
+            }),
+        },
+        "/v1/skill-catalog/{name}/{version}": {
+            "get": operation("getSkillCatalog", "读取技能版本及文件清单", params=catalog_params),
+            "put": operation("reviewSkillCatalog", "更新可移植性分类和用法；不改变不可变包", params=catalog_params, request=body()),
+        },
+        "/v1/skill-catalog/{name}/{version}/download": {"get": operation("downloadSkillCatalog", "认证下载原始技能包", params=catalog_params)},
+        "/v1/skill-catalog/{name}/{version}/files/{filePath}": {"get": operation("readSkillCatalogFile", "预览技能正文和引用文件，最大 1 MiB", params=catalog_params+[p("RuntimeSkillFilePath")])},
+        "/v1/skill-catalog/{name}/{version}/nodes/{nodeID}": {"post": operation("distributeSkillCatalog", "校验或按摘要安装到指定节点；依赖另行验证", params=catalog_params + [p("RuntimeNodeId")], request=body(obj("分发请求", {
+            "action": enum("节点操作", ["validate", "install"]),
+            "digest": scalar("string", "安装时必须提供此前节点校验返回的摘要"),
+        }, ("action",))))},
+    })
+
     return {
         "openapi": "3.1.0",
         "info": {

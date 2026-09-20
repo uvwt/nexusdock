@@ -78,6 +78,7 @@ func (w *trackedResponseWriter) Flush() {
 }
 
 type Server struct {
+	skillCatalog         *skillCatalogService
 	mu                   sync.RWMutex
 	cfg                  config.Config
 	aiCfg                settings.RuntimeAIConfig
@@ -178,7 +179,8 @@ func WithArtifactService(service *agentdock.ArtifactService) ServerOption {
 
 func NewServer(cfg config.Config, store *recall.Store, logger *slog.Logger, options ...ServerOption) *Server {
 	server := &Server{
-		cfg: cfg, aiCfg: settings.DefaultRuntimeAIConfig(), mcpAppsEnabledState: settings.DefaultMCPAppsEnabled,
+		skillCatalog: newSkillCatalog(cfg.NexusDataDir),
+		cfg:          cfg, aiCfg: settings.DefaultRuntimeAIConfig(), mcpAppsEnabledState: settings.DefaultMCPAppsEnabled,
 		store: store, logger: logger,
 		mcpResources: make(map[string]struct{}),
 	}
@@ -221,6 +223,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/settings/ai/test/stage3", protected(s.testStage3Connection))
 	mux.HandleFunc("POST /v1/settings/ai/test/embedding", protected(s.testEmbeddingConnection))
 	s.registerRuntimeRoutes(mux, protected)
+	s.registerSkillCatalogRoutes(mux, protected)
 	s.registerEvolutionLifecycleRoutes(mux, protected)
 	s.registerWorkflowTemplateRoutes(mux, deviceProtected)
 	if s.privateNotes != nil {
