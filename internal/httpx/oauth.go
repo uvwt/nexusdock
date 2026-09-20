@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/uvwt/nexusdock/internal/auth"
+	"github.com/uvwt/nexusdock/internal/core"
 )
 
 const oauthFormBodyLimit = 64 << 10
@@ -400,12 +401,14 @@ func (s *Server) withMCPAccess(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		header := strings.TrimSpace(r.Header.Get("Authorization"))
 		if s.mcpToken != nil && mcpTokenMatches(header, s.mcpToken.Token()) {
-			next(w, r)
+			actor := core.Actor{Type: core.ActorSystem, ID: "mcp_token"}
+			next(w, r.WithContext(withMCPActorContext(r.Context(), actor)))
 			return
 		}
 		if strings.HasPrefix(strings.ToLower(header), "bearer ") && s.oauth != nil {
-			if _, err := s.oauth.AuthenticateAccess(r.Context(), bearerToken(header), s.oauthResource(r)); err == nil {
-				next(w, r)
+			if access, err := s.oauth.AuthenticateAccess(r.Context(), bearerToken(header), s.oauthResource(r)); err == nil {
+				actor := core.Actor{Type: core.ActorUser, ID: access.UserID}
+				next(w, r.WithContext(withMCPActorContext(r.Context(), actor)))
 				return
 			}
 			s.writeMCPBearerChallenge(w, r, true)
@@ -418,7 +421,8 @@ func (s *Server) withMCPAccess(next http.HandlerFunc) http.HandlerFunc {
 			}
 		}
 		if s.auth == nil && s.isLocalAPIRequest(r) {
-			next(w, r)
+			actor := core.Actor{Type: core.ActorSystem, ID: "local_mcp"}
+			next(w, r.WithContext(withMCPActorContext(r.Context(), actor)))
 			return
 		}
 		s.writeMCPBearerChallenge(w, r, false)

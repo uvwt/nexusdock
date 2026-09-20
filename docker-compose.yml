@@ -36,6 +36,10 @@ services:
     environment:
       NEXUS_PUBLIC_URL: ${NEXUS_PUBLIC_URL:-}
       NEXUS_TRUSTED_PROXIES: "${NEXUS_TRUSTED_PROXIES:-127.0.0.1,::1}"
+      NEXUS_TOOL_CONCURRENCY_GLOBAL: ${NEXUS_TOOL_CONCURRENCY_GLOBAL:-16}
+      NEXUS_TOOL_CONCURRENCY_PER_NODE: ${NEXUS_TOOL_CONCURRENCY_PER_NODE:-4}
+      NEXUS_TOOL_CONCURRENCY_PER_WORKSPACE: ${NEXUS_TOOL_CONCURRENCY_PER_WORKSPACE:-3}
+      NEXUS_TOOL_QUEUE_TIMEOUT_SECONDS: ${NEXUS_TOOL_QUEUE_TIMEOUT_SECONDS:-30}
     # 与 Dockerfile HEALTHCHECK 一致，探针打 /ready（readiness）而不是 /health（liveness）。
     healthcheck:
       test: ["CMD", "wget", "-q", "-T", "2", "-O", "/dev/null", "http://127.0.0.1:18777/ready"]

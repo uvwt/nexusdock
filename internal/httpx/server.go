@@ -23,13 +23,17 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/uvwt/nexusdock/internal/agentdock"
+	"github.com/uvwt/nexusdock/internal/audit"
 	"github.com/uvwt/nexusdock/internal/auth"
+	"github.com/uvwt/nexusdock/internal/capability"
 	"github.com/uvwt/nexusdock/internal/config"
 	"github.com/uvwt/nexusdock/internal/privatenotes"
 	"github.com/uvwt/nexusdock/internal/recall"
+	"github.com/uvwt/nexusdock/internal/runtimecontrol"
 	"github.com/uvwt/nexusdock/internal/settings"
 	"github.com/uvwt/nexusdock/internal/stage3"
 	"github.com/uvwt/nexusdock/internal/workflow"
+	"github.com/uvwt/nexusdock/internal/workspace"
 )
 
 const maxJSONRequestBytes = 2 << 20
@@ -89,6 +93,7 @@ type Server struct {
 	agentDockHub         *agentdock.Hub
 	logger               *slog.Logger
 	auth                 *auth.Service
+	auditService         audit.AuditService
 	oauth                *auth.OAuthService
 	oauthRegisterLimiter *fixedWindowLimiter
 	embedding            *recall.EmbeddingService
@@ -96,6 +101,9 @@ type Server struct {
 	mcpSettings          *settings.MCPStore
 	mcpToken             *auth.MCPTokenStore
 	workflowRegistry     *workflow.Registry
+	workspaces           *workspace.Store
+	capabilities         *capability.Registry
+	toolGate             *runtimecontrol.Gate
 	evolutionWorker      *stage3.Worker
 	publishedToolBridge  *agentdock.PublishedToolBridge
 	mcpServer            *mcpsdk.Server
@@ -130,6 +138,18 @@ func WithEmbeddingService(service *recall.EmbeddingService) ServerOption {
 
 func WithRuntimeSettings(store *settings.Store) ServerOption {
 	return func(server *Server) { server.settings = store }
+}
+
+func WithRuntimeWorkspaces(store *workspace.Store) ServerOption {
+	return func(server *Server) { server.workspaces = store }
+}
+
+func WithRuntimeToolGate(gate *runtimecontrol.Gate) ServerOption {
+	return func(server *Server) { server.toolGate = gate }
+}
+
+func WithCapabilityRegistry(registry *capability.Registry) ServerOption {
+	return func(server *Server) { server.capabilities = registry }
 }
 
 func WithRuntimeAIConfig(cfg settings.RuntimeAIConfig) ServerOption {
@@ -184,6 +204,19 @@ func NewServer(cfg config.Config, store *recall.Store, logger *slog.Logger, opti
 	}
 	for _, option := range options {
 		option(server)
+	}
+	if server.capabilities == nil {
+		server.capabilities = capability.DefaultRegistry()
+	}
+	if server.toolGate == nil {
+		server.toolGate = runtimecontrol.New(runtimecontrol.Limits{
+			Global: cfg.ToolConcurrencyGlobal, PerNode: cfg.ToolConcurrencyPerNode,
+			PerWorkspace: cfg.ToolConcurrencyPerWorkspace,
+			QueueTimeout: time.Duration(cfg.ToolQueueTimeoutSeconds) * time.Second,
+		})
+	}
+	if server.db != nil && server.auditService == nil {
+		server.auditService = audit.NewService(server.db)
 	}
 	if server.db != nil && server.auth != nil {
 		server.oauth = auth.NewOAuthService(server.db)

@@ -10,7 +10,7 @@ import (
 // CurrentSchemaVersion 是当前程序对应的控制库 Schema 版本。
 // PRAGMA user_version 是唯一的应用 Schema 版本来源，不引入 schema_migrations 表，
 // 避免恢复 a923781 已移除的旧文件式迁移系统（SQL 文件 + checksum 校验 + 备份钩子的复杂度）。
-const CurrentSchemaVersion = 3
+const CurrentSchemaVersion = 4
 
 // currentSchema 是全新空库初始化用的当前结构。
 // 空库没有历史数据需要逐版本变换，直接建当前结构并写入版本号：
@@ -242,6 +242,21 @@ END`,
     ciphertext BLOB NOT NULL,
     updated_at TEXT NOT NULL
 )`,
+	`CREATE TABLE IF NOT EXISTS runtime_workspaces (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    node_id TEXT NOT NULL,
+    project_root TEXT NOT NULL,
+    domain TEXT NOT NULL DEFAULT '',
+    allowed_mcp_json TEXT NOT NULL DEFAULT '[]',
+    context_roots_json TEXT NOT NULL DEFAULT '[]',
+    design_authorities_json TEXT NOT NULL DEFAULT '[]',
+    route_authority TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (node_id) REFERENCES agentdock_devices(id) ON DELETE CASCADE
+)`,
+	`CREATE INDEX IF NOT EXISTS idx_runtime_workspaces_node ON runtime_workspaces(node_id, name COLLATE NOCASE)`,
 }
 
 // EnsureSchema 把控制库升级到 CurrentSchemaVersion，失败时启动流程必须中止。

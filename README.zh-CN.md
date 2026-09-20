@@ -60,6 +60,8 @@ NexusDock 不替代 AgentDock，也不会把每个节点的 Runtime 状态复制
 - 集中保存和搜索 Recall、经验卡片与私密笔记
 - 集中发布、退役、匹配和复用 Workflow 模板
 - 用一个 MCP 地址同时访问 NexusDock 共享工具与路由后的 AgentDock 能力
+- 使用可选 Project Workspace 将项目绑定到单一节点，并约束 MCP、文件系统、域名与站内路由
+- 为路由后的工具调用记录 Runtime 审计日志，并应用可配置的全局/节点/Workspace 并发限制
 - 使用 OAuth 或独立 MCP Access Token 认证 MCP 客户端
 - 按需配置 Embedding 与外部模型，用于语义 Recall 和 Workflow 匹配
 - 为在线 AgentDock 节点发布的文件生成临时下载地址
@@ -161,6 +163,14 @@ NexusDock 不会自动配置或推送 Recall 的 Git remote，远程备份方式
 - 基于节点的能力路由，不要求 AgentDock 节点开放入站公网端口
 - 通过 [`uvwt/agentdock-protocol`](https://github.com/uvwt/agentdock-protocol) 与 AgentDock 共享协议契约
 
+### Project Workspace 与 Runtime 控制
+
+Project Workspace 是可选能力。只传 `node_id` 的既有调用继续保持原行为；当路由到 AgentDock 的工具调用同时带上 `workspace_id` 时，NexusDock 才进入严格 Workspace 模式，并在转发前检查绑定节点、允许的 MCP、文件系统根目录、配置域名以及可选的 Route Authority。
+
+当前严格 Workspace 模式会明确拒绝 `exec_command`，因为现有 AgentDock 尚未提供 NexusDock 可以验证的 OS 级 sandbox capability。这里采用 fail-closed；不带 `workspace_id` 的旧调用不受影响。
+
+Workspace CRUD、Runtime 审计查询、节点健康/能力状态、迁移方式、兼容说明和分阶段 rollout 见 [Workspace Control Plane](./WORKSPACE_CONTROL_PLANE.zh-CN.md)。
+
 ### AI 与向量设置
 
 Embedding 与外部模型都是可选能力。需要语义 Recall、Workflow 向量匹配或相关 AI 辅助能力时，可在 **设置 → AI 与向量** 中配置。
@@ -207,6 +217,10 @@ README 上面的“快速开始”是默认推荐方式，不要求使用仓库�
 | `RECALL_REPO_DIR` | `./recall` | 挂载到容器 `/recall` 的宿主机目录 |
 | `NEXUS_PUBLIC_URL` | 空 | 对外 HTTPS Origin，例如 `https://nexus.example.com` |
 | `NEXUS_TRUSTED_PROXIES` | `127.0.0.1,::1` | 允许提供可信 `X-Forwarded-*` 的代理地址 |
+| `NEXUS_TOOL_CONCURRENCY_GLOBAL` | `16` | NexusDock 进程内路由到 AgentDock 的工具调用全局并发上限（`1-256`） |
+| `NEXUS_TOOL_CONCURRENCY_PER_NODE` | `4` | 单个 AgentDock 节点的路由工具并发上限（`1-64`） |
+| `NEXUS_TOOL_CONCURRENCY_PER_WORKSPACE` | `3` | 单个 Workspace 的路由工具并发上限（`1-64`） |
+| `NEXUS_TOOL_QUEUE_TIMEOUT_SECONDS` | `30` | 路由工具等待并发/资源锁槽位的最长秒数（`1-300`） |
 | `NEXUS_HTTP_BIND` | `127.0.0.1` | 宿主机监听地址；容器内端口固定 `18777` |
 | `NEXUS_HTTP_PORT` | `18777` | 宿主机端口；容器内端口固定 `18777` |
 | `NEXUS_IMAGE` | 空 | 生产固定使用的镜像标签，例如 `ghcr.io/uvwt/nexusdock:sha-<短SHA>`；留空回退 `nexusdock:local` |
@@ -224,8 +238,12 @@ README 上面的“快速开始”是默认推荐方式，不要求使用仓库�
 | `NEXUS_HOST` | `127.0.0.1` | HTTP 服务监听地址 |
 | `NEXUS_PORT` | `18777` | HTTP 服务端口 |
 | `NEXUS_LOG_LEVEL` | `info` | `debug`、`info`、`warn` 或 `error` |
+| `NEXUS_TOOL_CONCURRENCY_GLOBAL` | `16` | 路由工具的全局并发上限（`1-256`） |
+| `NEXUS_TOOL_CONCURRENCY_PER_NODE` | `4` | 单节点路由工具并发上限（`1-64`） |
+| `NEXUS_TOOL_CONCURRENCY_PER_WORKSPACE` | `3` | 单 Workspace 路由工具并发上限（`1-64`） |
+| `NEXUS_TOOL_QUEUE_TIMEOUT_SECONDS` | `30` | 等待并发/资源锁槽位的最长秒数（`1-300`） |
 
-上面的四个 Compose 变量在直接运行二进制时同样有效；此时 `NEXUS_DATA_DIR` 与 `RECALL_REPO_DIR` 表示应用实际数据路径，而不是 Docker 挂载来源。
+`NEXUS_DATA_DIR`、`RECALL_REPO_DIR`、`NEXUS_PUBLIC_URL`、`NEXUS_TRUSTED_PROXIES` 与以上四个工具控制变量在直接运行二进制时同样有效；此时 `NEXUS_DATA_DIR` 与 `RECALL_REPO_DIR` 表示应用实际数据路径，而不是 Docker 挂载来源。
 
 ## 安全部署
 

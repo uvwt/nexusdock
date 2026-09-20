@@ -16,6 +16,7 @@ import (
 	"github.com/uvwt/nexusdock/internal/core"
 	"github.com/uvwt/nexusdock/internal/privatenotes"
 	"github.com/uvwt/nexusdock/internal/recall"
+	"github.com/uvwt/nexusdock/internal/workspace"
 )
 
 func newTestHandler(t *testing.T, cfg config.Config, options ...ServerOption) http.Handler {
@@ -32,6 +33,10 @@ func newTestHandler(t *testing.T, cfg config.Config, options ...ServerOption) ht
 	if err != nil {
 		t.Fatalf("New AgentDock node store: %v", err)
 	}
+	workspaces, err := workspace.NewStore(db)
+	if err != nil {
+		t.Fatalf("New Runtime Workspace store: %v", err)
+	}
 	store, err := recall.NewStore(t.TempDir())
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
@@ -40,7 +45,7 @@ func newTestHandler(t *testing.T, cfg config.Config, options ...ServerOption) ht
 	if err != nil {
 		t.Fatalf("New private notes store: %v", err)
 	}
-	serverOptions := []ServerOption{WithSystemDatabase(db), WithAgentDockNodes(nodes, agentdock.NewHub(nodes)), WithPrivateNotes(privateNotes), WithWorkflowRegistry(newTestWorkflowRegistry(cfg.NexusDataDir))}
+	serverOptions := []ServerOption{WithSystemDatabase(db), WithAgentDockNodes(nodes, agentdock.NewHub(nodes)), WithRuntimeWorkspaces(workspaces), WithPrivateNotes(privateNotes), WithWorkflowRegistry(newTestWorkflowRegistry(cfg.NexusDataDir))}
 	serverOptions = append(serverOptions, options...)
 	handler := NewServer(cfg, store, slog.Default(), serverOptions...).Handler()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

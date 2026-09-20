@@ -278,4 +278,25 @@ END`,
 )`,
 		},
 	},
+	{
+		version: 4,
+		name:    "新增 Runtime Workspace",
+		statements: []string{
+			`CREATE TABLE IF NOT EXISTS runtime_workspaces (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    node_id TEXT NOT NULL,
+    project_root TEXT NOT NULL,
+    domain TEXT NOT NULL DEFAULT '',
+    allowed_mcp_json TEXT NOT NULL DEFAULT '[]',
+    context_roots_json TEXT NOT NULL DEFAULT '[]',
+    design_authorities_json TEXT NOT NULL DEFAULT '[]',
+    route_authority TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY (node_id) REFERENCES agentdock_devices(id) ON DELETE CASCADE
+)`,
+			`CREATE INDEX IF NOT EXISTS idx_runtime_workspaces_node ON runtime_workspaces(node_id, name COLLATE NOCASE)`,
+		},
+	},
 }

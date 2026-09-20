@@ -11,7 +11,7 @@ import (
 // 空串与未设置等价，这是 LoadFromEnv 对部署脚本中空变量的明确语义。
 func clearStartupEnv(t *testing.T) {
 	t.Helper()
-	for _, key := range []string{"NEXUS_HOST", "NEXUS_PORT", "NEXUS_PUBLIC_URL", "NEXUS_DATA_DIR", "RECALL_REPO_DIR", "NEXUS_TRUSTED_PROXIES", "NEXUS_LOG_LEVEL"} {
+	for _, key := range []string{"NEXUS_HOST", "NEXUS_PORT", "NEXUS_PUBLIC_URL", "NEXUS_DATA_DIR", "RECALL_REPO_DIR", "NEXUS_TRUSTED_PROXIES", "NEXUS_LOG_LEVEL", "NEXUS_TOOL_CONCURRENCY_GLOBAL", "NEXUS_TOOL_CONCURRENCY_PER_NODE", "NEXUS_TOOL_CONCURRENCY_PER_WORKSPACE", "NEXUS_TOOL_QUEUE_TIMEOUT_SECONDS"} {
 		t.Setenv(key, "")
 	}
 }
@@ -31,6 +31,9 @@ func TestLoadFromEnvUsesDefaultsWhenVariablesMissing(t *testing.T) {
 	}
 	if cfg.LogLevelName != "info" {
 		t.Fatalf("default log level = %q", cfg.LogLevelName)
+	}
+	if cfg.ToolConcurrencyGlobal != 16 || cfg.ToolConcurrencyPerNode != 4 || cfg.ToolConcurrencyPerWorkspace != 3 || cfg.ToolQueueTimeoutSeconds != 30 {
+		t.Fatalf("default tool concurrency = global:%d node:%d workspace:%d queue:%d", cfg.ToolConcurrencyGlobal, cfg.ToolConcurrencyPerNode, cfg.ToolConcurrencyPerWorkspace, cfg.ToolQueueTimeoutSeconds)
 	}
 	// 默认可信代理必须覆盖本机回环（IPv4 与 IPv6），并以规范化前缀形式存在。
 	want := []netip.Prefix{
@@ -54,6 +57,10 @@ func TestLoadFromEnvAcceptsValidOverrides(t *testing.T) {
 	t.Setenv("NEXUS_PUBLIC_URL", "https://nexus.example.com/")
 	t.Setenv("NEXUS_LOG_LEVEL", "warn")
 	t.Setenv("NEXUS_TRUSTED_PROXIES", "10.5.3.7/8, 192.168.227.0/24, fd00::1")
+	t.Setenv("NEXUS_TOOL_CONCURRENCY_GLOBAL", "32")
+	t.Setenv("NEXUS_TOOL_CONCURRENCY_PER_NODE", "8")
+	t.Setenv("NEXUS_TOOL_CONCURRENCY_PER_WORKSPACE", "5")
+	t.Setenv("NEXUS_TOOL_QUEUE_TIMEOUT_SECONDS", "45")
 
 	cfg, err := LoadFromEnv()
 	if err != nil {
@@ -64,6 +71,9 @@ func TestLoadFromEnvAcceptsValidOverrides(t *testing.T) {
 	}
 	if cfg.LogLevelName != "warn" {
 		t.Fatalf("log level = %q", cfg.LogLevelName)
+	}
+	if cfg.ToolConcurrencyGlobal != 32 || cfg.ToolConcurrencyPerNode != 8 || cfg.ToolConcurrencyPerWorkspace != 5 || cfg.ToolQueueTimeoutSeconds != 45 {
+		t.Fatalf("tool concurrency overrides = global:%d node:%d workspace:%d queue:%d", cfg.ToolConcurrencyGlobal, cfg.ToolConcurrencyPerNode, cfg.ToolConcurrencyPerWorkspace, cfg.ToolQueueTimeoutSeconds)
 	}
 	// CIDR 掩码归一后必须落在网络地址上，单个 IP 规范成整段前缀。
 	want := []netip.Prefix{
@@ -94,6 +104,10 @@ func TestLoadFromEnvRejectsInvalidValuesWithVariableName(t *testing.T) {
 		{name: "unknown log level", key: "NEXUS_LOG_LEVEL", value: "verbose", expect: "verbose"},
 		{name: "trusted proxy is not IP or CIDR", key: "NEXUS_TRUSTED_PROXIES", value: "10.0.0.0/8,not-an-ip", expect: "not-an-ip"},
 		{name: "trusted proxy prefix out of family range", key: "NEXUS_TRUSTED_PROXIES", value: "10.0.0.0/33", expect: "10.0.0.0/33"},
+		{name: "global tool concurrency below range", key: "NEXUS_TOOL_CONCURRENCY_GLOBAL", value: "0", expect: "0"},
+		{name: "node tool concurrency above range", key: "NEXUS_TOOL_CONCURRENCY_PER_NODE", value: "65", expect: "65"},
+		{name: "workspace tool concurrency not integer", key: "NEXUS_TOOL_CONCURRENCY_PER_WORKSPACE", value: "many", expect: "many"},
+		{name: "tool queue timeout above range", key: "NEXUS_TOOL_QUEUE_TIMEOUT_SECONDS", value: "301", expect: "301"},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {

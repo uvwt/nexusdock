@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import i18n from './i18n';
 import {
   Activity, BrainCircuit, Cable, ChevronRight,
-  CircleAlert, Database, FileJson, Home, ListChecks, Menu, RefreshCw,
+  CircleAlert, Database, FileJson, FolderKanban, Home, ListChecks, Menu, RefreshCw,
   ServerCog, Settings, ShieldCheck, UserRound, Wrench, X,
 } from 'lucide-react';
 import RecallWorkspace from './RecallWorkspace';
@@ -17,6 +17,7 @@ import { ApiError, api, setCSRFToken } from './api/client';
 import WorkflowTemplatesPage from './components/workflows/WorkflowTemplatesPage';
 import { SkillsPage, TaskCenterPage } from './components/runtime/RuntimePages';
 import MCPPage from './components/runtime/MCPPage';
+import WorkspacePage from './components/runtime/WorkspacePage';
 import {
   AgentDockNodeRequired,
   AgentDockNodeSelector,
@@ -25,7 +26,7 @@ import {
 } from './components/runtime/AgentDockNodes';
 import './nexus.css';
 
-type RuntimeSection = 'tasks' | 'skills' | 'mcp';
+type RuntimeSection = 'workspaces' | 'tasks' | 'skills' | 'mcp';
 type Section = 'home' | 'recall' | 'templates' | RuntimeSection | 'settings';
 type SettingsSection = 'account' | 'mcp' | 'ai' | 'system';
 type Tone = 'ok' | 'warn' | 'danger' | 'info' | 'muted';
@@ -68,6 +69,7 @@ type RuntimeSectionMeta = { id: RuntimeSection; label: string; icon: typeof Home
 type NavGroup = { label: string; items: SectionMeta[] };
 
 const RUNTIME_SECTIONS: RuntimeSectionMeta[] = [
+  { id: 'workspaces', label: 'Workspaces', icon: FolderKanban },
   { id: 'tasks', label: 'Tasks', icon: ListChecks },
   { id: 'skills', label: 'Skill', icon: Wrench },
   { id: 'mcp', label: 'MCP', icon: Cable },
@@ -383,6 +385,11 @@ function RuntimeContent({ active, refreshToken, runtimeNodes }: {
   runtimeNodes: RuntimeNodesState;
 }) {
   const { t } = useTranslation();
+  if (active === 'workspaces') {
+    return <section className="runtime-standalone-page runtime-workspaces-page">
+      <WorkspacePage refreshToken={refreshToken} nodes={runtimeNodes.nodes} />
+    </section>;
+  }
   return <section className={`runtime-standalone-page runtime-${active}-page`}>
     <div className="runtime-node-bar">
       <AgentDockNodeSelector nodes={runtimeNodes.nodes} selectedNodeID={runtimeNodes.selectedNodeID} onSelect={runtimeNodes.selectNode} />

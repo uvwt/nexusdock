@@ -60,6 +60,8 @@ NexusDock does not replace AgentDock and does not copy every node's runtime stat
 - Store and search shared Recall, experience cards, and private notes
 - Publish, retire, match, and reuse workflow templates across devices
 - Expose one MCP endpoint that combines NexusDock-owned shared tools with routed AgentDock capabilities
+- Define optional Project Workspaces that bind a project to one node and enforce MCP, filesystem, domain, and route boundaries
+- Record routed tool calls in the Runtime audit log and apply configurable global, per-node, and per-workspace concurrency limits
 - Authenticate MCP clients with OAuth or a dedicated MCP Access Token
 - Configure optional Embedding and model providers for semantic Recall and workflow matching
 - Generate temporary download links for files published by online AgentDock nodes
@@ -161,6 +163,14 @@ NexusDock does not automatically configure or push a Git remote for Recall. Remo
 - Node-aware routing without requiring inbound public AgentDock ports
 - Shared protocol contracts with AgentDock through [`uvwt/agentdock-protocol`](https://github.com/uvwt/agentdock-protocol)
 
+### Project Workspaces and runtime controls
+
+Project Workspaces are optional. Existing calls that provide only `node_id` keep their previous behavior. When a routed AgentDock tool call also includes `workspace_id`, NexusDock switches that call into strict workspace mode and checks the bound node, allowed MCP servers, filesystem roots, configured domain, and optional Route Authority before forwarding it.
+
+Strict workspace mode deliberately blocks `exec_command` today because current AgentDock nodes do not expose an OS-level sandbox capability that NexusDock can verify. This is fail-closed by design; legacy calls without `workspace_id` are unaffected.
+
+Workspace CRUD, Runtime audit queries, node health/capability status, migration guidance, compatibility notes, and the staged rollout plan are documented in [Workspace Control Plane](./WORKSPACE_CONTROL_PLANE.md).
+
 ### AI and vector settings
 
 Embedding and external model integrations are optional. Configure them from **Settings → AI & vectors** when you need semantic Recall, workflow vector matching, or related AI-assisted features.
@@ -207,6 +217,10 @@ The Quick Start above is the default recommended path. You do not need to use th
 | `RECALL_REPO_DIR` | `./recall` | Host directory mounted to `/recall` |
 | `NEXUS_PUBLIC_URL` | empty | Public HTTPS origin, for example `https://nexus.example.com` |
 | `NEXUS_TRUSTED_PROXIES` | `127.0.0.1,::1` | Proxies allowed to supply trusted `X-Forwarded-*` headers |
+| `NEXUS_TOOL_CONCURRENCY_GLOBAL` | `16` | Maximum concurrent routed AgentDock tool calls across the NexusDock process (`1-256`) |
+| `NEXUS_TOOL_CONCURRENCY_PER_NODE` | `4` | Maximum concurrent routed tool calls for one AgentDock node (`1-64`) |
+| `NEXUS_TOOL_CONCURRENCY_PER_WORKSPACE` | `3` | Maximum concurrent routed tool calls for one Workspace (`1-64`) |
+| `NEXUS_TOOL_QUEUE_TIMEOUT_SECONDS` | `30` | Maximum time a routed tool call waits for a concurrency/resource slot (`1-300`) |
 | `NEXUS_HTTP_BIND` | `127.0.0.1` | Host listen address; the container port is fixed at `18777` |
 | `NEXUS_HTTP_PORT` | `18777` | Host port; the container port is fixed at `18777` |
 | `NEXUS_IMAGE` | empty | Image tag pinned for production, for example `ghcr.io/uvwt/nexusdock:sha-<short SHA>`; falls back to `nexusdock:local` |
@@ -224,8 +238,12 @@ When running the NexusDock binary directly, these additional environment variabl
 | `NEXUS_HOST` | `127.0.0.1` | HTTP listen address |
 | `NEXUS_PORT` | `18777` | HTTP listen port |
 | `NEXUS_LOG_LEVEL` | `info` | `debug`, `info`, `warn`, or `error` |
+| `NEXUS_TOOL_CONCURRENCY_GLOBAL` | `16` | Global routed-tool concurrency limit (`1-256`) |
+| `NEXUS_TOOL_CONCURRENCY_PER_NODE` | `4` | Per-node routed-tool concurrency limit (`1-64`) |
+| `NEXUS_TOOL_CONCURRENCY_PER_WORKSPACE` | `3` | Per-Workspace routed-tool concurrency limit (`1-64`) |
+| `NEXUS_TOOL_QUEUE_TIMEOUT_SECONDS` | `30` | Queue/resource-lock wait timeout in seconds (`1-300`) |
 
-The four Compose variables above are also valid process environment variables when running the binary directly. In that case, `NEXUS_DATA_DIR` and `RECALL_REPO_DIR` are application data paths rather than Docker mount sources.
+`NEXUS_DATA_DIR`, `RECALL_REPO_DIR`, `NEXUS_PUBLIC_URL`, `NEXUS_TRUSTED_PROXIES`, and the four tool-control variables are also valid process environment variables when running the binary directly. In that case, `NEXUS_DATA_DIR` and `RECALL_REPO_DIR` are application data paths rather than Docker mount sources.
 
 ## Security notes
 

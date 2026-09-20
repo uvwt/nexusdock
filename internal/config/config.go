@@ -19,8 +19,12 @@ type Config struct {
 	RecallRepoDir string
 	// TrustedProxies 在 LoadFromEnv 阶段一次解析并规范化：单个 IP 规范为整段前缀
 	// （IPv4 /32、IPv6 /128），HTTP 层只做前缀包含判断，不再每请求重复解析字符串配置。
-	TrustedProxies []netip.Prefix
-	LogLevelName   string
+	TrustedProxies              []netip.Prefix
+	LogLevelName                string
+	ToolConcurrencyGlobal       int
+	ToolConcurrencyPerNode      int
+	ToolConcurrencyPerWorkspace int
+	ToolQueueTimeoutSeconds     int
 }
 
 // LoadFromEnv 从环境变量加载启动配置并做 fail-fast 校验。
@@ -39,6 +43,18 @@ func LoadFromEnv() (Config, error) {
 		return Config{}, err
 	}
 	cfg.Port = port
+	if cfg.ToolConcurrencyGlobal, err = loadBoundedInt("NEXUS_TOOL_CONCURRENCY_GLOBAL", 16, 1, 256); err != nil {
+		return Config{}, err
+	}
+	if cfg.ToolConcurrencyPerNode, err = loadBoundedInt("NEXUS_TOOL_CONCURRENCY_PER_NODE", 4, 1, 64); err != nil {
+		return Config{}, err
+	}
+	if cfg.ToolConcurrencyPerWorkspace, err = loadBoundedInt("NEXUS_TOOL_CONCURRENCY_PER_WORKSPACE", 3, 1, 64); err != nil {
+		return Config{}, err
+	}
+	if cfg.ToolQueueTimeoutSeconds, err = loadBoundedInt("NEXUS_TOOL_QUEUE_TIMEOUT_SECONDS", 30, 1, 300); err != nil {
+		return Config{}, err
+	}
 	if err := validateLogLevel(cfg.LogLevelName); err != nil {
 		return Config{}, err
 	}
@@ -65,6 +81,18 @@ func (c Config) LogLevel() slog.Level {
 	default:
 		return slog.LevelInfo
 	}
+}
+
+func loadBoundedInt(key string, fallback, minimum, maximum int) (int, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback, nil
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed < minimum || parsed > maximum {
+		return 0, fmt.Errorf("%s must be an integer between %d and %d, got %q", key, minimum, maximum, value)
+	}
+	return parsed, nil
 }
 
 func loadPort() (int, error) {

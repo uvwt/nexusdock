@@ -16,6 +16,8 @@ import (
 	"github.com/uvwt/nexusdock/internal/agentdock"
 	"github.com/uvwt/nexusdock/internal/privatenotes"
 	"github.com/uvwt/nexusdock/internal/recall"
+	"github.com/uvwt/nexusdock/internal/runtimecontrol"
+	"github.com/uvwt/nexusdock/internal/workspace"
 )
 
 const nexusServerInstructions = "NexusDock 可以连接并统一操作多台 AgentDock 设备。" +
@@ -197,9 +199,13 @@ func (s *Server) nodeToolHandler(name string) mcpsdk.ToolHandler {
 	}
 }
 
-func (s *Server) callNodeTool(ctx context.Context, name string, arguments map[string]any) (*mcpsdk.CallToolResult, error) {
+func (s *Server) callNodeTool(ctx context.Context, name string, arguments map[string]any) (response *mcpsdk.CallToolResult, responseErr error) {
 	nodeID, _ := arguments["node_id"].(string)
 	nodeID = strings.TrimSpace(nodeID)
+	workspaceID, _ := arguments["workspace_id"].(string)
+	workspaceID = strings.TrimSpace(workspaceID)
+	auditDone := s.beginNodeToolAudit(ctx, nodeID, workspaceID, name, arguments)
+	defer func() { auditDone(response, responseErr) }()
 	if nodeID == "" {
 		return s.gatewayToolResult(name, nil, errors.New("node_id is required"))
 	}
@@ -207,8 +213,36 @@ func (s *Server) callNodeTool(ctx context.Context, name string, arguments map[st
 	if err != nil {
 		return s.gatewayToolResult(name, nil, err)
 	}
-	if !containsString(node.Capabilities, name) {
+	compatibility := agentdock.NewCompatibility(node, nil)
+	if s.capabilities != nil {
+		if _, known := s.capabilities.CapabilityForTool(name); known {
+			if _, resolveErr := s.capabilities.ResolveTool(name, compatibility, workspaceID != ""); resolveErr != nil {
+				return s.gatewayToolResult(name, nil, resolveErr)
+			}
+		} else if !compatibility.SupportsCapability(name) {
+			return s.gatewayToolResult(name, nil, fmt.Errorf("AgentDock node %s does not provide tool %s", nodeID, name))
+		}
+	} else if !compatibility.SupportsCapability(name) {
 		return s.gatewayToolResult(name, nil, fmt.Errorf("AgentDock node %s does not provide tool %s", nodeID, name))
+	}
+
+	if workspaceID != "" {
+		if s.workspaces == nil {
+			return s.gatewayToolResult(name, nil, errors.New("Runtime Workspace store is unavailable"))
+		}
+		item, workspaceErr := s.workspaces.Get(ctx, workspaceID)
+		if workspaceErr != nil {
+			return s.gatewayToolResult(name, nil, workspaceErr)
+		}
+		if item.NodeID != nodeID {
+			return s.gatewayToolResult(name, nil, workspace.PolicyError{Boundary: "node", Resource: nodeID, Reason: "node is not bound to workspace " + item.ID})
+		}
+		if policyErr := workspace.Enforce(item, node.OS, name, arguments); policyErr != nil {
+			return s.gatewayToolResult(name, nil, policyErr)
+		}
+		if routeErr := s.enforceWorkspaceRouteAuthority(ctx, node, item, name, arguments); routeErr != nil {
+			return s.gatewayToolResult(name, nil, routeErr)
+		}
 	}
 
 	if s.publishedToolBridge == nil {
@@ -226,15 +260,27 @@ func (s *Server) callNodeTool(ctx context.Context, name string, arguments map[st
 		return s.gatewayToolResult(name, details, errors.New(mismatch.Message))
 	}
 
+	if s.toolGate != nil {
+		release, _, gateErr := s.toolGate.Acquire(ctx, runtimecontrol.Request{
+			NodeID: nodeID, WorkspaceID: workspaceID,
+			ResourceKeys: nodeToolResourceKeys(nodeID, workspaceID, name, arguments),
+		})
+		if gateErr != nil {
+			return s.gatewayToolResult(name, nil, fmt.Errorf("Runtime tool queue: %w", gateErr))
+		}
+		defer release()
+	}
+
 	delete(arguments, "node_id")
+	delete(arguments, "workspace_id")
 	result, err := s.agentDockHub.Invoke(ctx, nodeID, protocol.OperationToolCall, map[string]any{"tool": name, "arguments": arguments})
 	if err == nil {
-		bridgeCapabilities, capabilityErr := s.agentDock.BridgeCapabilities(ctx, nodeID)
-		if capabilityErr != nil {
+		compatibility, compatibilityErr := s.agentDock.Compatibility(ctx, nodeID)
+		if compatibilityErr != nil {
 			if s.logger != nil {
-				s.logger.Warn("读取 AgentDock Bridge 能力失败，保留原始工具结果", "node_id", nodeID, "error", capabilityErr)
+				s.logger.Warn("读取 AgentDock 兼容能力失败，保留原始工具结果", "node_id", nodeID, "error", compatibilityErr)
 			}
-		} else if containsString(bridgeCapabilities, protocol.ArtifactReadCapability) {
+		} else if compatibility.SupportsFeature(agentdock.FeatureArtifactRead) {
 			if decorateErr := s.decorateArtifactToolResult(nodeID, result); decorateErr != nil && s.logger != nil {
 				s.logger.Warn("生成 Nexus Artifact 下载地址失败，保留原始工具结果", "node_id", nodeID, "error", decorateErr)
 			}
@@ -270,6 +316,7 @@ func nodeInputSchema(schema map[string]any) map[string]any {
 		cloned["properties"] = properties
 	}
 	properties["node_id"] = map[string]any{"type": "string", "description": "Target AgentDock node ID from agentdock_context."}
+	properties["workspace_id"] = map[string]any{"type": "string", "description": "Optional Nexus Runtime Workspace ID. When provided, Nexus enforces the workspace node, MCP, filesystem and domain boundaries before forwarding the tool call."}
 	required, _ := cloned["required"].([]any)
 	for _, value := range required {
 		if value == "node_id" {

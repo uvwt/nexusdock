@@ -92,6 +92,9 @@ func TestNodeInputSchemaRequiresNodeID(t *testing.T) {
 	if nodeID["description"] != "Target AgentDock node ID from agentdock_context." {
 		t.Fatalf("node_id description = %#v", nodeID["description"])
 	}
+	if _, ok := properties["workspace_id"].(map[string]any); !ok {
+		t.Fatal("optional workspace_id property is missing")
+	}
 	required := schema["required"].([]any)
 	if len(required) != 2 || required[1] != "node_id" {
 		t.Fatalf("required = %#v", required)

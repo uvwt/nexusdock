@@ -23,6 +23,7 @@ import (
 	"github.com/uvwt/nexusdock/internal/settings"
 	"github.com/uvwt/nexusdock/internal/stage3"
 	"github.com/uvwt/nexusdock/internal/workflow"
+	"github.com/uvwt/nexusdock/internal/workspace"
 )
 
 func Main(args []string) int {
@@ -106,6 +107,10 @@ func run(args []string) error {
 	if err != nil {
 		return fmt.Errorf("initialize AgentDock node store: %w", err)
 	}
+	workspaceStore, err := workspace.NewStore(controlDB)
+	if err != nil {
+		return fmt.Errorf("initialize Runtime Workspace store: %w", err)
+	}
 
 	mcpTokenStore, err := auth.NewMCPTokenStore(controlDir)
 	if err != nil {
@@ -164,6 +169,7 @@ func run(args []string) error {
 		httpx.WithWebAuthentication(authService),
 		httpx.WithEmbeddingService(embeddingService),
 		httpx.WithRuntimeSettings(runtimeSettings),
+		httpx.WithRuntimeWorkspaces(workspaceStore),
 		httpx.WithRuntimeAIConfig(aiCfg),
 		httpx.WithMCPSettings(mcpSettings),
 		httpx.WithMCPAppsEnabled(mcpAppsEnabled),

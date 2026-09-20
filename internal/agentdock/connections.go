@@ -105,9 +105,17 @@ func (h *Hub) Accept(w http.ResponseWriter, r *http.Request, nodeID string) erro
 		connection.close(err)
 		return fmt.Errorf("读取 AgentDock 握手: %w", err)
 	}
-	if first.Type != protocol.MessageNodeHello || first.Hello == nil || first.ProtocolVersion != ConnectionProtocolVersion || first.Hello.ProtocolVersion != ConnectionProtocolVersion {
+	if first.Type != protocol.MessageNodeHello || first.Hello == nil {
 		connection.close(errors.New("invalid AgentDock handshake"))
 		return errors.New("AgentDock 节点握手无效")
+	}
+	if err := ValidateProtocolVersion(first.ProtocolVersion); err != nil {
+		connection.close(err)
+		return fmt.Errorf("AgentDock 节点握手无效: %w", err)
+	}
+	if err := ValidateProtocolVersion(first.Hello.ProtocolVersion); err != nil {
+		connection.close(err)
+		return fmt.Errorf("AgentDock Hello 不兼容: %w", err)
 	}
 	updated, err := h.store.UpdateHello(r.Context(), nodeID, *first.Hello)
 	if err != nil {
