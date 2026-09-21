@@ -25,6 +25,9 @@ const (
 	DynamicMCPManage  Name = "mcp.dynamic.manage"
 	TaskManage        Name = "task.manage"
 	SessionObserve    Name = "session.observe"
+	BrowserSession    Name = "browser.session"
+	BrowserAct        Name = "browser.act"
+	BrowserSnapshot   Name = "browser.snapshot"
 )
 
 var ErrUnavailable = errors.New("logical capability is unavailable")
@@ -65,6 +68,13 @@ func DefaultRegistry() *Registry {
 		{Name: DynamicMCPManage, Candidates: []Candidate{{Tool: "mcp_manage", WorkspaceSafe: true}}},
 		{Name: TaskManage, Candidates: []Candidate{{Tool: "task_manage", WorkspaceSafe: true}}},
 		{Name: SessionObserve, Candidates: []Candidate{{Tool: "session_observe", WorkspaceSafe: true}}},
+		// Browser tools are intentionally not marked workspace-safe yet: their current
+		// protocol does not carry workspace_id. They may be used as a separate read-only
+		// release/QA surface, but strict Workspace routing must fail closed until the
+		// protocol can prove browser-profile and target isolation.
+		{Name: BrowserSession, Candidates: []Candidate{{Tool: "browser_session", WorkspaceSafe: false}}},
+		{Name: BrowserAct, Candidates: []Candidate{{Tool: "browser_act", WorkspaceSafe: false}}},
+		{Name: BrowserSnapshot, Candidates: []Candidate{{Tool: "browser_snapshot", WorkspaceSafe: false}}},
 	})
 }
 
