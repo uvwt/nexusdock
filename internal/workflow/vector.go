@@ -479,6 +479,14 @@ func vectorText(t Template) string {
 	for _, step := range t.Steps {
 		parts = append(parts, step.ID, step.Title, step.Phase)
 	}
+	if t.Contract != nil {
+		parts = append(parts, t.Contract.Inputs...)
+		parts = append(parts, t.Contract.Outputs...)
+		parts = append(parts, t.Contract.Authority...)
+		parts = append(parts, t.Contract.ForbiddenChanges...)
+		parts = append(parts, t.Contract.Validation...)
+		parts = append(parts, t.Contract.NextSkill)
+	}
 	return strings.Join(normalizeTexts(parts), "\n")
 }
 

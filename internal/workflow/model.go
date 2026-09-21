@@ -38,6 +38,17 @@ type Step struct {
 	Phase string `json:"phase"`
 }
 
+// Contract 描述一个 Workflow 与相邻 Skill/能力之间的稳定边界。
+// 它不是执行器：模型仍负责选择真实工具并按步骤执行。
+type Contract struct {
+	Inputs           []string `json:"inputs"`
+	Outputs          []string `json:"outputs"`
+	Authority        []string `json:"authority"`
+	ForbiddenChanges []string `json:"forbidden_changes"`
+	Validation       []string `json:"validation"`
+	NextSkill        string   `json:"next_skill"`
+}
+
 // Template 是 published 模板文件的完整结构。文件使用严格 JSON 解码，
 // 出现未知字段直接报错，避免模板内容被悄悄丢弃。
 type Template struct {
@@ -50,6 +61,7 @@ type Template struct {
 	Match                MatchRule  `json:"match,omitempty"`
 	CompletionConditions []string   `json:"completion_conditions"`
 	Steps                []Step     `json:"steps"`
+	Contract             *Contract  `json:"contract,omitempty"`
 	AllowLongTemplate    bool       `json:"allow_long_template,omitempty"`
 	LongTemplateReason   string     `json:"long_template_reason,omitempty"`
 	Hash                 string     `json:"hash,omitempty"`
@@ -81,6 +93,9 @@ func validateTemplate(t Template) error {
 	}
 	if len(t.Steps) == 0 {
 		return errors.New("template requires at least one step")
+	}
+	if err := validateContract(t.Contract); err != nil {
+		return err
 	}
 	if err := validateTemplateGuardrails(t); err != nil {
 		return err
@@ -123,6 +138,14 @@ func validateTemplateGuardrails(t Template) error {
 	for _, step := range t.Steps {
 		texts = append(texts, step.ID, step.Title)
 	}
+	if t.Contract != nil {
+		texts = append(texts, t.Contract.Inputs...)
+		texts = append(texts, t.Contract.Outputs...)
+		texts = append(texts, t.Contract.Authority...)
+		texts = append(texts, t.Contract.ForbiddenChanges...)
+		texts = append(texts, t.Contract.Validation...)
+		texts = append(texts, t.Contract.NextSkill)
+	}
 	for _, text := range texts {
 		for _, term := range sopTemplateTerms {
 			if strings.Contains(text, term) {
@@ -153,6 +176,39 @@ func validPhase(value string) bool {
 	default:
 		return false
 	}
+}
+
+func validateContract(contract *Contract) error {
+	if contract == nil {
+		return nil
+	}
+	fields := []struct {
+		name   string
+		values []string
+	}{
+		{"inputs", contract.Inputs},
+		{"outputs", contract.Outputs},
+		{"authority", contract.Authority},
+		{"forbidden_changes", contract.ForbiddenChanges},
+		{"validation", contract.Validation},
+	}
+	for _, field := range fields {
+		values := normalizeTexts(field.values)
+		if len(values) == 0 {
+			return fmt.Errorf("workflow contract %s requires at least one non-empty item", field.name)
+		}
+		if len(values) > 16 {
+			return fmt.Errorf("workflow contract %s has %d items; max 16", field.name, len(values))
+		}
+	}
+	nextSkill := strings.TrimSpace(contract.NextSkill)
+	if nextSkill == "" {
+		return errors.New("workflow contract next_skill is required")
+	}
+	if nextSkill != "none" && !ValidToken(nextSkill) {
+		return errors.New("workflow contract next_skill must be a valid token or none")
+	}
+	return nil
 }
 
 // ValidToken 既是服务内部的 id/version 校验，也暴露给 HTTP 边界做同样的前置校验，
