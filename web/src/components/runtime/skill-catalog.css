@@ -1,0 +1,22 @@
+.skill-catalog { display: grid; gap: 18px; min-width: 0; }
+.skill-catalog header p, .skill-catalog small { color: #666; }
+.skill-catalog label { display: grid; gap: 6px; }
+.skill-catalog input:not([type=checkbox]), .skill-catalog textarea { width: 100%; padding: 9px; border: 1px solid #ccc; border-radius: 6px; }
+.skill-catalog fieldset { border: 0; display: grid; gap: 14px; padding: 16px 0; }
+.skill-catalog .catalog-platform { display: inline-flex; align-items: center; margin: 10px; }
+.catalog-upload { border: 1px solid #ddd; padding: 16px; border-radius: 10px; }
+.catalog-layout { display: grid; grid-template-columns: minmax(180px, 280px) minmax(0, 1fr); gap: 22px; }
+.catalog-layout nav { display: flex; flex-direction: column; gap: 8px; max-height: 70vh; overflow: auto; }
+.catalog-layout nav button { text-align: left; border: 1px solid #ddd; border-radius: 8px; padding: 12px; background: white; overflow-wrap: anywhere; }
+.catalog-layout nav button[aria-pressed=true] { border-color: #555; background: #f1f1f1; }
+.catalog-layout nav span { display: block; margin-top: 6px; color: #666; }
+.catalog-layout section { min-width: 0; overflow-wrap: anywhere; }
+.catalog-layout dd { margin: 4px 0 14px; white-space: pre-wrap; }
+.catalog-layout dt { font-weight: 600; }
+.catalog-layout details { margin: 18px 0; }
+.catalog-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.skill-mode-tabs { display: flex; gap: 12px; margin-bottom: 16px; }
+.skill-mode-tabs button[aria-pressed=true] { background: #222; color: white; }
+.skill-mode-tabs button[aria-pressed=false] { background: white; color: #333; border: 1px solid #ccc; }
+.catalog-file-preview { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 480px; overflow: auto; padding: 12px; background: #f8f8f8; border: 1px solid #ddd; }
+@media(max-width: 720px) { .catalog-layout { grid-template-columns: 1fr; } .catalog-layout nav { max-height: 240px; } }

@@ -16,6 +16,7 @@ import MCPAccessPanel from './components/settings/MCPAccessPanel';
 import { ApiError, api, setCSRFToken } from './api/client';
 import WorkflowTemplatesPage from './components/workflows/WorkflowTemplatesPage';
 import { SkillsPage, TaskCenterPage } from './components/runtime/RuntimePages';
+import SkillCatalog from './components/runtime/SkillCatalog';
 import MCPPage from './components/runtime/MCPPage';
 import {
   AgentDockNodeRequired,
@@ -383,14 +384,15 @@ function RuntimeContent({ active, refreshToken, runtimeNodes }: {
   runtimeNodes: RuntimeNodesState;
 }) {
   const { t } = useTranslation();
+  const [skillMode, setSkillMode] = useState<'catalog' | 'node'>('catalog');
   return <section className={`runtime-standalone-page runtime-${active}-page`}>
     <div className="runtime-node-bar">
       <AgentDockNodeSelector nodes={runtimeNodes.nodes} selectedNodeID={runtimeNodes.selectedNodeID} onSelect={runtimeNodes.selectNode} />
       {runtimeNodes.selectedNode && <span className={`runtime-node-status ${runtimeNodes.selectedNode.online ? 'is-online' : 'is-offline'}`}>{runtimeNodes.selectedNode.online ? t('Online') : t('Offline')}{runtimeNodes.selectedNode.os ? ` · ${runtimeNodes.selectedNode.os}/${runtimeNodes.selectedNode.arch}` : ''}</span>}
     </div>
-    {!runtimeNodes.selectedNode && <AgentDockNodeRequired><button type="button" className="nx-button" onClick={() => { window.location.hash = 'settings/system'; }}>{t('Manage nodes')}</button></AgentDockNodeRequired>}
+    {!runtimeNodes.selectedNode && !(active === 'skills' && skillMode === 'catalog') && <AgentDockNodeRequired><button type="button" className="nx-button" onClick={() => { window.location.hash = 'settings/system'; }}>{t('Manage nodes')}</button></AgentDockNodeRequired>}
     {active === 'tasks' && runtimeNodes.selectedNode && <TaskCenterPage key={runtimeNodes.selectedNode.id} nodeID={runtimeNodes.selectedNode.id} refreshToken={refreshToken} />}
-    {active === 'skills' && runtimeNodes.selectedNode && <SkillsPage key={runtimeNodes.selectedNode.id} nodeID={runtimeNodes.selectedNode.id} refreshToken={refreshToken} />}
+    {active === 'skills' && <><div className="skill-mode-tabs"><button className="nx-button" aria-pressed={skillMode === 'catalog'} onClick={() => setSkillMode('catalog')}>{t('Central Skill library')}</button><button className="nx-button" aria-pressed={skillMode === 'node'} onClick={() => setSkillMode('node')}>{t('Installed on node')}</button></div>{skillMode === 'catalog' ? <SkillCatalog key={runtimeNodes.selectedNodeID} nodeID={runtimeNodes.selectedNode?.id} online={runtimeNodes.selectedNode?.online} refreshToken={refreshToken} /> : runtimeNodes.selectedNode && <SkillsPage key={runtimeNodes.selectedNode.id} nodeID={runtimeNodes.selectedNode.id} refreshToken={refreshToken} />}</>}
     {active === 'mcp' && runtimeNodes.selectedNode && <MCPPage key={runtimeNodes.selectedNode.id} nodeID={runtimeNodes.selectedNode.id} refreshToken={refreshToken} />}
   </section>;
 }
