@@ -141,6 +141,8 @@ func TestParseLinuxDefaultGatewayRejectsUnsafeOrInvalidRoutes(t *testing.T) {
 		"route is down":  "eth0\t00000000\t010012AC\t0002\t0\t0\t0\t00000000\n",
 		"not default":    "eth0\t000012AC\t010012AC\t0003\t0\t0\t0\t0000FFFF\n",
 		"malformed":      "eth0\t00000000\tnot-hex\t0003\n",
+		"multiple private gateways": "eth0\t00000000\t010012AC\t0003\t0\t0\t0\t00000000\n" +
+			"eth1\t00000000\t010013AC\t0003\t0\t0\t10\t00000000\n",
 	} {
 		t.Run(name, func(t *testing.T) {
 			if gateway, ok := parseLinuxDefaultGateway(routeTable); ok {

@@ -35,7 +35,7 @@ services:
       - ${RECALL_REPO_DIR:-./recall}:/recall
     environment:
       NEXUS_PUBLIC_URL: ${NEXUS_PUBLIC_URL:-}
-      # 留空时 NexusDock 自动信任 loopback + 当前容器的单一宿主机 bridge 网关；
+      # 留空时自动信任 loopback；仅检测到唯一候选时追加当前容器的 RFC1918 宿主机 bridge 网关；
       # 复杂代理链可显式设置精确 IP/CIDR，并完全覆盖自动默认值。
       NEXUS_TRUSTED_PROXIES: "${NEXUS_TRUSTED_PROXIES:-}"
     # 与 Dockerfile HEALTHCHECK 一致，探针打 /ready（readiness）而不是 /health（liveness）。

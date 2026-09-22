@@ -15,7 +15,7 @@ export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) {
     if (error.code === 'INVALID_CREDENTIALS') return i18n.t('Incorrect username or password.');
     if (error.code === 'LOGIN_RATE_LIMITED') return i18n.t('Too many attempts. Please try again later.');
-    if (error.code === 'ADMIN_NOT_INITIALIZED') return i18n.t('The administrator has not been initialized. Run the initialization command on DockMini.');
+    if (error.code === 'ADMIN_NOT_INITIALIZED') return i18n.t('The administrator has not been initialized. Run the initialization command on the NexusDock host.');
     if (error.code === 'HTTPS_REQUIRED') return i18n.t('Sign-in is only allowed over a secure HTTPS connection.');
     if (error.code === 'CURRENT_CREDENTIAL_INVALID') return i18n.t('The current password is incorrect.');
     if (error.code === 'CREDENTIAL_POLICY_FAILED') return error.message;

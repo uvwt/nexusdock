@@ -37,8 +37,10 @@ func TestMemoryStoreRejectsTraversalAndHiddenPaths(t *testing.T) {
 func TestEmbeddedWebDoesNotLeakPrivateMaterial(t *testing.T) {
 	root := filepath.Join("..", "..", "internal", "httpx", "web_dist")
 	forbidden := []string{
-		"/Users/" + "xx/",
-		"/Volumes/" + "KIOXIA/",
+		"/Users/",
+		"/Volumes/",
+		"/home/",
+		"C:\\Users\\",
 		"BEGIN " + "PRIVATE KEY",
 		"GITHUB_" + "TOKEN=",
 		"AGENTDOCK_OAUTH_CLIENT_" + "SECRET=",

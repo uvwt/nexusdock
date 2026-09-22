@@ -67,8 +67,8 @@ func run(args []string) error {
 		return fmt.Errorf("create control plane directory: %w", err)
 	}
 	controlDBPath := filepath.Join(controlDir, "nexus.db")
-	// 控制库事务都很短，生产又运行在 macOS 外置卷的 Docker bind mount 上。
-	// 保持单个 SQLite 连接，并由 OpenSQLite 使用 rollback journal，降低跨宿主文件系统的一致性风险。
+	// 控制库以短事务为主，不依赖多连接并发写入。保持单个 SQLite 连接，
+	// 并由 OpenSQLite 使用 rollback journal，优先保证不同部署文件系统上的一致性。
 	controlDB, err := core.OpenSQLite(ctx, controlDBPath, 1)
 	if err != nil {
 		return fmt.Errorf("open control plane database: %w", err)

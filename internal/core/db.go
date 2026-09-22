@@ -31,8 +31,8 @@ func OpenSQLite(ctx context.Context, path string, maxOpenConns int) (*sql.DB, er
 		query := u.Query()
 		query.Add("_pragma", "foreign_keys(1)")
 		query.Add("_pragma", "busy_timeout(5000)")
-		// NexusDock 生产控制库位于 macOS 外置盘的 Docker bind mount。
-		// 使用 rollback journal + FULL 同步，避免跨宿主文件系统的 WAL/SHM 一致性风险。
+		// 控制库以短事务和可靠性优先，不依赖 WAL 提供的高并发写入。
+		// 使用 rollback journal + FULL 同步，降低容器挂载等共享文件系统对 WAL/SHM 一致性的要求。
 		query.Add("_pragma", "journal_mode(DELETE)")
 		query.Add("_pragma", "synchronous(FULL)")
 		u.RawQuery = query.Encode()

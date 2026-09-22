@@ -107,8 +107,8 @@ func TestCallFleetAgentDockContextAggregatesOnlineAndOfflineNodes(t *testing.T) 
 		},
 		"skills": []any{map[string]any{"name": "desktop", "description": "Desktop", "file": "skill://desktop/SKILL.md"}},
 		"common_skills": map[string]any{
-			"root": "/Users/xx/.agents/skills", "total": 1, "truncated": false,
-			"items": []any{map[string]any{"name": "personal-dev-guard", "description": "Development guard", "file": "/Users/xx/.agents/skills/personal-dev-guard/SKILL.md"}},
+			"root": "/test/agentdock/.agents/skills", "total": 1, "truncated": false,
+			"items": []any{map[string]any{"name": "personal-dev-guard", "description": "Development guard", "file": "/test/agentdock/.agents/skills/personal-dev-guard/SKILL.md"}},
 		},
 		"dynamic_mcp":        []any{map[string]any{"name": "github", "description": "GitHub"}},
 		"workflow_templates": []any{map[string]any{"name": "deploy", "description": "Deploy"}},

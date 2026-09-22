@@ -206,7 +206,7 @@ The Quick Start above is the default recommended path. You do not need to use th
 | `NEXUS_DATA_DIR` | `./nexus-data` | Host directory mounted to `/var/lib/nexus` |
 | `RECALL_REPO_DIR` | `./recall` | Host directory mounted to `/recall` |
 | `NEXUS_PUBLIC_URL` | empty | Public HTTPS origin, for example `https://nexus.example.com` |
-| `NEXUS_TRUSTED_PROXIES` | automatic | Trusts loopback by default; Linux containers also add the current container's single RFC1918 bridge gateway. An explicit value fully overrides the automatic set |
+| `NEXUS_TRUSTED_PROXIES` | automatic | Trusts loopback by default; Linux containers add the current container's RFC1918 bridge gateway only when exactly one eligible default gateway is detected. An explicit value fully overrides the automatic set |
 | `NEXUS_HTTP_BIND` | `127.0.0.1` | Host listen address; the container port is fixed at `18777` |
 | `NEXUS_HTTP_PORT` | `18777` | Host port; the container port is fixed at `18777` |
 | `NEXUS_IMAGE` | empty | Image tag pinned for production, for example `ghcr.io/uvwt/nexusdock:sha-<short SHA>`; falls back to `nexusdock:local` |
@@ -231,7 +231,7 @@ The four Compose variables above are also valid process environment variables wh
 
 For a remote deployment, administrator login requires HTTPS. Direct `localhost` / loopback access is the only HTTP exception.
 
-When host Nginx/Caddy proxies to the official Docker loopback port, you do not need to configure a Docker subnet manually. NexusDock automatically recognizes the current container's single host bridge gateway. The proxy must still forward the external scheme, for example with Nginx:
+When host Nginx/Caddy proxies to the official Docker loopback port, you do not need to configure a Docker subnet manually. NexusDock automatically trusts the container host bridge gateway only when exactly one eligible RFC1918 default gateway is detected; complex network topologies must configure `NEXUS_TRUSTED_PROXIES` explicitly. The proxy must still forward the external scheme, for example with Nginx:
 
 ```nginx
 location / {

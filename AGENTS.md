@@ -25,4 +25,4 @@ NexusDock 是个人多设备 AgentDock 汇总入口。一级产品区域保持�
 - 常规验证执行 `make check`；完整交付执行 `make ci`。
 - 修改公共 API 后必须更新生成器并执行 `make contracts`。
 - 修改前端后必须提交 `internal/httpx/web_dist` 中对应的嵌入式产物。
-- 提交标题使用 `type(scope): 中文说明`；默认从最新 `develop` 创建任务分支，验证后归并 `develop`。
+- 提交标题使用 `type(scope): 中文说明`；默认从最新 `main` 创建任务分支，验证后通过 PR 归并 `main`。

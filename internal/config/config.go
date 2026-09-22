@@ -170,8 +170,11 @@ func hasContainerRuntimeMarker() bool {
 }
 
 // parseLinuxDefaultGateway 解析 /proc/net/route 中 IPv4 默认路由的 little-endian gateway。
-// 自动信任只接受 RFC1918 地址；其他容器网络仍可通过 NEXUS_TRUSTED_PROXIES 显式声明。
+// 自动信任只在恰好一个 RFC1918 默认网关时生效；多默认路由属于复杂网络拓扑，
+// 必须通过 NEXUS_TRUSTED_PROXIES 显式声明，避免把不确定的网络邻居提升为可信代理。
 func parseLinuxDefaultGateway(routeTable string) (netip.Addr, bool) {
+	var candidate netip.Addr
+	found := false
 	for _, line := range strings.Split(routeTable, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) < 4 || fields[0] == "Iface" || fields[0] == "lo" {
@@ -194,11 +197,16 @@ func parseLinuxDefaultGateway(routeTable string) (netip.Addr, bool) {
 			byte(gateway >> 16),
 			byte(gateway >> 24),
 		})
-		if addr.IsPrivate() {
-			return addr, true
+		if !addr.IsPrivate() {
+			continue
 		}
+		if found {
+			return netip.Addr{}, false
+		}
+		candidate = addr
+		found = true
 	}
-	return netip.Addr{}, false
+	return candidate, found
 }
 
 // getenv 只把"不存在或为空串"视为未设置并回退默认值；
