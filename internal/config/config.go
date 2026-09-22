@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 )
@@ -118,7 +119,22 @@ func ParseTrustedProxy(entry string) (netip.Prefix, error) {
 }
 
 func loadTrustedProxies() ([]netip.Prefix, error) {
-	entries := splitCSV(getenv("NEXUS_TRUSTED_PROXIES", "127.0.0.1,::1"))
+	value := strings.TrimSpace(os.Getenv("NEXUS_TRUSTED_PROXIES"))
+	if value != "" {
+		return parseTrustedProxyEntries(splitCSV(value))
+	}
+
+	entries := []string{"127.0.0.1", "::1"}
+	// 官方容器默认只把宿主机端口绑定到 loopback。宿主机 Nginx/Caddy 访问该端口时，
+	// 容器内看到的来源通常是 bridge 默认网关；只自动追加这个单一 RFC1918 地址，
+	// 不扩大到整个 Docker 私网。显式 NEXUS_TRUSTED_PROXIES 会完全覆盖这套自动默认值。
+	if gateway, ok := discoverContainerGateway(); ok {
+		entries = append(entries, gateway.String())
+	}
+	return parseTrustedProxyEntries(entries)
+}
+
+func parseTrustedProxyEntries(entries []string) ([]netip.Prefix, error) {
 	prefixes := make([]netip.Prefix, 0, len(entries))
 	for _, entry := range entries {
 		prefix, err := ParseTrustedProxy(entry)
@@ -128,6 +144,61 @@ func loadTrustedProxies() ([]netip.Prefix, error) {
 		prefixes = append(prefixes, prefix)
 	}
 	return prefixes, nil
+}
+
+// discoverContainerGateway 只在 Linux 容器运行时读取 /proc/net/route。
+// Docker/Podman 的默认 bridge 网关代表“宿主机这一跳”，适合宿主机反代到 loopback
+// 发布端口的推荐场景；特殊网络拓扑应通过显式 NEXUS_TRUSTED_PROXIES 覆盖自动默认值。
+func discoverContainerGateway() (netip.Addr, bool) {
+	if runtime.GOOS != "linux" || !hasContainerRuntimeMarker() {
+		return netip.Addr{}, false
+	}
+	routeTable, err := os.ReadFile("/proc/net/route")
+	if err != nil {
+		return netip.Addr{}, false
+	}
+	return parseLinuxDefaultGateway(string(routeTable))
+}
+
+func hasContainerRuntimeMarker() bool {
+	for _, path := range []string{"/.dockerenv", "/run/.containerenv"} {
+		if _, err := os.Stat(path); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// parseLinuxDefaultGateway 解析 /proc/net/route 中 IPv4 默认路由的 little-endian gateway。
+// 自动信任只接受 RFC1918 地址；其他容器网络仍可通过 NEXUS_TRUSTED_PROXIES 显式声明。
+func parseLinuxDefaultGateway(routeTable string) (netip.Addr, bool) {
+	for _, line := range strings.Split(routeTable, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 4 || fields[0] == "Iface" || fields[0] == "lo" {
+			continue
+		}
+		if !strings.EqualFold(fields[1], "00000000") || strings.EqualFold(fields[2], "00000000") {
+			continue
+		}
+		flags, err := strconv.ParseUint(fields[3], 16, 64)
+		if err != nil || flags&0x3 != 0x3 { // RTF_UP | RTF_GATEWAY
+			continue
+		}
+		gateway, err := strconv.ParseUint(fields[2], 16, 32)
+		if err != nil {
+			continue
+		}
+		addr := netip.AddrFrom4([4]byte{
+			byte(gateway),
+			byte(gateway >> 8),
+			byte(gateway >> 16),
+			byte(gateway >> 24),
+		})
+		if addr.IsPrivate() {
+			return addr, true
+		}
+	}
+	return netip.Addr{}, false
 }
 
 // getenv 只把"不存在或为空串"视为未设置并回退默认值；

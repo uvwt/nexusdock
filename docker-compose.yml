@@ -35,7 +35,9 @@ services:
       - ${RECALL_REPO_DIR:-./recall}:/recall
     environment:
       NEXUS_PUBLIC_URL: ${NEXUS_PUBLIC_URL:-}
-      NEXUS_TRUSTED_PROXIES: "${NEXUS_TRUSTED_PROXIES:-127.0.0.1,::1}"
+      # 留空时 NexusDock 自动信任 loopback + 当前容器的单一宿主机 bridge 网关；
+      # 复杂代理链可显式设置精确 IP/CIDR，并完全覆盖自动默认值。
+      NEXUS_TRUSTED_PROXIES: "${NEXUS_TRUSTED_PROXIES:-}"
     # 与 Dockerfile HEALTHCHECK 一致，探针打 /ready（readiness）而不是 /health（liveness）。
     healthcheck:
       test: ["CMD", "wget", "-q", "-T", "2", "-O", "/dev/null", "http://127.0.0.1:18777/ready"]

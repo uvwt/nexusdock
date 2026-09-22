@@ -37,12 +37,21 @@ func TestLoadFromEnvUsesDefaultsWhenVariablesMissing(t *testing.T) {
 		netip.PrefixFrom(netip.MustParseAddr("127.0.0.1"), 32),
 		netip.MustParsePrefix("::1/128"),
 	}
-	if len(cfg.TrustedProxies) != len(want) {
+	if len(cfg.TrustedProxies) < len(want) || len(cfg.TrustedProxies) > len(want)+1 {
 		t.Fatalf("default trusted proxies = %v", cfg.TrustedProxies)
 	}
 	for index, prefix := range want {
 		if cfg.TrustedProxies[index] != prefix {
 			t.Fatalf("default trusted proxies = %v, want %v", cfg.TrustedProxies, want)
+		}
+	}
+	if len(cfg.TrustedProxies) == len(want)+1 {
+		gateway, ok := discoverContainerGateway()
+		if !ok {
+			t.Fatalf("unexpected auto trusted proxy: %v", cfg.TrustedProxies)
+		}
+		if got := cfg.TrustedProxies[len(want)]; got != netip.PrefixFrom(gateway, 32) {
+			t.Fatalf("auto trusted gateway = %v, want %v", got, gateway)
 		}
 	}
 }
@@ -107,6 +116,35 @@ func TestLoadFromEnvRejectsInvalidValuesWithVariableName(t *testing.T) {
 			// 错误必须能直接定位到变量与非法值，而不是泛化的加载失败。
 			if !strings.Contains(err.Error(), tt.key) || !strings.Contains(err.Error(), tt.expect) {
 				t.Fatalf("error should mention %s and %q, got: %v", tt.key, tt.expect, err)
+			}
+		})
+	}
+}
+
+func TestParseLinuxDefaultGateway(t *testing.T) {
+	routeTable := "Iface\tDestination\tGateway\tFlags\tRefCnt\tUse\tMetric\tMask\tMTU\tWindow\tIRTT\n" +
+		"eth0\t00000000\t010012AC\t0003\t0\t0\t0\t00000000\t0\t0\t0\n" +
+		"eth0\t000012AC\t00000000\t0001\t0\t0\t0\t0000FFFF\t0\t0\t0\n"
+
+	got, ok := parseLinuxDefaultGateway(routeTable)
+	if !ok {
+		t.Fatal("Docker bridge default gateway was not detected")
+	}
+	if want := netip.MustParseAddr("172.18.0.1"); got != want {
+		t.Fatalf("gateway = %v, want %v", got, want)
+	}
+}
+
+func TestParseLinuxDefaultGatewayRejectsUnsafeOrInvalidRoutes(t *testing.T) {
+	for name, routeTable := range map[string]string{
+		"public gateway": "eth0\t00000000\t017100CB\t0003\t0\t0\t0\t00000000\n",
+		"route is down":  "eth0\t00000000\t010012AC\t0002\t0\t0\t0\t00000000\n",
+		"not default":    "eth0\t000012AC\t010012AC\t0003\t0\t0\t0\t0000FFFF\n",
+		"malformed":      "eth0\t00000000\tnot-hex\t0003\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			if gateway, ok := parseLinuxDefaultGateway(routeTable); ok {
+				t.Fatalf("unexpected gateway %v", gateway)
 			}
 		})
 	}

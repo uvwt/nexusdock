@@ -206,7 +206,7 @@ README 上面的“快速开始”是默认推荐方式，不要求使用仓库�
 | `NEXUS_DATA_DIR` | `./nexus-data` | 挂载到容器 `/var/lib/nexus` 的宿主机目录 |
 | `RECALL_REPO_DIR` | `./recall` | 挂载到容器 `/recall` 的宿主机目录 |
 | `NEXUS_PUBLIC_URL` | 空 | 对外 HTTPS Origin，例如 `https://nexus.example.com` |
-| `NEXUS_TRUSTED_PROXIES` | `127.0.0.1,::1` | 允许提供可信 `X-Forwarded-*` 的代理地址 |
+| `NEXUS_TRUSTED_PROXIES` | 自动 | 默认信任回环地址；Linux 容器还会自动追加当前容器的单一 RFC1918 bridge 网关。显式设置后完全覆盖自动值 |
 | `NEXUS_HTTP_BIND` | `127.0.0.1` | 宿主机监听地址；容器内端口固定 `18777` |
 | `NEXUS_HTTP_PORT` | `18777` | 宿主机端口；容器内端口固定 `18777` |
 | `NEXUS_IMAGE` | 空 | 生产固定使用的镜像标签，例如 `ghcr.io/uvwt/nexusdock:sha-<短SHA>`；留空回退 `nexusdock:local` |
@@ -230,6 +230,21 @@ README 上面的“快速开始”是默认推荐方式，不要求使用仓库�
 ## 安全部署
 
 远程部署时管理员登录必须使用 HTTPS；只有直接访问 `localhost` / 回环地址时允许 HTTP。
+
+宿主机 Nginx/Caddy 反代到官方 Docker 端口时，不需要手填 Docker 网段；NexusDock 会自动识别当前容器的单一宿主机 bridge 网关。反代仍需把外部协议传给 NexusDock，例如 Nginx：
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:18777;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Real-IP $remote_addr;
+}
+```
+
+只有复杂代理链才需要显式配置 `NEXUS_TRUSTED_PROXIES`；显式设置后不会再自动追加容器网关。若将 `NEXUS_HTTP_BIND` 改为 `0.0.0.0`，请显式配置精确可信代理并限制防火墙来源，不要继续依赖自动网关信任。
 
 - 容器端口只绑定本机回环地址，通过 HTTPS 对外提供服务；
 - 将 `NEXUS_PUBLIC_URL` 设置为真实 HTTPS Origin；
