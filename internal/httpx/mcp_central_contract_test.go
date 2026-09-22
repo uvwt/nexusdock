@@ -24,7 +24,12 @@ func TestCentralToolDefinitionsMatchCanonicalContract(t *testing.T) {
 			t.Fatalf("central tool %s missing", name)
 		}
 		tool := raw.(*mcpsdk.Tool)
-		wantInput, _ := mcpcontract.InputSchema(name)
+		var wantInput map[string]any
+		if name == mcpcontract.ToolWorkspaceContext {
+			wantInput = mcpcontract.NodeWorkspaceContextInputSchema()
+		} else {
+			wantInput, _ = mcpcontract.InputSchema(name)
+		}
 		if !reflect.DeepEqual(tool.InputSchema, wantInput) {
 			t.Fatalf("%s input schema drifted from canonical contract", name)
 		}

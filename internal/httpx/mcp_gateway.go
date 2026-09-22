@@ -13,6 +13,7 @@ import (
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	protocol "github.com/uvwt/agentdock-protocol"
+	"github.com/uvwt/agentdock-protocol/mcpcontract"
 	"github.com/uvwt/nexusdock/internal/agentdock"
 	"github.com/uvwt/nexusdock/internal/privatenotes"
 	"github.com/uvwt/nexusdock/internal/recall"
@@ -21,6 +22,7 @@ import (
 const nexusServerInstructions = "NexusDock 可以连接并统一操作多台 AgentDock 设备。" +
 	"优先调用 `agentdock_context` 获取可用设备、节点标识以及各设备的核心能力、Skill、动态 MCP、Workflow 模板、重要上下文和长期记忆索引。" +
 	"需要操作具体设备时，根据 `agentdock_context` 返回的节点信息选择目标 `node_id`。" +
+	"操作具体项目、切换工作区或工作区规则可能变化时，调用 `workspace_context` 并传入目标 `node_id` 获取该节点的工作区上下文。" +
 	"需要查找或读取长期记忆时使用 `recall_*`；需要查找或使用 Workflow 模板时使用 `workflow_template_manage`；" +
 	"处理多步骤任务时使用 `task_manage` 记录和维护任务进度。根据用户需求选择合适的设备和能力，检查、操作并验证设备状态。"
 
@@ -92,6 +94,10 @@ func (s *Server) registerCentralTools() {
 	}
 	for _, definition := range nexusToolDefinitionsWithApps(s.mcpAppsEnabled()) {
 		definition := definition
+		if definition.Name == mcpcontract.ToolWorkspaceContext {
+			s.mcpServer.AddTool(definition, s.nodeToolHandler(definition.Name))
+			continue
+		}
 		s.mcpServer.AddTool(definition, func(ctx context.Context, request *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
 			arguments, err := toolArguments(request)
 			if err != nil {
@@ -211,19 +217,25 @@ func (s *Server) callNodeTool(ctx context.Context, name string, arguments map[st
 		return s.gatewayToolResult(name, nil, fmt.Errorf("AgentDock node %s does not provide tool %s", nodeID, name))
 	}
 
-	if s.publishedToolBridge == nil {
-		return s.gatewayToolResult(name, nil, fmt.Errorf("Nexus 公开工具契约不存在: %s", name))
-	}
-	mismatch, err := s.publishedToolBridge.ToolContractMismatch(ctx, node, name)
-	if err != nil {
-		return s.gatewayToolResult(name, nil, err)
-	}
-	if mismatch != nil {
-		details, encodeErr := asMap(mismatch)
-		if encodeErr != nil {
-			return nil, encodeErr
+	if mcpcontract.IsCanonicalTool(name) {
+		if err := s.validateCanonicalNodeToolContract(ctx, node, name); err != nil {
+			return s.gatewayToolResult(name, nil, err)
 		}
-		return s.gatewayToolResult(name, details, errors.New(mismatch.Message))
+	} else {
+		if s.publishedToolBridge == nil {
+			return s.gatewayToolResult(name, nil, fmt.Errorf("Nexus 公开工具契约不存在: %s", name))
+		}
+		mismatch, err := s.publishedToolBridge.ToolContractMismatch(ctx, node, name)
+		if err != nil {
+			return s.gatewayToolResult(name, nil, err)
+		}
+		if mismatch != nil {
+			details, encodeErr := asMap(mismatch)
+			if encodeErr != nil {
+				return nil, encodeErr
+			}
+			return s.gatewayToolResult(name, details, errors.New(mismatch.Message))
+		}
 	}
 
 	delete(arguments, "node_id")
@@ -241,6 +253,39 @@ func (s *Server) callNodeTool(ctx context.Context, name string, arguments map[st
 		}
 	}
 	return s.gatewayToolResult(name, result, err)
+}
+
+func (s *Server) validateCanonicalNodeToolContract(ctx context.Context, node agentdock.Node, name string) error {
+	input, ok := mcpcontract.InputSchema(name)
+	if !ok {
+		return fmt.Errorf("canonical AgentDock tool contract missing input schema: %s", name)
+	}
+	output, ok := mcpcontract.OutputSchema(name)
+	if !ok {
+		return fmt.Errorf("canonical AgentDock tool contract missing output schema: %s", name)
+	}
+	wantHash, err := agentdock.ToolContractHash(agentdock.ToolDescriptor{Name: name, InputSchema: input, OutputSchema: output})
+	if err != nil {
+		return err
+	}
+	descriptors, err := s.agentDock.ToolDescriptors(ctx, node.ID)
+	if err != nil {
+		return err
+	}
+	for _, descriptor := range descriptors {
+		if descriptor.Name != name {
+			continue
+		}
+		gotHash, hashErr := agentdock.ToolContractHash(descriptor)
+		if hashErr != nil {
+			return hashErr
+		}
+		if gotHash != wantHash {
+			return fmt.Errorf("目标 AgentDock 的 %s 契约与 Nexus canonical contract 不一致，请更新该节点 AgentDock 后重试", name)
+		}
+		return nil
+	}
+	return fmt.Errorf("AgentDock node %s does not provide tool descriptor %s", node.ID, name)
 }
 
 func containsString(values []string, target string) bool {

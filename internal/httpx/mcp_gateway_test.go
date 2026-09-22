@@ -58,7 +58,7 @@ func TestInitializeMCPGatewayAdvertisesFixedInstructions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	central := map[string]bool{"agentdock_context": false, "workflow_template_manage": false}
+	central := map[string]bool{"agentdock_context": false, "workspace_context": false, "workflow_template_manage": false}
 	for _, tool := range tools.Tools {
 		if tool.Name == "node_list" {
 			t.Fatal("tools/list still exposes node_list")
@@ -69,8 +69,15 @@ func TestInitializeMCPGatewayAdvertisesFixedInstructions(t *testing.T) {
 		central[tool.Name] = true
 		input := tool.InputSchema.(map[string]any)
 		properties := input["properties"].(map[string]any)
-		if _, hasNodeID := properties["node_id"]; hasNodeID {
-			t.Fatalf("central tool %s unexpectedly requires node_id: %#v", tool.Name, input)
+		_, hasNodeID := properties["node_id"]
+		if tool.Name == "workspace_context" {
+			if !hasNodeID {
+				t.Fatalf("workspace_context must require node_id: %#v", input)
+			}
+			continue
+		}
+		if hasNodeID {
+			t.Fatalf("fleet-owned central tool %s unexpectedly requires node_id: %#v", tool.Name, input)
 		}
 	}
 	for name, found := range central {
