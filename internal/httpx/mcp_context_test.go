@@ -105,10 +105,17 @@ func TestCallFleetAgentDockContextAggregatesOnlineAndOfflineNodes(t *testing.T) 
 			"version": "9.9.9", "os": "linux", "arch": "amd64",
 			"agentdock_home": "/wrong", "agentdock_default_dir": "/wrong", "default_cwd": ".", "path_model": "host",
 		},
-		"skills": []any{map[string]any{"name": "desktop", "description": "Desktop", "file": "skill://desktop/SKILL.md"}},
+		"skills": []any{map[string]any{
+			"name": "desktop", "description": "Desktop", "file": "skill://managed/desktop/SKILL.md",
+			"skill_ref": "skill://managed/desktop", "source_type": "managed", "source_id": "desktop",
+			"content_digest": "sha256:desktop",
+		}},
 		"common_skills": map[string]any{
 			"root": "/test/agentdock/.agents/skills", "total": 1, "truncated": false,
-			"items": []any{map[string]any{"name": "personal-dev-guard", "description": "Development guard", "file": "/test/agentdock/.agents/skills/personal-dev-guard/SKILL.md"}},
+			"items": []any{map[string]any{
+				"name": "personal-dev-guard", "description": "Development guard", "file": "skill://shared/personal-dev-guard/SKILL.md",
+				"skill_ref": "skill://shared/personal-dev-guard", "source_type": "shared", "source_id": "global",
+			}},
 		},
 		"dynamic_mcp":        []any{map[string]any{"name": "github", "description": "GitHub"}},
 		"workflow_templates": []any{map[string]any{"name": "deploy", "description": "Deploy"}},
@@ -211,6 +218,21 @@ func TestDecodeAgentDockContextRejectsLegacyMarkdownResult(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "结构化契约") {
 		t.Fatalf("legacy context should be rejected, got %v", err)
+	}
+}
+
+func TestDecodeAgentDockContextRejectsSkillWithoutProvenance(t *testing.T) {
+	_, err := decodeAgentDockContextResult(map[string]any{
+		"isError": false,
+		"structuredContent": map[string]any{
+			"skills": []any{map[string]any{
+				"name": "desktop", "description": "Desktop", "file": "skill://desktop/SKILL.md",
+			}},
+			"dynamic_mcp": []any{}, "workflow_templates": []any{}, "rules": []any{},
+		},
+	})
+	if err == nil || !strings.Contains(err.Error(), "skill_ref") {
+		t.Fatalf("Skill without provenance should be rejected, got %v", err)
 	}
 }
 

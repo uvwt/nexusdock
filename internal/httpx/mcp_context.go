@@ -39,10 +39,13 @@ type agentDockContext struct {
 }
 
 type agentDockContextSkill struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	File        string `json:"file"`
-	Bundled     bool   `json:"bundled,omitempty"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	File          string `json:"file"`
+	SkillRef      string `json:"skill_ref"`
+	SourceType    string `json:"source_type"`
+	SourceID      string `json:"source_id"`
+	ContentDigest string `json:"content_digest,omitempty"`
 }
 
 type agentDockContextCommonSkills struct {
@@ -53,9 +56,13 @@ type agentDockContextCommonSkills struct {
 }
 
 type agentDockContextCommonSkill struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	File        string `json:"file"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	File          string `json:"file"`
+	SkillRef      string `json:"skill_ref"`
+	SourceType    string `json:"source_type"`
+	SourceID      string `json:"source_id"`
+	ContentDigest string `json:"content_digest,omitempty"`
 }
 
 type agentDockContextItem struct {
@@ -198,7 +205,33 @@ func decodeAgentDockContextResult(result map[string]any) (agentDockContext, erro
 	if decoded.CommonSkills != nil && decoded.CommonSkills.Items == nil {
 		return agentDockContext{}, errors.New("agentdock_context common_skills 不符合当前结构化契约")
 	}
+	if err := validateAgentDockContextSkills(decoded); err != nil {
+		return agentDockContext{}, err
+	}
 	return decoded, nil
+}
+
+func validateAgentDockContextSkills(context agentDockContext) error {
+	for i, skill := range context.Skills {
+		if strings.TrimSpace(skill.SkillRef) == "" {
+			return fmt.Errorf("agentdock_context skills[%d].skill_ref 不符合当前结构化契约", i)
+		}
+		if skill.SourceType != "managed" || strings.TrimSpace(skill.SourceID) == "" {
+			return fmt.Errorf("agentdock_context skills[%d] 来源身份不符合当前结构化契约", i)
+		}
+	}
+	if context.CommonSkills == nil {
+		return nil
+	}
+	for i, skill := range context.CommonSkills.Items {
+		if strings.TrimSpace(skill.SkillRef) == "" {
+			return fmt.Errorf("agentdock_context common_skills.items[%d].skill_ref 不符合当前结构化契约", i)
+		}
+		if skill.SourceType != "shared" || strings.TrimSpace(skill.SourceID) == "" {
+			return fmt.Errorf("agentdock_context common_skills.items[%d] 来源身份不符合当前结构化契约", i)
+		}
+	}
+	return nil
 }
 
 func agentDockContextResultError(result map[string]any) string {

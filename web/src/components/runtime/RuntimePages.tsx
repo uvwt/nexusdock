@@ -27,9 +27,9 @@ function taskStatusLabel(status: string | undefined, t: TFunction): string {
 type TaskStep = { id: string; title: string; status: string };
 type OpsTask = { id: string; title: string; goal: string; status: string; summary?: string; blocker?: string; current_step?: TaskStep; completed_step_count: number; step_count: number; updated_at: string; file_name: string };
 type OpsTaskDetail = OpsTask & { steps?: unknown[] };
-type OpsSkill = { id: string; title: string; source: string; path: string; description?: string; updated_at: string; file_count: number; status: string; active_version?: string; versions?: string[]; channels?: Record<string, string>; runtime_state_path?: string; doc_root?: string };
+type OpsSkill = { id: string; title: string; source: string; path: string; description: string; file_count: number; status: string; skill_ref: string; source_type: string; source_id: string; content_digest: string };
 type OpsSkillFile = { path: string; kind: string; size_bytes: number; updated_at: string };
-type OpsSkillDetail = OpsSkill & { root?: string; skill_doc?: string; files?: OpsSkillFile[]; runtime_state?: Record<string, unknown> };
+type OpsSkillDetail = OpsSkill & { files?: OpsSkillFile[]; runtime_state?: Record<string, unknown> };
 type TaskCounts = { active: number; blocked: number; completed: number };
 type TaskListResponse = { ok: boolean; items: OpsTask[]; count: number; total: number; root?: string; source?: string };
 type TaskDetailResponse = { ok: boolean; task: OpsTaskDetail; source?: string };
@@ -264,7 +264,7 @@ export function SkillsPage({ nodeID, refreshToken }: { nodeID: string; refreshTo
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return resource.data.items;
-    return resource.data.items.filter((item) => [item.id, item.title, item.description, item.active_version].filter(Boolean).join(' ').toLowerCase().includes(needle));
+    return resource.data.items.filter((item) => [item.id, item.title, item.description, item.skill_ref, item.source_type, item.source_id].filter(Boolean).join(' ').toLowerCase().includes(needle));
   }, [query, resource.data.items]);
   const selected = filtered.find((item) => `${item.source}:${item.id}` === selectedKey) || filtered[0];
   const detail = useOptionalOpsResource<SkillDetailResponse>(selected ? `${runtimeBase}/skills/${encodeURIComponent(selected.source)}/${encodeURIComponent(selected.id)}` : '', { ok: false, skill: selected as OpsSkillDetail }, refreshToken, t('Request failed'));
@@ -276,11 +276,11 @@ export function SkillsPage({ nodeID, refreshToken }: { nodeID: string; refreshTo
           <label className="ops-search"><Search size={15} /><input aria-label={t('Search Skill')} value={query} onChange={(event) => { setQuery(event.target.value); setMobileDetailOpen(false); }} placeholder={t('Search name or description')} /></label>
         </header>
         <div className="skills-rail">
-          {filtered.length === 0 ? <EmptyOps text={t('No matching skills.')} /> : filtered.map((skill) => <button type="button" key={`${skill.source}:${skill.id}`} className={`skill-list-item ${selected?.source === skill.source && selected?.id === skill.id ? 'is-selected' : ''}`} aria-pressed={selected?.source === skill.source && selected?.id === skill.id} onClick={() => { setSelectedKey(`${skill.source}:${skill.id}`); setMobileDetailOpen(true); }}><span className="ops-card-icon"><Layers size={16} /></span><span><strong>{skill.title || skill.id}</strong><small>{skill.active_version || t('Unversioned')} · {skill.file_count > 0 ? t('{{count}} files', { count: skill.file_count }) : t('Files loaded on demand')}</small></span></button>)}
+          {filtered.length === 0 ? <EmptyOps text={t('No matching skills.')} /> : filtered.map((skill) => <button type="button" key={`${skill.source}:${skill.id}`} className={`skill-list-item ${selected?.source === skill.source && selected?.id === skill.id ? 'is-selected' : ''}`} aria-pressed={selected?.source === skill.source && selected?.id === skill.id} onClick={() => { setSelectedKey(`${skill.source}:${skill.id}`); setMobileDetailOpen(true); }}><span className="ops-card-icon"><Layers size={16} /></span><span><strong>{skill.title || skill.id}</strong><small>{skillSourceLabel(skill.source_type, t)} · {skill.file_count > 0 ? t('{{count}} files', { count: skill.file_count }) : t('Files loaded on demand')}</small></span></button>)}
         </div>
       </aside>
       <div className="skills-detail mobile-drilldown-detail">
-        {selected && <MobileDrilldownBar label="Skill" title={selected.title || selected.id} meta={selected.active_version || selected.status} backLabel={t('Back to skill list')} onBack={() => setMobileDetailOpen(false)} />}
+        {selected && <MobileDrilldownBar label="Skill" title={selected.title || selected.id} meta={skillSourceLabel(selected.source_type, t)} backLabel={t('Back to skill list')} onBack={() => setMobileDetailOpen(false)} />}
         <SkillDetail nodeID={nodeID} skill={selected} detail={detail.data.skill} loading={detail.loading} error={detail.error} refreshToken={refreshToken} />
       </div>
     </section>
@@ -332,21 +332,19 @@ function SkillDetailContent({ nodeID, skill, detail, loading, error, refreshToke
   const fileURL = activePath ? `/v1/runtime/nodes/${encodeURIComponent(nodeID)}/skills/${encodeURIComponent(full.source)}/${encodeURIComponent(full.id)}/files/${encodePathSegments(activePath)}` : '';
   const preview = useOptionalOpsResource<SkillFileResponse>(fileURL, { ok: false }, refreshToken, t('Request failed'));
   const raw = detail?.runtime_state;
-  const manifest = asRecord(raw?.manifest);
-  const selection = asRecord(raw?.selection);
 
   return <article className="skill-detail-panel">
     <header className="skill-detail-head">
       <div><span className="nexus-eyebrow">SKILL</span><h3>{full.title || full.id}</h3><p>{full.description || t('No description provided.')}</p></div>
-      <StatusBadge tone={toneForStatus(full.status)}>{full.active_version || full.status}</StatusBadge>
+      <StatusBadge tone={toneForStatus(full.status)}>{t('Current content')}</StatusBadge>
     </header>
     {loading && <div className="nx-alert is-info">{t('Loading Skill details…')}</div>}
     {error && <div className="nx-alert is-error">{error}</div>}
 
     <dl className="skill-meta" aria-label={t('Skill summary')}>
-      <div><dt>{t('Version')}</dt><dd>{full.active_version || t('Unmarked')}</dd></div>
+      <div><dt>{t('Source type')}</dt><dd>{skillSourceLabel(full.source_type, t)}</dd></div>
       <div><dt>{t('Files')}</dt><dd>{files.length}</dd></div>
-      <div><dt>{t('Updated')}</dt><dd>{formatTime(full.updated_at)}</dd></div>
+      <div><dt>{t('Content digest')}</dt><dd title={full.content_digest}>{shortDigest(full.content_digest)}</dd></div>
     </dl>
 
     <section className="skill-file-workspace">
@@ -366,15 +364,14 @@ function SkillDetailContent({ nodeID, skill, detail, loading, error, refreshToke
     </section>
 
     <details className="ops-secondary-details skill-technical-details">
-      <summary>{t('Version and technical information')}</summary>
+      <summary>{t('Current content and technical information')}</summary>
       <div className="ops-detail-grid">
         <Info label="ID" value={full.id} />
-        <Info label={t('Source')} value={full.source || 'agentdock-api'} />
-        <Info label={t('Version history')} value={(full.versions || []).join(' → ') || t('None')} />
-        <Info label={t('Install directory')} value={detail?.root || t('Unavailable')} />
+        <Info label={t('Skill reference')} value={full.skill_ref} />
+        <Info label={t('Source type')} value={skillSourceLabel(full.source_type, t)} />
+        <Info label={t('Source ID')} value={full.source_id} />
+        <Info label={t('Content digest')} value={full.content_digest} />
       </div>
-      <ChannelChips channels={full.channels} />
-      {manifest && <div className="ops-key-values is-compact"><Info label="metadata" value={Object.keys(asRecord(manifest.metadata) || {}).join(', ') || t('None')} /><Info label="operations" value={String((manifest.operations as unknown[] | undefined)?.length || 0)} /><Info label="permissions" value={Object.keys(asRecord(manifest.permissions) || {}).join(', ') || t('None')} /><Info label="env" value={String((manifest.env as unknown[] | undefined)?.length || 0)} /><Info label="Active" value={full.active_version || pickText(selection || {}, ['active_version']) || 'unknown'} /></div>}
       {raw && <RawJsonPanel title={t('Runtime raw response')} value={raw} />}
     </details>
   </article>;
@@ -445,10 +442,17 @@ function pickText(record: Record<string, unknown>, keys: string[]): string {
   }
   return '';
 }
-function ChannelChips({ channels }: { channels?: Record<string, string> }) {
-  const entries = Object.entries(channels || {});
-  if (entries.length === 0) return null;
-  return <div className="ops-chip-row">{entries.map(([name, version]) => <span key={name}>{name}: {version}</span>)}</div>;
+function skillSourceLabel(sourceType: string | undefined, t: TFunction): string {
+  if (sourceType === 'managed') return t('Managed');
+  if (sourceType === 'shared') return t('Shared');
+  if (sourceType === 'workspace') return t('Workspace');
+  return sourceType || t('Unknown');
+}
+function shortDigest(value: string | undefined): string {
+  if (!value) return '—';
+  const [algorithm, digest] = value.split(':', 2);
+  if (!digest) return value.length > 18 ? `${value.slice(0, 18)}…` : value;
+  return `${algorithm}:${digest.slice(0, 12)}`;
 }
 function RawJsonPanel({ title, value }: { title: string; value: unknown }) {
   return <details className="ops-json-panel"><summary>{title}</summary><pre>{JSON.stringify(value, null, 2)}</pre></details>;

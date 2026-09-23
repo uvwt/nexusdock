@@ -204,6 +204,30 @@ func TestRuntimeTaskDetailThroughBridgeDerivesProgress(t *testing.T) {
 	}
 }
 
+func TestRuntimeSkillsThroughBridgeExposeCurrentContentIdentity(t *testing.T) {
+	_, mux, nodeID := runtimeContractTestServer(t, map[string]string{
+		"/internal/runtime/skills": `{"action":"list","count":1,"source":"agentdock-api","skills":[{
+			"skill":"demo","name":"demo","description":"Demo Skill",
+			"skill_ref":"skill://managed/demo","source_type":"managed","source_id":"demo",
+			"content_digest":"sha256:abc123","file_count":2}]}`,
+	})
+	payload := runtimeContractRequest(t, mux, http.MethodGet, "/v1/runtime/nodes/"+nodeID+"/skills")
+	items, _ := payload["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("Skill 列表响应错误: %v", payload)
+	}
+	item, _ := items[0].(map[string]any)
+	if item["skill_ref"] != "skill://managed/demo" || item["source_type"] != "managed" ||
+		item["source_id"] != "demo" || item["content_digest"] != "sha256:abc123" {
+		t.Fatalf("Skill 当前内容身份字段错误: %v", item)
+	}
+	for _, legacy := range []string{"active_version", "versions", "channels"} {
+		if _, ok := item[legacy]; ok {
+			t.Fatalf("Skill UI API 不应保留旧版本字段 %q: %v", legacy, item)
+		}
+	}
+}
+
 func TestRuntimeSkillFileThroughBridgeRejectsWrongType(t *testing.T) {
 	_, mux, nodeID := runtimeContractTestServer(t, map[string]string{
 		"/internal/runtime/skills/demo/files/SKILL.md": `{"action": "file", "ok": true,

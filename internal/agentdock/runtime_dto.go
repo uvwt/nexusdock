@@ -83,18 +83,17 @@ type RuntimeTaskDetail struct {
 	FinalReview *RuntimeTaskFinalReview
 }
 
-// RuntimeSkillSummary 是 Skill 列表项。Skill 是安装目录名，作为唯一键必填；
-// Name/Description/FileCount 由较新的 AgentDock 补充，旧节点可能缺失。
+// RuntimeSkillSummary 是当前 managed Skill 内容的列表项。
+// skill_ref 与来源字段直接来自 AgentDock，Nexus 不再维护独立版本或激活态。
 type RuntimeSkillSummary struct {
-	Skill         string   `json:"skill"`
-	Name          string   `json:"name,omitempty"`
-	Description   string   `json:"description,omitempty"`
-	Versions      []string `json:"versions,omitempty"`
-	ActiveVersion string   `json:"active_version,omitempty"`
-	UpdatedAt     string   `json:"updated_at,omitempty"`
-	FileCount     int      `json:"file_count,omitempty"`
-	// Channels 是旧版 AgentDock 的渠道声明字段，当前上游已不再发送；保留以兼容旧节点的 UI 展示。
-	Channels map[string]string `json:"channels,omitempty"`
+	Skill         string `json:"skill"`
+	Name          string `json:"name"`
+	Description   string `json:"description"`
+	SkillRef      string `json:"skill_ref"`
+	SourceType    string `json:"source_type"`
+	SourceID      string `json:"source_id"`
+	ContentDigest string `json:"content_digest"`
+	FileCount     int    `json:"file_count"`
 }
 
 type RuntimeSkillFile struct {
@@ -106,12 +105,12 @@ type RuntimeSkillFile struct {
 
 type RuntimeSkillDetail struct {
 	Skill         string             `json:"skill"`
-	Name          string             `json:"name,omitempty"`
-	Description   string             `json:"description,omitempty"`
-	Versions      []string           `json:"versions"`
-	ActiveVersion string             `json:"active_version,omitempty"`
-	UpdatedAt     string             `json:"updated_at,omitempty"`
-	Channels      map[string]string  `json:"channels,omitempty"`
+	Name          string             `json:"name"`
+	Description   string             `json:"description"`
+	SkillRef      string             `json:"skill_ref"`
+	SourceType    string             `json:"source_type"`
+	SourceID      string             `json:"source_id"`
+	ContentDigest string             `json:"content_digest"`
 	Files         []RuntimeSkillFile `json:"files"`
 }
 
@@ -572,7 +571,7 @@ func (p runtimeParser) parseOptionalFinalReview(field string, value any) (*Runti
 }
 
 // parseRuntimeSkillList 解析 GET /internal/runtime/skills 响应。
-// skill 字段是安装目录名；id/name 是旧版 AgentDock 的兼容字段名。
+// AgentDock 当前内容模型要求每个列表项都携带精确 skill_ref 与来源身份。
 func parseRuntimeSkillList(node string, payload map[string]any) ([]RuntimeSkillSummary, error) {
 	p := runtimeParser{node: node, operation: "GET /internal/runtime/skills"}
 	raw, err := p.array("skills", payload["skills"], false)
@@ -586,27 +585,31 @@ func parseRuntimeSkillList(node string, payload map[string]any) ([]RuntimeSkillS
 		if err != nil {
 			return nil, err
 		}
-		skill, err := p.skillID(field, object)
+		skill, err := p.requiredString(field+".skill", object["skill"])
 		if err != nil {
 			return nil, err
 		}
-		name, err := p.optionalString(field+".name", object["name"])
+		name, err := p.requiredString(field+".name", object["name"])
 		if err != nil {
 			return nil, err
 		}
-		description, err := p.optionalString(field+".description", object["description"])
+		description, err := p.requiredString(field+".description", object["description"])
 		if err != nil {
 			return nil, err
 		}
-		versions, err := p.optionalStringArray(field+".versions", object["versions"])
+		skillRef, err := p.requiredString(field+".skill_ref", object["skill_ref"])
 		if err != nil {
 			return nil, err
 		}
-		activeVersion, err := p.optionalString(field+".active_version", object["active_version"])
+		sourceType, err := p.requiredString(field+".source_type", object["source_type"])
 		if err != nil {
 			return nil, err
 		}
-		updatedAt, err := p.optionalString(field+".updated_at", object["updated_at"])
+		sourceID, err := p.requiredString(field+".source_id", object["source_id"])
+		if err != nil {
+			return nil, err
+		}
+		contentDigest, err := p.requiredString(field+".content_digest", object["content_digest"])
 		if err != nil {
 			return nil, err
 		}
@@ -614,80 +617,57 @@ func parseRuntimeSkillList(node string, payload map[string]any) ([]RuntimeSkillS
 		if err != nil {
 			return nil, err
 		}
-		channels, err := p.optionalStringMap(field+".channels", object["channels"])
-		if err != nil {
-			return nil, err
-		}
 		skills = append(skills, RuntimeSkillSummary{
-			Skill: skill, Name: name, Description: description, Versions: versions,
-			ActiveVersion: activeVersion, UpdatedAt: updatedAt, FileCount: fileCount, Channels: channels,
+			Skill: skill, Name: name, Description: description,
+			SkillRef: skillRef, SourceType: sourceType, SourceID: sourceID,
+			ContentDigest: contentDigest, FileCount: fileCount,
 		})
 	}
 	return skills, nil
 }
 
-// skillID 读取 Skill 安装名；id/name 是旧版 AgentDock 的兼容字段名。
-func (p runtimeParser) skillID(field string, item map[string]any) (string, error) {
-	for _, key := range []string{"skill", "id", "name"} {
-		if value, ok := item[key]; ok && value != nil {
-			if text, ok := value.(string); ok && text != "" {
-				return text, nil
-			}
-			return "", p.fail(field+"."+key, fmt.Sprintf("应为非空字符串，实际为 %T", value))
-		}
-	}
-	return "", p.fail(field+".skill", "缺少必填字段")
-}
-
 // parseRuntimeSkillDetail 解析 GET /internal/runtime/skills/{skillID} 响应。
-// 未激活的 Skill 没有选中版本，document 与 files 缺失属于合法状态。
+// 详情只描述当前 managed Skill 内容，不再解析版本、激活态或渠道历史。
 func parseRuntimeSkillDetail(node, skillID string, payload map[string]any) (RuntimeSkillDetail, error) {
 	operation := "GET /internal/runtime/skills/" + skillID
 	p := runtimeParser{node: node, operation: operation}
 
-	versions, err := p.requiredStringArray("versions", payload["versions"])
+	skill, err := p.requiredString("skill", payload["skill"])
 	if err != nil {
 		return RuntimeSkillDetail{}, err
 	}
-	selection, err := p.object("selection", payload["selection"], true)
+	if skill != skillID {
+		return RuntimeSkillDetail{}, p.fail("skill", fmt.Sprintf("与请求 Skill %q 不一致", skillID))
+	}
+	name, err := p.requiredString("name", payload["name"])
 	if err != nil {
 		return RuntimeSkillDetail{}, err
 	}
-	selectionActive := ""
-	selectionUpdatedAt := ""
-	var channels map[string]string
-	if selection != nil {
-		if selectionActive, err = p.optionalString("selection.active_version", selection["active_version"]); err != nil {
-			return RuntimeSkillDetail{}, err
-		}
-		if selectionUpdatedAt, err = p.optionalString("selection.updated_at", selection["updated_at"]); err != nil {
-			return RuntimeSkillDetail{}, err
-		}
-		if channels, err = p.optionalStringMap("selection.channels", selection["channels"]); err != nil {
-			return RuntimeSkillDetail{}, err
-		}
+	description, err := p.requiredString("description", payload["description"])
+	if err != nil {
+		return RuntimeSkillDetail{}, err
+	}
+	skillRef, err := p.requiredString("skill_ref", payload["skill_ref"])
+	if err != nil {
+		return RuntimeSkillDetail{}, err
+	}
+	sourceType, err := p.requiredString("source_type", payload["source_type"])
+	if err != nil {
+		return RuntimeSkillDetail{}, err
+	}
+	sourceID, err := p.requiredString("source_id", payload["source_id"])
+	if err != nil {
+		return RuntimeSkillDetail{}, err
+	}
+	contentDigest, err := p.requiredString("content_digest", payload["content_digest"])
+	if err != nil {
+		return RuntimeSkillDetail{}, err
+	}
+	if _, err := p.object("document", payload["document"], false); err != nil {
+		return RuntimeSkillDetail{}, err
 	}
 
-	document, err := p.object("document", payload["document"], true)
-	if err != nil {
-		return RuntimeSkillDetail{}, err
-	}
-	name := ""
-	description := ""
-	documentVersion := ""
-	if document != nil {
-		if name, err = p.optionalString("document.name", document["name"]); err != nil {
-			return RuntimeSkillDetail{}, err
-		}
-		if description, err = p.optionalString("document.description", document["description"]); err != nil {
-			return RuntimeSkillDetail{}, err
-		}
-		if documentVersion, err = p.optionalString("document.version", document["version"]); err != nil {
-			return RuntimeSkillDetail{}, err
-		}
-	}
-
-	filesRaw, err := p.array("files", payload["files"], true)
+	filesRaw, err := p.array("files", payload["files"], false)
 	if err != nil {
 		return RuntimeSkillDetail{}, err
 	}
@@ -717,21 +697,10 @@ func parseRuntimeSkillDetail(node, skillID string, payload map[string]any) (Runt
 		files = append(files, RuntimeSkillFile{Path: path, Kind: kind, SizeBytes: sizeBytes, UpdatedAt: updatedAt})
 	}
 
-	// 激活版本按“选中版本 → selection → 文档声明”的顺序回退，与旧解析链保持一致。
-	activeVersion, err := p.optionalString("version", payload["version"])
-	if err != nil {
-		return RuntimeSkillDetail{}, err
-	}
-	if activeVersion == "" {
-		activeVersion = selectionActive
-	}
-	if activeVersion == "" {
-		activeVersion = documentVersion
-	}
-
 	return RuntimeSkillDetail{
-		Skill: skillID, Name: name, Description: description, Versions: versions,
-		ActiveVersion: activeVersion, UpdatedAt: selectionUpdatedAt, Channels: channels, Files: files,
+		Skill: skill, Name: name, Description: description,
+		SkillRef: skillRef, SourceType: sourceType, SourceID: sourceID,
+		ContentDigest: contentDigest, Files: files,
 	}, nil
 }
 

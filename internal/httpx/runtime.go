@@ -84,22 +84,21 @@ type runtimeTaskDetail struct {
 }
 
 type runtimeSkillSummary struct {
-	ID            string            `json:"id"`
-	Title         string            `json:"title"`
-	Source        string            `json:"source"`
-	Path          string            `json:"path"`
-	Description   string            `json:"description,omitempty"`
-	UpdatedAt     string            `json:"updated_at"`
-	FileCount     int               `json:"file_count"`
-	Status        string            `json:"status"`
-	ActiveVersion string            `json:"active_version,omitempty"`
-	Versions      []string          `json:"versions,omitempty"`
-	Channels      map[string]string `json:"channels,omitempty"`
+	ID            string `json:"id"`
+	Title         string `json:"title"`
+	Source        string `json:"source"`
+	Path          string `json:"path"`
+	Description   string `json:"description"`
+	FileCount     int    `json:"file_count"`
+	Status        string `json:"status"`
+	SkillRef      string `json:"skill_ref"`
+	SourceType    string `json:"source_type"`
+	SourceID      string `json:"source_id"`
+	ContentDigest string `json:"content_digest"`
 }
 
 type runtimeSkillDetail struct {
 	runtimeSkillSummary
-	Root string `json:"root"`
 	// RuntimeState 是上游 Skill 详情的原始 JSON，供 UI 的“原始响应”调试面板透传展示；
 	// Nexus 不解读其内容，因此保留 RawMessage 而不是映射成结构体。
 	RuntimeState json.RawMessage    `json:"runtime_state,omitempty"`
@@ -368,22 +367,22 @@ func runtimeSkillSummaryView(skill agentdock.RuntimeSkillSummary) runtimeSkillSu
 		Source:        "agentdock-api",
 		Path:          "agentdock-api/" + skill.Skill,
 		Description:   skill.Description,
-		UpdatedAt:     skill.UpdatedAt,
 		FileCount:     skill.FileCount,
 		Status:        "installed",
-		ActiveVersion: skill.ActiveVersion,
-		Versions:      skill.Versions,
-		Channels:      skill.Channels,
+		SkillRef:      skill.SkillRef,
+		SourceType:    skill.SourceType,
+		SourceID:      skill.SourceID,
+		ContentDigest: skill.ContentDigest,
 	}
 }
 
 func runtimeSkillDetailView(skillID string, detail agentdock.RuntimeSkillDetail, raw json.RawMessage) runtimeSkillDetail {
 	view := runtimeSkillDetail{
 		runtimeSkillSummary: runtimeSkillSummaryView(agentdock.RuntimeSkillSummary{
-			Skill: skillID, Name: detail.Name, Description: detail.Description, Versions: detail.Versions,
-			ActiveVersion: detail.ActiveVersion, UpdatedAt: detail.UpdatedAt, Channels: detail.Channels,
+			Skill: skillID, Name: detail.Name, Description: detail.Description,
+			SkillRef: detail.SkillRef, SourceType: detail.SourceType, SourceID: detail.SourceID,
+			ContentDigest: detail.ContentDigest,
 		}),
-		Root:         "agentdock-runtime-api",
 		RuntimeState: raw,
 		Files:        make([]runtimeSkillFile, 0, len(detail.Files)),
 	}

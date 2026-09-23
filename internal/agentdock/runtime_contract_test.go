@@ -264,9 +264,9 @@ func TestParseRuntimeSkillList_CurrentNodeResponse(t *testing.T) {
 	payload := fixturePayload(t, `{
 	  "action": "list", "count": 1, "source": "agentdock-api",
 	  "skills": [
-	    {"skill": "browser-use", "name": "Browser Use", "description": "控制浏览器",
-	     "versions": ["0.4.2", "0.4.1"], "active_version": "0.4.2",
-	     "bundled": false, "updated_at": "2026-09-10T00:00:00Z", "file_count": 8}
+	    {"skill": "browser-use", "name": "browser-use", "description": "控制浏览器",
+	     "skill_ref": "skill://managed/browser-use", "source_type": "managed", "source_id": "browser-use",
+	     "content_digest": "sha256:abc123", "file_count": 8}
 	  ]
 	}`)
 	skills, err := parseRuntimeSkillList("node1", payload)
@@ -277,59 +277,40 @@ func TestParseRuntimeSkillList_CurrentNodeResponse(t *testing.T) {
 		t.Fatalf("Skill 数 = %d, want 1", len(skills))
 	}
 	skill := skills[0]
-	if skill.Skill != "browser-use" || skill.Name != "Browser Use" || skill.ActiveVersion != "0.4.2" || skill.FileCount != 8 {
+	if skill.Skill != "browser-use" || skill.Name != "browser-use" || skill.FileCount != 8 {
 		t.Fatalf("Skill 摘要解析错误: %#v", skill)
 	}
-	if len(skill.Versions) != 2 {
-		t.Fatalf("版本列表解析错误: %#v", skill.Versions)
+	if skill.SkillRef != "skill://managed/browser-use" || skill.SourceType != "managed" ||
+		skill.SourceID != "browser-use" || skill.ContentDigest != "sha256:abc123" {
+		t.Fatalf("Skill provenance 解析错误: %#v", skill)
 	}
 }
 
-func TestParseRuntimeSkillList_LegacyShapeStillParses(t *testing.T) {
-	// 旧版 AgentDock 列表项没有 name/description/file_count，且用 id 作为标识、channels 声明渠道。
-	payload := fixturePayload(t, `{
-	  "skills": [
-	    {"id": "legacy-skill", "versions": ["1.0.0"], "active_version": "1.0.0",
-	     "bundled": true, "updated_at": "2025-01-01T00:00:00Z",
-	     "channels": {"stable": "1.0.0"}}
-	  ]
-	}`)
-	skills, err := parseRuntimeSkillList("node1", payload)
-	if err != nil {
-		t.Fatalf("解析旧形状 Skill 列表失败: %v", err)
-	}
-	if skills[0].Skill != "legacy-skill" || skills[0].ActiveVersion != "1.0.0" {
-		t.Fatalf("旧形状 Skill 解析错误: %#v", skills[0])
-	}
-	if skills[0].Channels["stable"] != "1.0.0" {
-		t.Fatalf("旧形状 channels 应保留: %#v", skills[0].Channels)
-	}
-}
-
-func TestParseRuntimeSkillList_MissingSkillNameReturnsContractError(t *testing.T) {
-	payload := fixturePayload(t, `{"skills": [{"versions": ["1.0.0"]}]}`)
+func TestParseRuntimeSkillList_MissingSkillRefReturnsContractError(t *testing.T) {
+	payload := fixturePayload(t, `{"skills": [{
+	  "skill": "s", "name": "s", "description": "demo",
+	  "source_type": "managed", "source_id": "s", "content_digest": "sha256:abc", "file_count": 1
+	}]}`)
 	_, err := parseRuntimeSkillList("node1", payload)
-	assertContractError(t, err, "GET /internal/runtime/skills", "skills[0].skill")
+	assertContractError(t, err, "GET /internal/runtime/skills", "skills[0].skill_ref")
 }
 
-func TestParseRuntimeSkillList_WrongVersionsTypeReturnsContractError(t *testing.T) {
-	payload := fixturePayload(t, `{"skills": [{"skill": "s", "versions": "1.0.0"}]}`)
+func TestParseRuntimeSkillList_WrongDigestTypeReturnsContractError(t *testing.T) {
+	payload := fixturePayload(t, `{"skills": [{
+	  "skill": "s", "name": "s", "description": "demo",
+	  "skill_ref": "skill://managed/s", "source_type": "managed", "source_id": "s",
+	  "content_digest": 3, "file_count": 1
+	}]}`)
 	_, err := parseRuntimeSkillList("node1", payload)
-	assertContractError(t, err, "GET /internal/runtime/skills", "skills[0].versions")
-}
-
-func TestParseRuntimeSkillList_NonStringChannelValueReturnsContractError(t *testing.T) {
-	payload := fixturePayload(t, `{"skills": [{"skill": "s", "channels": {"stable": 3}}]}`)
-	_, err := parseRuntimeSkillList("node1", payload)
-	assertContractError(t, err, "GET /internal/runtime/skills", "skills[0].channels.stable")
+	assertContractError(t, err, "GET /internal/runtime/skills", "skills[0].content_digest")
 }
 
 func TestParseRuntimeSkillDetail_CurrentNodeResponse(t *testing.T) {
 	payload := fixturePayload(t, `{
-	  "action": "inspect", "skill": "browser-use", "versions": ["0.4.2"], "bundled": false,
-	  "selection": {"active_version": "0.4.2", "history": ["0.4.1"], "updated_at": "2026-09-10T00:00:00Z"},
-	  "version": "0.4.2",
-	  "document": {"name": "Browser Use", "description": "控制浏览器", "version": "0.4.2", "body": "# Browser Use"},
+	  "action": "inspect", "skill": "browser-use", "name": "browser-use", "description": "控制浏览器",
+	  "skill_ref": "skill://managed/browser-use", "source_type": "managed", "source_id": "browser-use",
+	  "content_digest": "sha256:def456",
+	  "document": {"name": "browser-use", "description": "控制浏览器", "body": "# Browser Use"},
 	  "files": [
 	    {"path": "SKILL.md", "kind": "doc", "size_bytes": 1024, "updated_at": "2026-09-10T00:00:00Z"},
 	    {"path": "scripts/run.ts", "kind": "code", "size_bytes": 2048, "updated_at": "2026-09-10T00:00:00Z"}
@@ -340,56 +321,43 @@ func TestParseRuntimeSkillDetail_CurrentNodeResponse(t *testing.T) {
 	if err != nil {
 		t.Fatalf("解析 Skill 详情失败: %v", err)
 	}
-	if detail.Skill != "browser-use" || detail.Name != "Browser Use" || detail.ActiveVersion != "0.4.2" {
+	if detail.Skill != "browser-use" || detail.Name != "browser-use" || detail.Description != "控制浏览器" {
 		t.Fatalf("Skill 详情字段错误: %#v", detail)
 	}
-	if detail.UpdatedAt != "2026-09-10T00:00:00Z" || len(detail.Files) != 2 {
-		t.Fatalf("Skill 详情 selection/files 错误: %#v", detail)
+	if detail.SkillRef != "skill://managed/browser-use" || detail.SourceType != "managed" ||
+		detail.SourceID != "browser-use" || detail.ContentDigest != "sha256:def456" {
+		t.Fatalf("Skill 详情 provenance 错误: %#v", detail)
 	}
-	if detail.Files[1].Path != "scripts/run.ts" || detail.Files[1].SizeBytes != 2048 {
+	if len(detail.Files) != 2 || detail.Files[1].Path != "scripts/run.ts" || detail.Files[1].SizeBytes != 2048 {
 		t.Fatalf("文件清单解析错误: %#v", detail.Files)
 	}
 }
 
-func TestParseRuntimeSkillDetail_InactiveSkillHasNoDocument(t *testing.T) {
-	// 未激活的 Skill 没有 document/files，是合法状态，不能误报契约错误。
+func TestParseRuntimeSkillDetail_MismatchedSkillReturnsContractError(t *testing.T) {
 	payload := fixturePayload(t, `{
-	  "action": "inspect", "skill": "dormant", "versions": ["1.0.0"], "bundled": false,
-	  "selection": {"history": ["1.0.0"], "updated_at": "2025-01-01T00:00:00Z"}
+	  "skill": "other", "name": "other", "description": "demo",
+	  "skill_ref": "skill://managed/other", "source_type": "managed", "source_id": "other",
+	  "content_digest": "sha256:abc", "document": {}, "files": []
 	}`)
-	detail, err := parseRuntimeSkillDetail("node1", "dormant", payload)
-	if err != nil {
-		t.Fatalf("解析未激活 Skill 失败: %v", err)
-	}
-	if detail.ActiveVersion != "" || len(detail.Files) != 0 {
-		t.Fatalf("未激活 Skill 解析错误: %#v", detail)
-	}
-}
-
-func TestParseRuntimeSkillDetail_ActiveVersionFallsBackToSelection(t *testing.T) {
-	payload := fixturePayload(t, `{
-	  "skill": "s", "versions": ["2.0.0"],
-	  "selection": {"active_version": "2.0.0", "updated_at": "2025-01-01T00:00:00Z"}
-	}`)
-	detail, err := parseRuntimeSkillDetail("node1", "s", payload)
-	if err != nil {
-		t.Fatalf("解析 Skill 详情失败: %v", err)
-	}
-	if detail.ActiveVersion != "2.0.0" {
-		t.Fatalf("激活版本应回退到 selection.active_version: %q", detail.ActiveVersion)
-	}
-}
-
-func TestParseRuntimeSkillDetail_MissingVersionsReturnsContractError(t *testing.T) {
-	payload := fixturePayload(t, `{"skill": "s"}`)
 	_, err := parseRuntimeSkillDetail("node1", "s", payload)
-	// versions 是 inspect 响应的必有字段，缺失说明上游契约漂移。
-	assertContractError(t, err, "GET /internal/runtime/skills/s", "versions")
+	assertContractError(t, err, "GET /internal/runtime/skills/s", "skill")
+}
+
+func TestParseRuntimeSkillDetail_MissingContentDigestReturnsContractError(t *testing.T) {
+	payload := fixturePayload(t, `{
+	  "skill": "s", "name": "s", "description": "demo",
+	  "skill_ref": "skill://managed/s", "source_type": "managed", "source_id": "s",
+	  "document": {}, "files": []
+	}`)
+	_, err := parseRuntimeSkillDetail("node1", "s", payload)
+	assertContractError(t, err, "GET /internal/runtime/skills/s", "content_digest")
 }
 
 func TestParseRuntimeSkillDetail_FileWithoutPathReturnsContractError(t *testing.T) {
 	payload := fixturePayload(t, `{
-	  "skill": "s", "versions": ["1.0.0"], "selection": {"active_version": "1.0.0"},
+	  "skill": "s", "name": "s", "description": "demo",
+	  "skill_ref": "skill://managed/s", "source_type": "managed", "source_id": "s",
+	  "content_digest": "sha256:abc", "document": {},
 	  "files": [{"kind": "doc", "size_bytes": 1, "updated_at": "2026-01-01T00:00:00Z"}]
 	}`)
 	_, err := parseRuntimeSkillDetail("node1", "s", payload)
@@ -398,7 +366,8 @@ func TestParseRuntimeSkillDetail_FileWithoutPathReturnsContractError(t *testing.
 
 func TestParseRuntimeSkillFile_CurrentNodeResponse(t *testing.T) {
 	payload := fixturePayload(t, `{
-	  "action": "file", "skill": "s", "version": "1.0.0", "source": "agentdock-api",
+	  "action": "file", "skill": "s", "skill_ref": "skill://managed/s",
+	  "content_digest": "sha256:abc", "source": "agentdock-api",
 	  "file": {"path": "SKILL.md", "kind": "doc", "size_bytes": 12,
 	           "updated_at": "2026-09-10T00:00:00Z", "content": "hello skill", "truncated": false}
 	}`)

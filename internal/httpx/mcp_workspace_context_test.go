@@ -70,7 +70,14 @@ func TestWorkspaceContextRoutesToSelectedNodeWithoutForwardingNodeID(t *testing.
 
 	wantStructured := map[string]any{
 		"workdir": "/repo/service", "workspace_root": "/repo",
-		"instructions": []any{}, "workspace_skills": []any{}, "warnings": []any{},
+		"instructions": []any{},
+		"workspace_skills": []any{map[string]any{
+			"name": "demo", "description": "Workspace demo",
+			"file":        "skill://workspace/ws-test/demo/SKILL.md",
+			"skill_ref":   "skill://workspace/ws-test/demo",
+			"source_type": "workspace", "source_id": "ws-test",
+		}},
+		"warnings": []any{},
 	}
 	assertCentralToolResultMatchesOutputSchema(t, mcpcontract.ToolWorkspaceContext, wantStructured)
 	serveDone := make(chan error, 1)
