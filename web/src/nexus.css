@@ -222,13 +222,13 @@
 .nexus-inline-alert.tone-danger { border-color: var(--nx-danger-line); background: var(--nx-danger-bg); color: var(--nx-danger); }
 .nexus-inline-alert.tone-info { border-color: var(--nx-info-line); background: var(--nx-info-bg); color: var(--nx-info); }
 
-.ops-task-state.tone-ok,
+.ops-task-state.tone-ok { color: #555; }
+.ops-task-state.tone-warn { color: #555; }
+.ops-task-state.tone-danger { color: #444; }
+.ops-task-state.tone-muted { color: #777; }
 .mcp-server-list em.tone-ok { color: var(--nx-success); }
-.ops-task-state.tone-warn,
 .mcp-server-list em.tone-warn { color: var(--nx-warning); }
-.ops-task-state.tone-danger,
 .mcp-server-list em.tone-danger { color: var(--nx-danger); }
-.ops-task-state.tone-muted,
 .mcp-server-list em.tone-muted { color: #666; }
 
 .empty-mini { margin: 0; padding: 24px 12px; color: var(--nx-muted); text-align: center; }
@@ -785,12 +785,6 @@ summary::-webkit-details-marker { display: none; }
 .ops-progress-track { position: relative; height: 5px; overflow: hidden; border-radius: 99px; background: #e5e5e5 !important; }
 .ops-progress-track > span,
 .ops-progress-track > i { display: block; height: 100%; background: #555; }
-.ops-progress-track.tone-ok > span,
-.ops-progress-track.tone-ok > i { background: var(--nx-success); }
-.ops-progress-track.tone-warn > span,
-.ops-progress-track.tone-warn > i { background: var(--nx-warning); }
-.ops-progress-track.tone-danger > span,
-.ops-progress-track.tone-danger > i { background: var(--nx-danger); }
 .ops-progress-count { color: var(--nx-muted); font-size: 10px; }
 .ops-task-progress.is-compact { grid-template-columns: minmax(60px, 1fr) auto; align-items: center; }
 
