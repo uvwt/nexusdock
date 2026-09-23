@@ -64,6 +64,14 @@ function shortDigest(value: string): string {
   return value.length > 18 ? `${value.slice(0, 10)}…${value.slice(-6)}` : value;
 }
 
+function pluginSkillHref(pluginName: string, skillName: string): string {
+  return `#skills/plugin/${encodeURIComponent(pluginName)}/${encodeURIComponent(skillName)}`;
+}
+
+function pluginMCPHref(mcp: PluginMCP): string {
+  return `#mcp/${encodeURIComponent(mcp.runtime_name || mcp.name)}`;
+}
+
 export default function PluginPage({ nodeID, refreshToken }: { nodeID: string; refreshToken: number }) {
   const { t } = useTranslation();
   const runtimeBase = `/v1/runtime/nodes/${encodeURIComponent(nodeID)}`;
@@ -176,11 +184,11 @@ export default function PluginPage({ nodeID, refreshToken }: { nodeID: string; r
             <div className="plugin-component-grid">
               <div className="plugin-component-card">
                 <header><Wrench size={15} /><strong>Skill</strong><span>{detail.skills.length}</span></header>
-                {detail.skills.length === 0 ? <p className="empty-mini">{t('No Skill components.')}</p> : detail.skills.map((skill) => <div className="plugin-component-row" key={skill.name}><span><strong>{skill.name}</strong><small>{skill.description || skill.path}</small></span><code>{skill.path}</code></div>)}
+                {detail.skills.length === 0 ? <p className="empty-mini">{t('No Skill components.')}</p> : detail.skills.map((skill) => <a className="plugin-component-row is-link" href={pluginSkillHref(selected.name, skill.name)} key={skill.name}><span><strong>{skill.name}</strong><small>{skill.description || skill.path}</small></span><code>{skill.path}</code></a>)}
               </div>
               <div className="plugin-component-card">
                 <header><Cable size={15} /><strong>MCP</strong><span>{detail.mcp.length}</span></header>
-                {detail.mcp.length === 0 ? <p className="empty-mini">{t('No MCP components.')}</p> : detail.mcp.map((mcp) => <div className="plugin-component-row" key={mcp.name}><span><strong>{mcp.name}</strong><small>{mcp.description || mcp.transport}</small></span><code>{mcp.runtime_name || mcp.transport}</code></div>)}
+                {detail.mcp.length === 0 ? <p className="empty-mini">{t('No MCP components.')}</p> : detail.mcp.map((mcp) => <a className="plugin-component-row is-link" href={pluginMCPHref(mcp)} key={mcp.name}><span><strong>{mcp.name}</strong><small>{mcp.description || mcp.transport}</small></span><code>{mcp.runtime_name || mcp.transport}</code></a>)}
               </div>
             </div>
           </section>}

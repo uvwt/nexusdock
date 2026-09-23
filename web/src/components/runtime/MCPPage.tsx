@@ -58,19 +58,36 @@ function errorMessage(error: unknown, fallback: string): string {
 function serverStatusLabel(server: Pick<MCPServer, 'enabled' | 'status'>, t: TFunction): string {
   if (!server.enabled) return t('Disabled');
   switch (server.status) {
+    case 'idle': return t('Idle');
     case 'ready': return t('Ready');
     case 'connected': return t('Connected');
-    case 'error': return t('Error');
+    case 'running':
+    case 'active': return t('Running');
+    case 'starting': return t('Starting');
     case 'pending': return t('Pending');
+    case 'stopped': return t('Stopped');
+    case 'failed': return t('Failed');
+    case 'error': return t('Error');
     default: return server.status || t('Enabled');
   }
 }
 
 function statusTone(server: MCPServer): string {
   if (!server.enabled) return 'muted';
-  if (server.status === 'ready' || server.status === 'connected') return 'ok';
-  if (server.status === 'error' || server.last_error) return 'danger';
+  if (['ready', 'connected', 'running', 'active'].includes(server.status)) return 'ok';
+  if (server.status === 'error' || server.status === 'failed' || server.last_error) return 'danger';
+  if (server.status === 'idle' || server.status === 'stopped') return 'muted';
   return 'warn';
+}
+
+function mcpSelectionFromHash(): string {
+  const [section, encodedName] = window.location.hash.replace(/^#\/?/, '').split('/');
+  if (section !== 'mcp' || !encodedName) return '';
+  try {
+    return decodeURIComponent(encodedName);
+  } catch {
+    return '';
+  }
 }
 
 function actionMessage(action: string, name: string, t: (key: string, options?: Record<string, unknown>) => string): string {
@@ -93,14 +110,14 @@ export default function MCPPage({ nodeID, refreshToken, addOpen, onAddOpenChange
 }) {
   const { t } = useTranslation();
   const [servers, setServers] = useState<MCPServer[]>([]);
-  const [selectedName, setSelectedName] = useState('');
+  const [selectedName, setSelectedName] = useState(mcpSelectionFromHash);
   const [detail, setDetail] = useState<MCPDetailResponse | null>(null);
   const [envItems, setEnvItems] = useState<MCPEnvResponse['items']>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
   const [removeTarget, setRemoveTarget] = useState<MCPServer | null>(null);
-  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(() => Boolean(mcpSelectionFromHash()));
   const [addForm, setAddForm] = useState<AddForm>(emptyAddForm);
   const [envKey, setEnvKey] = useState('');
   const [envValue, setEnvValue] = useState('');

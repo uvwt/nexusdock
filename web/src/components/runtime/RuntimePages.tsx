@@ -258,15 +258,19 @@ export function SkillsPage({ nodeID, refreshToken }: { nodeID: string; refreshTo
   const { t } = useTranslation();
   const runtimeBase = `/v1/runtime/nodes/${encodeURIComponent(nodeID)}`;
   const resource = useOpsResource<SkillsResponse>(`${runtimeBase}/skills`, { ok: false, items: [], count: 0, root: '' }, refreshToken, t('Request failed'));
+  const deepLinkTarget = pluginSkillTargetFromHash();
   const [query, setQuery] = useState('');
   const [selectedKey, setSelectedKey] = useState('');
-  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(() => Boolean(pluginSkillTargetFromHash()));
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return resource.data.items;
     return resource.data.items.filter((item) => [item.id, item.title, item.description, item.skill_ref, item.source_type, item.source_id, item.plugin_name].filter(Boolean).join(' ').toLowerCase().includes(needle));
   }, [query, resource.data.items]);
-  const selected = filtered.find((item) => skillSelectionKey(item) === selectedKey) || filtered[0];
+  const deepLinkedSkill = deepLinkTarget
+    ? filtered.find((item) => item.source_type === 'plugin' && item.plugin_name === deepLinkTarget.pluginName && (item.id === deepLinkTarget.skillName || item.title === deepLinkTarget.skillName))
+    : undefined;
+  const selected = filtered.find((item) => skillSelectionKey(item) === selectedKey) || deepLinkedSkill || filtered[0];
   const detailURL = selected ? withSkillRef(`${runtimeBase}/skills/${encodeURIComponent(selected.source)}/${encodeURIComponent(selected.id)}`, selected.skill_ref) : '';
   const detail = useOptionalOpsResource<SkillDetailResponse>(detailURL, { ok: false, skill: selected as OpsSkillDetail }, refreshToken, t('Request failed'));
   return <OpsShell error={resource.error}>
@@ -384,6 +388,16 @@ function SkillDetailContent({ nodeID, skill, detail, loading, error, refreshToke
       {raw && <RawJsonPanel title={t('Runtime raw response')} value={raw} />}
     </details>
   </article>;
+}
+
+function pluginSkillTargetFromHash(): { pluginName: string; skillName: string } | null {
+  const [section, source, pluginName, skillName] = window.location.hash.replace(/^#\/?/, '').split('/');
+  if (section !== 'skills' || source !== 'plugin' || !pluginName || !skillName) return null;
+  try {
+    return { pluginName: decodeURIComponent(pluginName), skillName: decodeURIComponent(skillName) };
+  } catch {
+    return null;
+  }
 }
 
 function skillSelectionKey(skill: OpsSkill): string {

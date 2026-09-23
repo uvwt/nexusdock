@@ -710,6 +710,9 @@ summary::-webkit-details-marker { display: none; }
 .plugin-component-card > .empty-mini { padding: 10px; }
 .plugin-component-row { min-width: 0; padding: 9px 10px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; border-top: 1px solid #ededed; }
 .plugin-component-row:first-of-type { border-top: 0; }
+.plugin-component-row.is-link { color: inherit; text-decoration: none; cursor: pointer; }
+.plugin-component-row.is-link:hover { background: var(--nx-soft); }
+.plugin-component-row.is-link:focus-visible { outline: 2px solid #777; outline-offset: -2px; }
 .plugin-component-row > span { min-width: 0; }
 .plugin-component-row strong,
 .plugin-component-row small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

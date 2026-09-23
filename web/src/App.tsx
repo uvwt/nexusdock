@@ -70,8 +70,8 @@ type NavGroup = { label: string; items: SectionMeta[] };
 
 const RUNTIME_SECTIONS: RuntimeSectionMeta[] = [
   { id: 'tasks', label: 'Tasks', icon: ListChecks },
-  { id: 'skills', label: 'Skill', icon: Wrench },
   { id: 'plugins', label: 'Plugin', icon: Package },
+  { id: 'skills', label: 'Skill', icon: Wrench },
   { id: 'mcp', label: 'MCP', icon: Cable },
 ];
 
