@@ -227,7 +227,6 @@ export default function MCPPage({ nodeID, refreshToken }: { nodeID: string; refr
   return <section className="mcp-page">
     {notice && <div className={`nx-alert is-${notice.tone}`} role="status"><span>{notice.text}</span><button type="button" onClick={() => setNotice(null)}>{t('Close')}</button></div>}
     <header className="mcp-heading">
-      <p>{t('Nexus only forwards AgentDock dynamic MCP management interfaces; secret values are never echoed.')}</p>
       <button type="button" className="nx-button" onClick={() => setAddOpen(true)}><CirclePlus size={16} />{t('Add MCP')}</button>
     </header>
 

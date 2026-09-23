@@ -150,7 +150,6 @@ export default function PluginPage({ nodeID, refreshToken }: { nodeID: string; r
           </header>
           {detailError && <div className="nx-alert is-error">{detailError}</div>}
           {!detail && !detailError && <div className="nx-alert is-info">{t('Loading Plugin details…')}</div>}
-          <p className="plugin-readonly-note">{t('Plugin lifecycle is managed by AgentDock; this page shows the current installed snapshot.')}</p>
 
           <section className="plugin-metrics" aria-label={t('Plugin summary')}>
             <div><span>{t('Version')}</span><strong>{selected.version}</strong></div>

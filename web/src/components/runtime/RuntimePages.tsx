@@ -454,7 +454,7 @@ function pickText(record: Record<string, unknown>, keys: string[]): string {
   return '';
 }
 function skillSourceLabel(sourceType: string | undefined, t: TFunction): string {
-  if (sourceType === 'managed') return t('Managed');
+  if (sourceType === 'managed') return t('AgentDock Skills');
   if (sourceType === 'shared') return t('Shared');
   if (sourceType === 'workspace') return t('Workspace');
   if (sourceType === 'plugin') return t('Plugin');
