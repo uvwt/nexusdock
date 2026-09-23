@@ -768,24 +768,16 @@ summary::-webkit-details-marker { display: none; }
 .ops-task-detail h3 { margin: 4px 0 5px; font-size: 20px; letter-spacing: -.02em; }
 .ops-task-detail p { margin: 0; color: var(--nx-muted); }
 .ops-task-detail-actions { display: flex; align-items: center; gap: 7px; }
-.ops-task-status-icon {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  place-items: center;
-  flex: none;
-  border: 1.5px solid currentColor;
-  border-radius: 50%;
-}
-.ops-task-status-icon.is-completed { color: var(--nx-success); }
-.ops-task-status-icon.is-blocked { color: var(--nx-danger); }
-.ops-task-status-icon.is-active { color: var(--nx-warning); }
-.ops-task-status-icon.is-active > span { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-.ops-task-delete-icon { color: var(--nx-danger); }
+.ops-task-delete-icon { color: #555; }
 .ops-task-delete-icon:disabled { opacity: .45; cursor: default; }
 .ops-blocker { margin-top: 10px; padding: 9px 10px; display: flex; gap: 7px; border: 1px solid var(--nx-line); border-radius: 5px; background: #ececec; }
 
+.ops-current-step-text,
 .ops-task-steps { margin-top: 14px; }
+.ops-current-step-text { display: grid; gap: 4px; }
+.ops-current-step-text > span { color: var(--nx-muted); font-size: 10px; }
+.ops-current-step-text > strong { font-size: 13px; line-height: 1.45; }
+.ops-current-step-text > p { margin: 0; color: var(--nx-muted); font-size: 11px; line-height: 1.5; }
 .ops-task-updated { margin-top: 14px; color: var(--nx-subtle); font-size: 10px; }
 
 .ops-task-progress { display: grid; gap: 5px; }
