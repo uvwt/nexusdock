@@ -753,7 +753,7 @@ summary::-webkit-details-marker { display: none; }
 .ops-task-line small { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ops-task-line strong { font-size: 12px; }
 .ops-task-line small { color: var(--nx-muted); font-size: 10px; }
-.ops-task-line-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
+.ops-task-line-title { display: flex; align-items: center; justify-content: flex-start; gap: 8px; min-width: 0; }
 .ops-task-state { font-size: 10px; font-weight: 700; white-space: nowrap; }
 
 .ops-task-detail,
@@ -786,7 +786,8 @@ summary::-webkit-details-marker { display: none; }
 .ops-progress-track > span,
 .ops-progress-track > i { display: block; height: 100%; background: #555; }
 .ops-progress-count { color: var(--nx-muted); font-size: 10px; }
-.ops-task-progress.is-compact { grid-template-columns: minmax(60px, 1fr) auto; align-items: center; }
+.ops-task-progress.is-compact { grid-template-columns: 1fr; align-items: start; }
+.ops-task-progress.is-compact .ops-progress-count { justify-self: start; }
 
 .ops-task-step-list { display: grid; gap: 10px; padding: 4px 0; }
 .ops-task-step { min-height: 28px; display: grid; grid-template-columns: 26px minmax(0,1fr); gap: 8px; align-items: center; }
