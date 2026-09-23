@@ -767,12 +767,25 @@ summary::-webkit-details-marker { display: none; }
 .ops-task-detail > header { padding-bottom: 12px; display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--nx-line); }
 .ops-task-detail h3 { margin: 4px 0 5px; font-size: 20px; letter-spacing: -.02em; }
 .ops-task-detail p { margin: 0; color: var(--nx-muted); }
-.ops-task-detail-actions { display: flex; gap: 7px; }
+.ops-task-detail-actions { display: flex; align-items: center; gap: 7px; }
+.ops-task-status-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  border: 1.5px solid currentColor;
+  border-radius: 50%;
+}
+.ops-task-status-icon.is-completed { color: var(--nx-success); }
+.ops-task-status-icon.is-blocked { color: var(--nx-danger); }
+.ops-task-status-icon.is-active { color: var(--nx-warning); }
+.ops-task-status-icon.is-active > span { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.ops-task-delete-icon { color: var(--nx-danger); }
+.ops-task-delete-icon:disabled { opacity: .45; cursor: default; }
 .ops-blocker { margin-top: 10px; padding: 9px 10px; display: flex; gap: 7px; border: 1px solid var(--nx-line); border-radius: 5px; background: #ececec; }
 
-.ops-current-step,
 .ops-task-steps { margin-top: 14px; }
-.ops-current-step { padding: 12px; border: 1px solid var(--nx-line); border-radius: 6px; }
 .ops-task-updated { margin-top: 14px; color: var(--nx-subtle); font-size: 10px; }
 
 .ops-task-progress { display: grid; gap: 5px; }

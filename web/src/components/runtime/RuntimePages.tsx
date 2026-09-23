@@ -293,25 +293,27 @@ function TaskDetail({ task, detail, loading, error, deleting, onDelete }: { task
   if (!task) return <article className="ops-detail-empty"><EmptyOps text={t('Please select a task.')} /></article>;
   const full = detail?.id ? detail : task;
   const steps = taskSteps(detail?.steps, t);
-  const currentStep = full.current_step || steps.find((step) => step.status === 'in_progress') || steps.find((step) => step.status === 'pending');
-  const currentTitle = currentStep?.title || (full.status === 'completed' ? t('Task completed') : full.status === 'blocked' ? t('Task blocked') : t('Waiting for next step'));
   return <article className="ops-task-detail">
     <header>
       <div><span>{t('Task')}</span><h3>{taskDisplayTitle(full, t('Untitled task'))}</h3>{full.goal && <p>{full.goal}</p>}</div>
       <div className="ops-task-detail-actions">
-        <StatusBadge tone={toneForTask(full)}>{taskStatusLabel(full.status, t)}</StatusBadge>
-        <button type="button" className="nx-button is-danger is-small" aria-label={t('Delete task {{title}}', { title: taskDisplayTitle(full, t('Untitled task')) })} onClick={() => onDelete(full)} disabled={deleting}><Trash2 size={15} />{deleting ? t('Deleting…') : t('Delete')}</button>
+        <span className={`ops-task-status-icon is-${full.status}`} role="img" aria-label={taskStatusLabel(full.status, t)} title={taskStatusLabel(full.status, t)}>
+          {full.status === 'completed' ? <Check size={17} strokeWidth={2.5} /> : full.status === 'blocked' ? <ShieldAlert size={16} /> : <span />}
+        </span>
+        <button
+          type="button"
+          className="nx-icon-button ops-task-delete-icon"
+          title={t('Delete task')}
+          aria-label={t('Delete task {{title}}', { title: taskDisplayTitle(full, t('Untitled task')) })}
+          aria-busy={deleting}
+          onClick={() => onDelete(full)}
+          disabled={deleting}
+        ><Trash2 size={16} /></button>
       </div>
     </header>
     {loading && <div className="nx-alert is-info">{t('Loading task details…')}</div>}
     {error && <div className="nx-alert is-error">{error}</div>}
     {full.blocker && <div className="ops-blocker"><ShieldAlert size={15} />{full.blocker}</div>}
-    <TaskProgress task={full} />
-    <section className="ops-current-step" aria-label={t('Current progress')}>
-      <span>{full.status === 'completed' ? t('Result') : full.status === 'blocked' ? t('Current status') : t('Current step')}</span>
-      <strong>{currentTitle}</strong>
-      {full.summary && full.summary !== currentTitle && <p>{full.summary}</p>}
-    </section>
     <TaskStepList steps={steps} status={full.status} />
     <footer className="ops-task-updated">{t('Updated at {{time}}', { time: formatTime(full.updated_at) })}</footer>
   </article>;
