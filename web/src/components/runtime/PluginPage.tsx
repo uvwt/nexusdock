@@ -5,16 +5,12 @@ import { ApiError, api } from '../../api/client';
 import { formatTime } from '../../lib/time';
 import MobileDrilldownBar from '../MobileDrilldownBar';
 
-type PluginSource = {
-  type: string;
-  ref?: string;
+type PluginProvenance = {
+  origin: string;
   revision?: string;
-  adapter?: string;
-  catalog?: string;
-  catalog_item?: string;
-  resolved_type?: string;
-  resolved_ref?: string;
-  resolved_revision?: string;
+  subdir?: string;
+  format?: string;
+  adapted?: boolean;
 };
 
 type PluginSummary = {
@@ -22,7 +18,7 @@ type PluginSummary = {
   version: string;
   enabled: boolean;
   package_digest: string;
-  source: PluginSource;
+  provenance?: PluginProvenance;
   skill_count: number;
   mcp_count: number;
 };
@@ -48,8 +44,7 @@ type PluginDetail = PluginSummary & {
   warnings: string[];
   unsupported: string[];
   compatibility: {
-    detected_format?: string;
-    adapter?: string;
+    format?: string;
     supported?: string[];
     unsupported?: string[];
     warnings?: string[];
@@ -67,11 +62,6 @@ function errorMessage(error: unknown, fallback: string): string {
 function shortDigest(value: string): string {
   if (!value) return '—';
   return value.length > 18 ? `${value.slice(0, 10)}…${value.slice(-6)}` : value;
-}
-
-function sourceLabel(source: PluginSource): string {
-  if (source.catalog && source.catalog_item) return `${source.catalog} / ${source.catalog_item}`;
-  return source.resolved_ref || source.ref || source.type || '—';
 }
 
 export default function PluginPage({ nodeID, refreshToken }: { nodeID: string; refreshToken: number }) {
@@ -110,8 +100,8 @@ export default function PluginPage({ nodeID, refreshToken }: { nodeID: string; r
     const needle = query.trim().toLowerCase();
     if (!needle) return plugins;
     return plugins.filter((plugin) => [
-      plugin.name, plugin.version, plugin.source.type, plugin.source.adapter,
-      plugin.source.ref, plugin.source.resolved_ref, plugin.source.catalog, plugin.source.catalog_item,
+      plugin.name, plugin.version, plugin.provenance?.origin, plugin.provenance?.revision,
+      plugin.provenance?.subdir, plugin.provenance?.format,
     ].filter(Boolean).join(' ').toLowerCase().includes(needle));
   }, [plugins, query]);
 
@@ -136,7 +126,7 @@ export default function PluginPage({ nodeID, refreshToken }: { nodeID: string; r
     <aside className="plugin-list-panel mobile-drilldown-list">
       <header className="plugin-list-head">
         <div><span className="nexus-eyebrow">PLUGINS</span><strong>{filtered.length}</strong><small>{t('Total {{count}}', { count: plugins.length })}</small></div>
-        <label className="ops-search"><Search size={15} /><input aria-label={t('Search Plugin')} value={query} onChange={(event) => { setQuery(event.target.value); setMobileDetailOpen(false); }} placeholder={t('Search Plugin name or source')} /></label>
+        <label className="ops-search"><Search size={15} /><input aria-label={t('Search Plugin')} value={query} onChange={(event) => { setQuery(event.target.value); setMobileDetailOpen(false); }} placeholder={t('Search Plugin name or provenance')} /></label>
       </header>
       {listError && <div className="nx-alert is-error">{listError}</div>}
       <div className="plugin-list">
@@ -166,15 +156,17 @@ export default function PluginPage({ nodeID, refreshToken }: { nodeID: string; r
             <div><span>{t('Version')}</span><strong>{selected.version}</strong></div>
             <div><span>Skill</span><strong>{detail?.skills.length ?? selected.skill_count}</strong></div>
             <div><span>MCP</span><strong>{detail?.mcp.length ?? selected.mcp_count}</strong></div>
-            <div><span>{t('Format')}</span><strong>{detail?.compatibility.detected_format || detail?.compatibility.adapter || selected.source.adapter || '—'}</strong></div>
+            <div><span>{t('Format')}</span><strong>{detail?.compatibility.format || 'portable'}</strong></div>
           </section>
 
           <section className="plugin-section">
-            <h4>{t('Source & installation')}</h4>
+            <h4>{t('Provenance & installation')}</h4>
             <dl className="plugin-meta">
-              <div><dt>{t('Source type')}</dt><dd>{selected.source.resolved_type || selected.source.type}</dd></div>
-              <div><dt>{t('Source')}</dt><dd title={sourceLabel(selected.source)}>{sourceLabel(selected.source)}</dd></div>
-              {selected.source.revision && <div><dt>{t('Revision')}</dt><dd>{selected.source.revision}</dd></div>}
+              <div><dt>{t('Origin')}</dt><dd title={selected.provenance?.origin}>{selected.provenance?.origin || t('Local Portable package')}</dd></div>
+              {selected.provenance?.revision && <div><dt>{t('Revision')}</dt><dd>{selected.provenance.revision}</dd></div>}
+              {selected.provenance?.subdir && <div><dt>{t('Subdirectory')}</dt><dd>{selected.provenance.subdir}</dd></div>}
+              {selected.provenance?.format && <div><dt>{t('Imported format')}</dt><dd>{selected.provenance.format}</dd></div>}
+              {selected.provenance?.adapted && <div><dt>{t('Adapted')}</dt><dd>{t('Yes')}</dd></div>}
               {detail?.installed_at && <div><dt>{t('Installed at')}</dt><dd>{formatTime(detail.installed_at)}</dd></div>}
               <div><dt>{t('Package digest')}</dt><dd title={selected.package_digest}>{shortDigest(selected.package_digest)}</dd></div>
             </dl>

@@ -7,27 +7,24 @@ import (
 	"net/url"
 )
 
-// RuntimePluginSource 是 AgentDock 持久化的 Plugin 来源身份；Nexus 只展示，不解释或改写。
-type RuntimePluginSource struct {
-	Type             string `json:"type"`
-	Ref              string `json:"ref,omitempty"`
-	Revision         string `json:"revision,omitempty"`
-	Adapter          string `json:"adapter,omitempty"`
-	Catalog          string `json:"catalog,omitempty"`
-	CatalogItem      string `json:"catalog_item,omitempty"`
-	ResolvedType     string `json:"resolved_type,omitempty"`
-	ResolvedRef      string `json:"resolved_ref,omitempty"`
-	ResolvedRevision string `json:"resolved_revision,omitempty"`
+// RuntimePluginProvenance 是 Portable Plugin manifest 中记录的上游来源身份。
+// Nexus 只展示，不下载、不解释来源，也不参与 Plugin 生命周期。
+type RuntimePluginProvenance struct {
+	Origin   string `json:"origin"`
+	Revision string `json:"revision,omitempty"`
+	Subdir   string `json:"subdir,omitempty"`
+	Format   string `json:"format,omitempty"`
+	Adapted  bool   `json:"adapted,omitempty"`
 }
 
 type RuntimePluginSummary struct {
-	Name          string              `json:"name"`
-	Version       string              `json:"version"`
-	Enabled       bool                `json:"enabled"`
-	PackageDigest string              `json:"package_digest"`
-	Source        RuntimePluginSource `json:"source"`
-	SkillCount    int                 `json:"skill_count"`
-	MCPCount      int                 `json:"mcp_count"`
+	Name          string                   `json:"name"`
+	Version       string                   `json:"version"`
+	Enabled       bool                     `json:"enabled"`
+	PackageDigest string                   `json:"package_digest"`
+	Provenance    *RuntimePluginProvenance `json:"provenance,omitempty"`
+	SkillCount    int                      `json:"skill_count"`
+	MCPCount      int                      `json:"mcp_count"`
 }
 
 type RuntimePluginSkill struct {
@@ -49,11 +46,10 @@ type RuntimePluginMCP struct {
 }
 
 type RuntimePluginCompatibility struct {
-	DetectedFormat string   `json:"detected_format,omitempty"`
-	Adapter        string   `json:"adapter,omitempty"`
-	Supported      []string `json:"supported,omitempty"`
-	Unsupported    []string `json:"unsupported,omitempty"`
-	Warnings       []string `json:"warnings,omitempty"`
+	Format      string   `json:"format,omitempty"`
+	Supported   []string `json:"supported,omitempty"`
+	Unsupported []string `json:"unsupported,omitempty"`
+	Warnings    []string `json:"warnings,omitempty"`
 }
 
 type RuntimePluginDetail struct {
@@ -179,7 +175,7 @@ func parseRuntimePluginSummary(p runtimeParser, field string, object map[string]
 	if err != nil {
 		return RuntimePluginSummary{}, err
 	}
-	source, err := parseRuntimePluginSource(p, field+".source", object["source"])
+	provenance, err := parseRuntimePluginProvenance(p, field+".provenance", object["provenance"])
 	if err != nil {
 		return RuntimePluginSummary{}, err
 	}
@@ -192,34 +188,34 @@ func parseRuntimePluginSummary(p runtimeParser, field string, object map[string]
 		return RuntimePluginSummary{}, err
 	}
 	return RuntimePluginSummary{
-		Name: name, Version: version, Enabled: enabled, PackageDigest: digest, Source: source,
+		Name: name, Version: version, Enabled: enabled, PackageDigest: digest, Provenance: provenance,
 		SkillCount: skillCount, MCPCount: mcpCount,
 	}, nil
 }
 
-func parseRuntimePluginSource(p runtimeParser, field string, value any) (RuntimePluginSource, error) {
-	object, err := p.object(field, value, false)
+func parseRuntimePluginProvenance(p runtimeParser, field string, value any) (*RuntimePluginProvenance, error) {
+	object, err := p.object(field, value, true)
+	if err != nil || object == nil {
+		return nil, err
+	}
+	origin, err := p.requiredString(field+".origin", object["origin"])
 	if err != nil {
-		return RuntimePluginSource{}, err
+		return nil, err
 	}
-	source := RuntimePluginSource{}
-	for key, target := range map[string]*string{
-		"type": &source.Type, "ref": &source.Ref, "revision": &source.Revision, "adapter": &source.Adapter,
-		"catalog": &source.Catalog, "catalog_item": &source.CatalogItem, "resolved_type": &source.ResolvedType,
-		"resolved_ref": &source.ResolvedRef, "resolved_revision": &source.ResolvedRevision,
-	} {
-		var text string
-		if key == "type" {
-			text, err = p.requiredString(field+"."+key, object[key])
-		} else {
-			text, err = p.optionalString(field+"."+key, object[key])
-		}
-		if err != nil {
-			return RuntimePluginSource{}, err
-		}
-		*target = text
+	provenance := &RuntimePluginProvenance{Origin: origin}
+	if provenance.Revision, err = p.optionalString(field+".revision", object["revision"]); err != nil {
+		return nil, err
 	}
-	return source, nil
+	if provenance.Subdir, err = p.optionalString(field+".subdir", object["subdir"]); err != nil {
+		return nil, err
+	}
+	if provenance.Format, err = p.optionalString(field+".format", object["format"]); err != nil {
+		return nil, err
+	}
+	if provenance.Adapted, err = p.optionalBool(field+".adapted", object["adapted"]); err != nil {
+		return nil, err
+	}
+	return provenance, nil
 }
 
 func parseRuntimePluginSkills(p runtimeParser, value any) ([]RuntimePluginSkill, error) {
@@ -296,13 +292,8 @@ func parseRuntimePluginCompatibility(p runtimeParser, value any) (RuntimePluginC
 		return RuntimePluginCompatibility{}, err
 	}
 	result := RuntimePluginCompatibility{}
-	for key, target := range map[string]*string{
-		"detected_format": &result.DetectedFormat, "adapter": &result.Adapter,
-	} {
-		*target, err = p.optionalString("plugin.compatibility."+key, object[key])
-		if err != nil {
-			return RuntimePluginCompatibility{}, err
-		}
+	if result.Format, err = p.optionalString("plugin.compatibility.format", object["format"]); err != nil {
+		return RuntimePluginCompatibility{}, err
 	}
 	if result.Supported, err = p.optionalStringArray("plugin.compatibility.supported", object["supported"]); err != nil {
 		return RuntimePluginCompatibility{}, err
