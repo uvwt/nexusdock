@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	protocol "github.com/uvwt/agentdock-protocol"
@@ -93,8 +94,12 @@ func (h *Hub) RuntimeSkills(ctx context.Context, nodeID string) ([]RuntimeSkillS
 
 // RuntimeSkill 读取单个 Skill 的详情与文件清单。
 // 第二个返回值是上游原始响应 JSON，供 UI 的“原始响应”调试面板透传展示。
-func (h *Hub) RuntimeSkill(ctx context.Context, nodeID, skillID string) (RuntimeSkillDetail, json.RawMessage, error) {
-	payload, err := h.invokeRuntime(ctx, nodeID, http.MethodGet, "/internal/runtime/skills/"+url.PathEscape(skillID), nil, nil)
+func (h *Hub) RuntimeSkill(ctx context.Context, nodeID, skillID, skillRef string) (RuntimeSkillDetail, json.RawMessage, error) {
+	query := url.Values{}
+	if strings.TrimSpace(skillRef) != "" {
+		query.Set("skill_ref", strings.TrimSpace(skillRef))
+	}
+	payload, err := h.invokeRuntime(ctx, nodeID, http.MethodGet, "/internal/runtime/skills/"+url.PathEscape(skillID), query, nil)
 	if err != nil {
 		return RuntimeSkillDetail{}, nil, err
 	}
@@ -110,8 +115,12 @@ func (h *Hub) RuntimeSkill(ctx context.Context, nodeID, skillID string) (Runtime
 }
 
 // RuntimeSkillFile 读取 Skill 包内的文本文件内容。
-func (h *Hub) RuntimeSkillFile(ctx context.Context, nodeID, skillID, filePath string) (RuntimeSkillFileContent, error) {
-	payload, err := h.invokeRuntime(ctx, nodeID, http.MethodGet, "/internal/runtime/skills/"+skillID+"/files/"+filePath, nil, nil)
+func (h *Hub) RuntimeSkillFile(ctx context.Context, nodeID, skillID, skillRef, filePath string) (RuntimeSkillFileContent, error) {
+	query := url.Values{}
+	if strings.TrimSpace(skillRef) != "" {
+		query.Set("skill_ref", strings.TrimSpace(skillRef))
+	}
+	payload, err := h.invokeRuntime(ctx, nodeID, http.MethodGet, "/internal/runtime/skills/"+skillID+"/files/"+filePath, query, nil)
 	if err != nil {
 		return RuntimeSkillFileContent{}, err
 	}

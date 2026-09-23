@@ -3,6 +3,7 @@ package agentdock
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // 本文件定义 AgentDock Runtime API 在 Nexus 边界内的 DTO 与解析逻辑。
@@ -92,6 +93,7 @@ type RuntimeSkillSummary struct {
 	SkillRef      string `json:"skill_ref"`
 	SourceType    string `json:"source_type"`
 	SourceID      string `json:"source_id"`
+	PluginName    string `json:"plugin_name,omitempty"`
 	ContentDigest string `json:"content_digest"`
 	FileCount     int    `json:"file_count"`
 }
@@ -110,6 +112,7 @@ type RuntimeSkillDetail struct {
 	SkillRef      string             `json:"skill_ref"`
 	SourceType    string             `json:"source_type"`
 	SourceID      string             `json:"source_id"`
+	PluginName    string             `json:"plugin_name,omitempty"`
 	ContentDigest string             `json:"content_digest"`
 	Files         []RuntimeSkillFile `json:"files"`
 }
@@ -609,6 +612,22 @@ func parseRuntimeSkillList(node string, payload map[string]any) ([]RuntimeSkillS
 		if err != nil {
 			return nil, err
 		}
+		pluginName, err := p.optionalString(field+".plugin_name", object["plugin_name"])
+		if err != nil {
+			return nil, err
+		}
+		switch sourceType {
+		case "managed":
+			if pluginName != "" {
+				return nil, p.fail(field+".plugin_name", "managed Skill 不应携带 Plugin provenance")
+			}
+		case "plugin":
+			if strings.TrimSpace(pluginName) == "" {
+				return nil, p.fail(field+".plugin_name", "Plugin Skill 必须携带 owning Plugin name")
+			}
+		default:
+			return nil, p.fail(field+".source_type", fmt.Sprintf("不支持的 Skill 来源类型 %q", sourceType))
+		}
 		contentDigest, err := p.requiredString(field+".content_digest", object["content_digest"])
 		if err != nil {
 			return nil, err
@@ -619,7 +638,7 @@ func parseRuntimeSkillList(node string, payload map[string]any) ([]RuntimeSkillS
 		}
 		skills = append(skills, RuntimeSkillSummary{
 			Skill: skill, Name: name, Description: description,
-			SkillRef: skillRef, SourceType: sourceType, SourceID: sourceID,
+			SkillRef: skillRef, SourceType: sourceType, SourceID: sourceID, PluginName: pluginName,
 			ContentDigest: contentDigest, FileCount: fileCount,
 		})
 	}
@@ -658,6 +677,22 @@ func parseRuntimeSkillDetail(node, skillID string, payload map[string]any) (Runt
 	sourceID, err := p.requiredString("source_id", payload["source_id"])
 	if err != nil {
 		return RuntimeSkillDetail{}, err
+	}
+	pluginName, err := p.optionalString("plugin_name", payload["plugin_name"])
+	if err != nil {
+		return RuntimeSkillDetail{}, err
+	}
+	switch sourceType {
+	case "managed":
+		if pluginName != "" {
+			return RuntimeSkillDetail{}, p.fail("plugin_name", "managed Skill 不应携带 Plugin provenance")
+		}
+	case "plugin":
+		if strings.TrimSpace(pluginName) == "" {
+			return RuntimeSkillDetail{}, p.fail("plugin_name", "Plugin Skill 必须携带 owning Plugin name")
+		}
+	default:
+		return RuntimeSkillDetail{}, p.fail("source_type", fmt.Sprintf("不支持的 Skill 来源类型 %q", sourceType))
 	}
 	contentDigest, err := p.requiredString("content_digest", payload["content_digest"])
 	if err != nil {
@@ -699,7 +734,7 @@ func parseRuntimeSkillDetail(node, skillID string, payload map[string]any) (Runt
 
 	return RuntimeSkillDetail{
 		Skill: skill, Name: name, Description: description,
-		SkillRef: skillRef, SourceType: sourceType, SourceID: sourceID,
+		SkillRef: skillRef, SourceType: sourceType, SourceID: sourceID, PluginName: pluginName,
 		ContentDigest: contentDigest, Files: files,
 	}, nil
 }

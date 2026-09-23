@@ -94,6 +94,7 @@ type runtimeSkillSummary struct {
 	SkillRef      string `json:"skill_ref"`
 	SourceType    string `json:"source_type"`
 	SourceID      string `json:"source_id"`
+	PluginName    string `json:"plugin_name,omitempty"`
 	ContentDigest string `json:"content_digest"`
 }
 
@@ -264,7 +265,7 @@ func (s *Server) runtimeSkillDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nodeID := r.PathValue("nodeID")
-	detail, raw, err := s.agentDockHub.RuntimeSkill(r.Context(), nodeID, skillID)
+	detail, raw, err := s.agentDockHub.RuntimeSkill(r.Context(), nodeID, skillID, r.URL.Query().Get("skill_ref"))
 	if err != nil {
 		writeRuntimeUnavailable(w, err)
 		return
@@ -284,7 +285,7 @@ func (s *Server) runtimeSkillFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	nodeID := r.PathValue("nodeID")
-	file, err := s.agentDockHub.RuntimeSkillFile(r.Context(), nodeID, skillID, urlPathSegments(relativePath))
+	file, err := s.agentDockHub.RuntimeSkillFile(r.Context(), nodeID, skillID, r.URL.Query().Get("skill_ref"), urlPathSegments(relativePath))
 	if err != nil {
 		writeRuntimeUnavailable(w, err)
 		return
@@ -372,6 +373,7 @@ func runtimeSkillSummaryView(skill agentdock.RuntimeSkillSummary) runtimeSkillSu
 		SkillRef:      skill.SkillRef,
 		SourceType:    skill.SourceType,
 		SourceID:      skill.SourceID,
+		PluginName:    skill.PluginName,
 		ContentDigest: skill.ContentDigest,
 	}
 }
@@ -380,7 +382,7 @@ func runtimeSkillDetailView(skillID string, detail agentdock.RuntimeSkillDetail,
 	view := runtimeSkillDetail{
 		runtimeSkillSummary: runtimeSkillSummaryView(agentdock.RuntimeSkillSummary{
 			Skill: skillID, Name: detail.Name, Description: detail.Description,
-			SkillRef: detail.SkillRef, SourceType: detail.SourceType, SourceID: detail.SourceID,
+			SkillRef: detail.SkillRef, SourceType: detail.SourceType, SourceID: detail.SourceID, PluginName: detail.PluginName,
 			ContentDigest: detail.ContentDigest,
 		}),
 		RuntimeState: raw,

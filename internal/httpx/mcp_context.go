@@ -30,7 +30,7 @@ var nexusSharedAgentDockRules = []string{
 type agentDockContext struct {
 	Skills            []agentDockContextSkill       `json:"skills"`
 	CommonSkills      *agentDockContextCommonSkills `json:"common_skills,omitempty"`
-	DynamicMCP        []agentDockContextItem        `json:"dynamic_mcp"`
+	DynamicMCP        []agentDockContextDynamicMCP  `json:"dynamic_mcp"`
 	ACP               *agentDockContextACP          `json:"acp,omitempty"`
 	WorkflowTemplates []agentDockContextItem        `json:"workflow_templates"`
 	Recall            *agentDockContextRecall       `json:"recall,omitempty"`
@@ -45,6 +45,7 @@ type agentDockContextSkill struct {
 	SkillRef      string `json:"skill_ref"`
 	SourceType    string `json:"source_type"`
 	SourceID      string `json:"source_id"`
+	PluginName    string `json:"plugin_name,omitempty"`
 	ContentDigest string `json:"content_digest,omitempty"`
 }
 
@@ -68,6 +69,17 @@ type agentDockContextCommonSkill struct {
 type agentDockContextItem struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
+}
+
+type agentDockContextDynamicMCP struct {
+	Name          string `json:"name"`
+	DisplayName   string `json:"display_name,omitempty"`
+	Description   string `json:"description"`
+	SourceType    string `json:"source_type,omitempty"`
+	PluginName    string `json:"plugin_name,omitempty"`
+	Status        string `json:"status,omitempty"`
+	ToolCount     int    `json:"tool_count,omitempty"`
+	LastErrorCode string `json:"last_error_code,omitempty"`
 }
 
 type agentDockContextACP struct {
@@ -106,7 +118,7 @@ type fleetAgentDockContextNode struct {
 type fleetAgentDockNodeContext struct {
 	Skills       []agentDockContextSkill       `json:"skills"`
 	CommonSkills *agentDockContextCommonSkills `json:"common_skills,omitempty"`
-	DynamicMCP   []agentDockContextItem        `json:"dynamic_mcp"`
+	DynamicMCP   []agentDockContextDynamicMCP  `json:"dynamic_mcp"`
 	ACP          *agentDockContextACP          `json:"acp,omitempty"`
 	Rules        []string                      `json:"rules"`
 	Warnings     []agentDockContextWarning     `json:"warnings,omitempty"`
@@ -205,30 +217,56 @@ func decodeAgentDockContextResult(result map[string]any) (agentDockContext, erro
 	if decoded.CommonSkills != nil && decoded.CommonSkills.Items == nil {
 		return agentDockContext{}, errors.New("agentdock_context common_skills 不符合当前结构化契约")
 	}
-	if err := validateAgentDockContextSkills(decoded); err != nil {
+	if err := validateAgentDockContextCapabilities(&decoded); err != nil {
 		return agentDockContext{}, err
 	}
 	return decoded, nil
 }
 
-func validateAgentDockContextSkills(context agentDockContext) error {
+func validateAgentDockContextCapabilities(context *agentDockContext) error {
 	for i, skill := range context.Skills {
 		if strings.TrimSpace(skill.SkillRef) == "" {
 			return fmt.Errorf("agentdock_context skills[%d].skill_ref 不符合当前结构化契约", i)
 		}
-		if skill.SourceType != "managed" || strings.TrimSpace(skill.SourceID) == "" {
+		if strings.TrimSpace(skill.SourceID) == "" {
 			return fmt.Errorf("agentdock_context skills[%d] 来源身份不符合当前结构化契约", i)
 		}
-	}
-	if context.CommonSkills == nil {
-		return nil
-	}
-	for i, skill := range context.CommonSkills.Items {
-		if strings.TrimSpace(skill.SkillRef) == "" {
-			return fmt.Errorf("agentdock_context common_skills.items[%d].skill_ref 不符合当前结构化契约", i)
+		switch skill.SourceType {
+		case "managed":
+		case "plugin":
+			if strings.TrimSpace(skill.PluginName) == "" {
+				return fmt.Errorf("agentdock_context skills[%d].plugin_name 不符合 Plugin provenance 契约", i)
+			}
+		default:
+			return fmt.Errorf("agentdock_context skills[%d] 来源类型不符合当前结构化契约", i)
 		}
-		if skill.SourceType != "shared" || strings.TrimSpace(skill.SourceID) == "" {
-			return fmt.Errorf("agentdock_context common_skills.items[%d] 来源身份不符合当前结构化契约", i)
+	}
+	if context.CommonSkills != nil {
+		for i, skill := range context.CommonSkills.Items {
+			if strings.TrimSpace(skill.SkillRef) == "" {
+				return fmt.Errorf("agentdock_context common_skills.items[%d].skill_ref 不符合当前结构化契约", i)
+			}
+			if skill.SourceType != "shared" || strings.TrimSpace(skill.SourceID) == "" {
+				return fmt.Errorf("agentdock_context common_skills.items[%d] 来源身份不符合当前结构化契约", i)
+			}
+		}
+	}
+	for i := range context.DynamicMCP {
+		item := &context.DynamicMCP[i]
+		if strings.TrimSpace(item.Name) == "" {
+			return fmt.Errorf("agentdock_context dynamic_mcp[%d].name 不符合当前结构化契约", i)
+		}
+		if item.SourceType == "" {
+			item.SourceType = "standalone"
+		}
+		switch item.SourceType {
+		case "standalone":
+		case "plugin":
+			if strings.TrimSpace(item.PluginName) == "" {
+				return fmt.Errorf("agentdock_context dynamic_mcp[%d].plugin_name 不符合 Plugin provenance 契约", i)
+			}
+		default:
+			return fmt.Errorf("agentdock_context dynamic_mcp[%d].source_type 不符合当前结构化契约", i)
 		}
 	}
 	return nil

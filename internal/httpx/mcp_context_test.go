@@ -105,11 +105,18 @@ func TestCallFleetAgentDockContextAggregatesOnlineAndOfflineNodes(t *testing.T) 
 			"version": "9.9.9", "os": "linux", "arch": "amd64",
 			"agentdock_home": "/wrong", "agentdock_default_dir": "/wrong", "default_cwd": ".", "path_model": "host",
 		},
-		"skills": []any{map[string]any{
-			"name": "desktop", "description": "Desktop", "file": "skill://managed/desktop/SKILL.md",
-			"skill_ref": "skill://managed/desktop", "source_type": "managed", "source_id": "desktop",
-			"content_digest": "sha256:desktop",
-		}},
+		"skills": []any{
+			map[string]any{
+				"name": "desktop", "description": "Desktop", "file": "skill://managed/desktop/SKILL.md",
+				"skill_ref": "skill://managed/desktop", "source_type": "managed", "source_id": "desktop",
+				"content_digest": "sha256:desktop",
+			},
+			map[string]any{
+				"name": "plugin-skill", "description": "Plugin Skill", "file": "skill://plugin/demo.plugin/plugin-skill/SKILL.md",
+				"skill_ref": "skill://plugin/demo.plugin/plugin-skill", "source_type": "plugin", "source_id": "demo.plugin",
+				"plugin_name": "demo.plugin", "content_digest": "sha256:plugin-skill",
+			},
+		},
 		"common_skills": map[string]any{
 			"root": "/test/agentdock/.agents/skills", "total": 1, "truncated": false,
 			"items": []any{map[string]any{
@@ -117,7 +124,13 @@ func TestCallFleetAgentDockContextAggregatesOnlineAndOfflineNodes(t *testing.T) 
 				"skill_ref": "skill://shared/personal-dev-guard", "source_type": "shared", "source_id": "global",
 			}},
 		},
-		"dynamic_mcp":        []any{map[string]any{"name": "github", "description": "GitHub"}},
+		"dynamic_mcp": []any{
+			map[string]any{"name": "github", "description": "GitHub"},
+			map[string]any{
+				"name": "plugin.demo.plugin.remote", "display_name": "remote", "description": "Plugin MCP",
+				"source_type": "plugin", "plugin_name": "demo.plugin", "status": "idle", "tool_count": 0,
+			},
+		},
 		"workflow_templates": []any{map[string]any{"name": "deploy", "description": "Deploy"}},
 		"recall":             map[string]any{"enabled": true, "items": []any{map[string]any{"name": "profile.md", "description": "Profile"}}},
 		"rules":              []any{"rule-a", "rule-b"},
@@ -144,8 +157,17 @@ func TestCallFleetAgentDockContextAggregatesOnlineAndOfflineNodes(t *testing.T) 
 	if len(fleet.Nodes) != 2 {
 		t.Fatalf("enabled fleet nodes = %#v", fleet.Nodes)
 	}
-	if fleet.Nodes[0].Name != "DockMini" || !fleet.Nodes[0].Online || containsString(fleet.Nodes[0].Capabilities, descriptor.Name) || fleet.Nodes[0].Context == nil || len(fleet.Nodes[0].Context.Skills) != 1 {
+	if fleet.Nodes[0].Name != "DockMini" || !fleet.Nodes[0].Online || containsString(fleet.Nodes[0].Capabilities, descriptor.Name) || fleet.Nodes[0].Context == nil || len(fleet.Nodes[0].Context.Skills) != 2 {
 		t.Fatalf("online node context = %#v", fleet.Nodes[0])
+	}
+	if fleet.Nodes[0].Context.Skills[1].SourceType != "plugin" || fleet.Nodes[0].Context.Skills[1].PluginName != "demo.plugin" {
+		t.Fatalf("Plugin Skill provenance was not forwarded: %#v", fleet.Nodes[0].Context.Skills)
+	}
+	if len(fleet.Nodes[0].Context.DynamicMCP) != 2 ||
+		fleet.Nodes[0].Context.DynamicMCP[0].SourceType != "standalone" ||
+		fleet.Nodes[0].Context.DynamicMCP[1].SourceType != "plugin" ||
+		fleet.Nodes[0].Context.DynamicMCP[1].PluginName != "demo.plugin" {
+		t.Fatalf("Plugin MCP provenance was not forwarded: %#v", fleet.Nodes[0].Context.DynamicMCP)
 	}
 	if fleet.Nodes[0].Context.CommonSkills == nil || fleet.Nodes[0].Context.CommonSkills.Total != 1 || len(fleet.Nodes[0].Context.CommonSkills.Items) != 1 || fleet.Nodes[0].Context.CommonSkills.Items[0].Name != "personal-dev-guard" {
 		t.Fatalf("common Skill context was not forwarded: %#v", fleet.Nodes[0].Context.CommonSkills)

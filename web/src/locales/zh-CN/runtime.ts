@@ -120,6 +120,7 @@ const runtime: Record<string, string> = {
   'No matching skills.': '没有匹配的 Skill。',
   'Current content': '当前内容',
   'Managed': '已管理',
+  'Plugin': '插件',
   'Workspace': '工作区',
   '{{count}} files': '{{count}} 个文件',
   'Files loaded on demand': '文件按需读取',

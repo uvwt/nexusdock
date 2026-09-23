@@ -27,7 +27,7 @@ function taskStatusLabel(status: string | undefined, t: TFunction): string {
 type TaskStep = { id: string; title: string; status: string };
 type OpsTask = { id: string; title: string; goal: string; status: string; summary?: string; blocker?: string; current_step?: TaskStep; completed_step_count: number; step_count: number; updated_at: string; file_name: string };
 type OpsTaskDetail = OpsTask & { steps?: unknown[] };
-type OpsSkill = { id: string; title: string; source: string; path: string; description: string; file_count: number; status: string; skill_ref: string; source_type: string; source_id: string; content_digest: string };
+type OpsSkill = { id: string; title: string; source: string; path: string; description: string; file_count: number; status: string; skill_ref: string; source_type: string; source_id: string; plugin_name?: string; content_digest: string };
 type OpsSkillFile = { path: string; kind: string; size_bytes: number; updated_at: string };
 type OpsSkillDetail = OpsSkill & { files?: OpsSkillFile[]; runtime_state?: Record<string, unknown> };
 type TaskCounts = { active: number; blocked: number; completed: number };
@@ -266,8 +266,9 @@ export function SkillsPage({ nodeID, refreshToken }: { nodeID: string; refreshTo
     if (!needle) return resource.data.items;
     return resource.data.items.filter((item) => [item.id, item.title, item.description, item.skill_ref, item.source_type, item.source_id].filter(Boolean).join(' ').toLowerCase().includes(needle));
   }, [query, resource.data.items]);
-  const selected = filtered.find((item) => `${item.source}:${item.id}` === selectedKey) || filtered[0];
-  const detail = useOptionalOpsResource<SkillDetailResponse>(selected ? `${runtimeBase}/skills/${encodeURIComponent(selected.source)}/${encodeURIComponent(selected.id)}` : '', { ok: false, skill: selected as OpsSkillDetail }, refreshToken, t('Request failed'));
+  const selected = filtered.find((item) => skillSelectionKey(item) === selectedKey) || filtered[0];
+  const detailURL = selected ? withSkillRef(`${runtimeBase}/skills/${encodeURIComponent(selected.source)}/${encodeURIComponent(selected.id)}`, selected.skill_ref) : '';
+  const detail = useOptionalOpsResource<SkillDetailResponse>(detailURL, { ok: false, skill: selected as OpsSkillDetail }, refreshToken, t('Request failed'));
   return <OpsShell error={resource.error}>
     <section className={`skills-workspace mobile-drilldown ${mobileDetailOpen ? 'is-detail-open' : 'is-list-open'}`}>
       <aside className="skills-catalog mobile-drilldown-list">
@@ -276,7 +277,7 @@ export function SkillsPage({ nodeID, refreshToken }: { nodeID: string; refreshTo
           <label className="ops-search"><Search size={15} /><input aria-label={t('Search Skill')} value={query} onChange={(event) => { setQuery(event.target.value); setMobileDetailOpen(false); }} placeholder={t('Search name or description')} /></label>
         </header>
         <div className="skills-rail">
-          {filtered.length === 0 ? <EmptyOps text={t('No matching skills.')} /> : filtered.map((skill) => <button type="button" key={`${skill.source}:${skill.id}`} className={`skill-list-item ${selected?.source === skill.source && selected?.id === skill.id ? 'is-selected' : ''}`} aria-pressed={selected?.source === skill.source && selected?.id === skill.id} onClick={() => { setSelectedKey(`${skill.source}:${skill.id}`); setMobileDetailOpen(true); }}><span className="ops-card-icon"><Layers size={16} /></span><span><strong>{skill.title || skill.id}</strong><small>{skillSourceLabel(skill.source_type, t)} · {skill.file_count > 0 ? t('{{count}} files', { count: skill.file_count }) : t('Files loaded on demand')}</small></span></button>)}
+          {filtered.length === 0 ? <EmptyOps text={t('No matching skills.')} /> : filtered.map((skill) => <button type="button" key={skillSelectionKey(skill)} className={`skill-list-item ${selected && skillSelectionKey(selected) === skillSelectionKey(skill) ? 'is-selected' : ''}`} aria-pressed={Boolean(selected && skillSelectionKey(selected) === skillSelectionKey(skill))} onClick={() => { setSelectedKey(skillSelectionKey(skill)); setMobileDetailOpen(true); }}><span className="ops-card-icon"><Layers size={16} /></span><span><strong>{skill.title || skill.id}</strong><small>{skillSourceLabel(skill.source_type, t)} · {skill.file_count > 0 ? t('{{count}} files', { count: skill.file_count }) : t('Files loaded on demand')}</small></span></button>)}
         </div>
       </aside>
       <div className="skills-detail mobile-drilldown-detail">
@@ -329,7 +330,7 @@ function SkillDetailContent({ nodeID, skill, detail, loading, error, refreshToke
   const files = detail?.files || [];
   const preferredPath = files.find((file) => file.path.toLowerCase() === 'skill.md')?.path || files[0]?.path || '';
   const activePath = files.some((file) => file.path === selectedPath) ? selectedPath : preferredPath;
-  const fileURL = activePath ? `/v1/runtime/nodes/${encodeURIComponent(nodeID)}/skills/${encodeURIComponent(full.source)}/${encodeURIComponent(full.id)}/files/${encodePathSegments(activePath)}` : '';
+  const fileURL = activePath ? withSkillRef(`/v1/runtime/nodes/${encodeURIComponent(nodeID)}/skills/${encodeURIComponent(full.source)}/${encodeURIComponent(full.id)}/files/${encodePathSegments(activePath)}`, full.skill_ref) : '';
   const preview = useOptionalOpsResource<SkillFileResponse>(fileURL, { ok: false }, refreshToken, t('Request failed'));
   const raw = detail?.runtime_state;
 
@@ -343,6 +344,7 @@ function SkillDetailContent({ nodeID, skill, detail, loading, error, refreshToke
 
     <dl className="skill-meta" aria-label={t('Skill summary')}>
       <div><dt>{t('Source type')}</dt><dd>{skillSourceLabel(full.source_type, t)}</dd></div>
+      {full.plugin_name && <div><dt>{t('Plugin')}</dt><dd>{full.plugin_name}</dd></div>}
       <div><dt>{t('Files')}</dt><dd>{files.length}</dd></div>
       <div><dt>{t('Content digest')}</dt><dd title={full.content_digest}>{shortDigest(full.content_digest)}</dd></div>
     </dl>
@@ -369,6 +371,7 @@ function SkillDetailContent({ nodeID, skill, detail, loading, error, refreshToke
         <Info label="ID" value={full.id} />
         <Info label={t('Skill reference')} value={full.skill_ref} />
         <Info label={t('Source type')} value={skillSourceLabel(full.source_type, t)} />
+        {full.plugin_name && <Info label={t('Plugin')} value={full.plugin_name} />}
         <Info label={t('Source ID')} value={full.source_id} />
         <Info label={t('Content digest')} value={full.content_digest} />
       </div>
@@ -377,6 +380,14 @@ function SkillDetailContent({ nodeID, skill, detail, loading, error, refreshToke
   </article>;
 }
 
+function skillSelectionKey(skill: OpsSkill): string {
+  return skill.skill_ref || `${skill.source}:${skill.id}`;
+}
+function withSkillRef(url: string, skillRef: string | undefined): string {
+  if (!skillRef) return url;
+  const separator = url.includes('?') ? '&' : '?';
+  return `${url}${separator}skill_ref=${encodeURIComponent(skillRef)}`;
+}
 function encodePathSegments(value: string): string {
   return value.split('/').map((segment) => encodeURIComponent(segment)).join('/');
 }
@@ -446,6 +457,7 @@ function skillSourceLabel(sourceType: string | undefined, t: TFunction): string 
   if (sourceType === 'managed') return t('Managed');
   if (sourceType === 'shared') return t('Shared');
   if (sourceType === 'workspace') return t('Workspace');
+  if (sourceType === 'plugin') return t('Plugin');
   return sourceType || t('Unknown');
 }
 function shortDigest(value: string | undefined): string {
