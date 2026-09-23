@@ -902,6 +902,7 @@ def build_openapi(schemas: dict[str, Any]) -> dict[str, Any]:
         "RuntimeSkillId": path_param("skillID", "AgentDock Runtime skill ID。", uuid=False),
         "RuntimeSkillFilePath": path_param("filePath", "AgentDock Runtime Skill 文件相对路径。", uuid=False),
         "RuntimeMCPName": path_param("name", "AgentDock 动态 MCP 服务名称。", uuid=False),
+        "RuntimePluginName": path_param("name", "AgentDock 已安装 Plugin 名称。", uuid=False),
         "WorkflowTemplateId": path_param("templateID", "Nexus 工作流模板 ID。", uuid=False),
         "WorkflowTemplateVersion": path_param("version", "Nexus 工作流模板版本。", uuid=False),
     }
@@ -1198,6 +1199,8 @@ def build_openapi(schemas: dict[str, Any]) -> dict[str, Any]:
         "/v1/runtime/nodes/{nodeID}/skills": {"get": operation("listRuntimeSkills", "列出指定 AgentDock 节点的 Skill", params=[p("RuntimeNodeId")])},
         "/v1/runtime/nodes/{nodeID}/skills/{source}/{skillID}": {"get": operation("getRuntimeSkill", "读取指定 AgentDock 节点的 Skill 详情", params=[p("RuntimeNodeId"), p("RuntimeSkillSource"), p("RuntimeSkillId"), q("skill_ref", "AgentDock 返回的精确 Skill 引用；同名不同来源时用于无歧义解析。")])},
         "/v1/runtime/nodes/{nodeID}/skills/{source}/{skillID}/files/{filePath}": {"get": operation("getRuntimeSkillFile", "读取指定 AgentDock 节点的 Skill 文件", params=[p("RuntimeNodeId"), p("RuntimeSkillSource"), p("RuntimeSkillId"), p("RuntimeSkillFilePath"), q("skill_ref", "AgentDock 返回的精确 Skill 引用；同名不同来源时用于无歧义解析。")])},
+        "/v1/runtime/nodes/{nodeID}/plugins": {"get": operation("listRuntimePlugins", "列出指定 AgentDock 节点的已安装 Plugin", params=[p("RuntimeNodeId")])},
+        "/v1/runtime/nodes/{nodeID}/plugins/{name}": {"get": operation("getRuntimePlugin", "读取指定 AgentDock 节点的 Plugin 详情", params=[p("RuntimeNodeId"), p("RuntimePluginName")])},
         "/v1/runtime/nodes/{nodeID}/mcp": {
             "get": operation("listRuntimeMCPServers", "列出指定 AgentDock 节点的动态 MCP 服务", params=[p("RuntimeNodeId")]),
             "post": operation("manageRuntimeMCPServer", "管理指定 AgentDock 节点的动态 MCP 服务", params=[p("RuntimeNodeId")], request=body()),

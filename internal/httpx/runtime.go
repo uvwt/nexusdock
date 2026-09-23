@@ -131,6 +131,7 @@ func (s *Server) registerRuntimeRoutes(mux *http.ServeMux, protected func(http.H
 	mux.HandleFunc("GET /v1/runtime/nodes/{nodeID}/skills", protected(s.runtimeSkills))
 	mux.HandleFunc("GET /v1/runtime/nodes/{nodeID}/skills/{source}/{skillID}/files/{filePath...}", protected(s.runtimeSkillFile))
 	mux.HandleFunc("GET /v1/runtime/nodes/{nodeID}/skills/{source}/{skillID}", protected(s.runtimeSkillDetail))
+	s.registerRuntimePluginRoutes(mux, protected)
 	s.registerRuntimeMCPRoutes(mux, protected)
 }
 
