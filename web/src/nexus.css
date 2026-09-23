@@ -443,6 +443,7 @@ summary::-webkit-details-marker { display: none; }
 .agentdock-node-status::before { width: 6px; height: 6px; flex: none; border-radius: 50%; background: currentColor; content: ""; }
 .runtime-node-status.is-online { color: var(--nx-success); }
 .runtime-node-status.is-offline { color: var(--nx-danger); }
+.runtime-node-action { margin-left: auto; flex: none; }
 .agentdock-node-status { color: var(--nx-muted) !important; }
 .agentdock-node-status strong { font-size: inherit; font-weight: 700; }
 .agentdock-node-status.is-online::before { background: var(--nx-success); }
@@ -788,9 +789,21 @@ summary::-webkit-details-marker { display: none; }
 .ops-progress-count { color: var(--nx-muted); font-size: 10px; }
 .ops-task-progress.is-compact { grid-template-columns: minmax(60px, 1fr) auto; align-items: center; }
 
-.ops-task-step-list { display: grid; gap: 6px; }
-.ops-task-step { padding: 9px 10px; display: grid; grid-template-columns: auto minmax(0,1fr); gap: 9px; border: 1px solid var(--nx-line); border-radius: 5px; }
-.ops-task-step-icon { color: #555; }
+.ops-task-step-list { display: grid; gap: 10px; padding: 4px 0; }
+.ops-task-step { min-height: 28px; display: grid; grid-template-columns: 26px minmax(0,1fr); gap: 8px; align-items: center; }
+.ops-task-step strong { font-size: 12px; line-height: 1.4; }
+.ops-task-step-marker {
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid #c9c9c9;
+  border-radius: 50%;
+  color: #fff;
+}
+.ops-task-step-marker.is-completed { border-color: #171717; background: #171717; }
+.ops-task-step-marker.is-in_progress { border-color: #171717; background: #fff; }
+.ops-task-step-marker.is-in_progress > span { width: 8px; height: 8px; border-radius: 50%; background: #171717; }
 .ops-no-steps { color: var(--nx-muted); }
 
 .ops-detail-grid,
@@ -899,7 +912,6 @@ summary::-webkit-details-marker { display: none; }
 
 /* MCP */
 .mcp-page { display: grid; gap: 12px; }
-.mcp-heading { display: flex; justify-content: flex-end; gap: 14px; align-items: center; }
 .mcp-layout { display: grid; grid-template-columns: 300px minmax(0,1fr); gap: 12px; align-items: start; }
 .mcp-list-panel,
 .mcp-detail-card { border: 1px solid var(--nx-line); border-radius: 7px; background: #fff; }
@@ -1250,8 +1262,9 @@ summary::-webkit-details-marker { display: none; }
   .agentdock-node-actions .nx-button { flex: 1; }
   .agentdock-node-list > article { grid-template-columns: auto minmax(0, 1fr); }
   .agentdock-node-row-actions { grid-column: 2; justify-content: flex-start; }
-  .runtime-node-bar { align-items: flex-start; flex-direction: column; }
+  .runtime-node-bar { align-items: stretch; flex-direction: column; }
   .runtime-node-selector { width: 100%; }
+  .runtime-node-action { width: 100%; margin-left: 0; justify-content: center; }
   .runtime-node-selector select { flex: 1; min-width: 0; }
 
   .ops-toolbar,
@@ -1323,7 +1336,6 @@ summary::-webkit-details-marker { display: none; }
   .workflow-runtime-grid { grid-template-columns: 1fr; }
   .workflow-secondary-details { padding-left: 14px; padding-right: 14px; }
 
-  .mcp-heading { align-items: flex-start; flex-direction: column; }
   .mcp-metrics { grid-template-columns: 1fr; }
   .mcp-env-form,
   .mcp-form { grid-template-columns: 1fr; }

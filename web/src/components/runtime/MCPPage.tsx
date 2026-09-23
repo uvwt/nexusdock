@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { Cable, CirclePlus, KeyRound, Link, Power, RefreshCw, Server, Terminal, Trash2 } from 'lucide-react';
+import { Cable, KeyRound, Link, Power, RefreshCw, Server, Terminal, Trash2 } from 'lucide-react';
 import { ApiError, api } from '../../api/client';
 import Dialog from '../Dialog';
 import MobileDrilldownBar from '../MobileDrilldownBar';
@@ -85,7 +85,12 @@ function actionMessage(action: string, name: string, t: (key: string, options?: 
   }
 }
 
-export default function MCPPage({ nodeID, refreshToken }: { nodeID: string; refreshToken: number }) {
+export default function MCPPage({ nodeID, refreshToken, addOpen, onAddOpenChange }: {
+  nodeID: string;
+  refreshToken: number;
+  addOpen: boolean;
+  onAddOpenChange: (open: boolean) => void;
+}) {
   const { t } = useTranslation();
   const [servers, setServers] = useState<MCPServer[]>([]);
   const [selectedName, setSelectedName] = useState('');
@@ -94,7 +99,6 @@ export default function MCPPage({ nodeID, refreshToken }: { nodeID: string; refr
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [addOpen, setAddOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<MCPServer | null>(null);
   const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
   const [addForm, setAddForm] = useState<AddForm>(emptyAddForm);
@@ -189,7 +193,7 @@ export default function MCPPage({ nodeID, refreshToken }: { nodeID: string; refr
         enabled: addForm.enabled,
       };
       await api(`${runtimeBase}/mcp`, { method: 'POST', body: JSON.stringify(payload) });
-      setAddOpen(false);
+      onAddOpenChange(false);
       setAddForm(emptyAddForm);
       await loadServers(name);
       setMobileDetailOpen(true);
@@ -226,10 +230,6 @@ export default function MCPPage({ nodeID, refreshToken }: { nodeID: string; refr
 
   return <section className="mcp-page">
     {notice && <div className={`nx-alert is-${notice.tone}`} role="status"><span>{notice.text}</span><button type="button" onClick={() => setNotice(null)}>{t('Close')}</button></div>}
-    <header className="mcp-heading">
-      <button type="button" className="nx-button" onClick={() => setAddOpen(true)}><CirclePlus size={16} />{t('Add MCP')}</button>
-    </header>
-
     <section className={`mcp-layout mobile-drilldown ${mobileDetailOpen ? 'is-detail-open' : 'is-list-open'}`}>
       <aside className="mcp-list-panel mobile-drilldown-list">
         <div className="mcp-list-summary"><strong>{servers.length}</strong><span>{t('registered services')}</span></div>
@@ -264,7 +264,7 @@ export default function MCPPage({ nodeID, refreshToken }: { nodeID: string; refr
       </section>
     </section>
 
-    {addOpen && <Dialog title={t('Add MCP service')} description={t('Configuration is written to AgentDock; save sensitive values to the isolated environment after adding.')} onClose={() => setAddOpen(false)} wide>
+    {addOpen && <Dialog title={t('Add MCP service')} description={t('Configuration is written to AgentDock; save sensitive values to the isolated environment after adding.')} onClose={() => onAddOpenChange(false)} wide>
       <form className="mcp-form" onSubmit={addServer}>
         <label><span>{t('Name')}</span><input required value={addForm.name} onChange={(event) => setAddForm({ ...addForm, name: event.target.value })} placeholder={t('e.g. github')} /></label>
         <label><span>{t('Description')}</span><input value={addForm.description} onChange={(event) => setAddForm({ ...addForm, description: event.target.value })} placeholder={t('What capabilities this MCP provides')} /></label>
@@ -276,7 +276,7 @@ export default function MCPPage({ nodeID, refreshToken }: { nodeID: string; refr
           <label className="is-wide"><span>{t('Working directory')}</span><input value={addForm.cwd} onChange={(event) => setAddForm({ ...addForm, cwd: event.target.value })} placeholder={t('Optional')} /></label>
         </>}
         <label className="mcp-check is-wide"><input type="checkbox" checked={addForm.enabled} onChange={(event) => setAddForm({ ...addForm, enabled: event.target.checked })} /><span>{t('Enable immediately after adding')}</span></label>
-        <footer><button type="button" className="nx-button is-secondary" onClick={() => setAddOpen(false)}>{t('Cancel')}</button><button type="submit" className="nx-button" disabled={busy === 'add'}>{busy === 'add' ? t('Adding…') : t('Add MCP')}</button></footer>
+        <footer><button type="button" className="nx-button is-secondary" onClick={() => onAddOpenChange(false)}>{t('Cancel')}</button><button type="submit" className="nx-button" disabled={busy === 'add'}>{busy === 'add' ? t('Adding…') : t('Add MCP')}</button></footer>
       </form>
     </Dialog>}
 
