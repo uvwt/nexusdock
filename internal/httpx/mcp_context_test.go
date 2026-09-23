@@ -124,12 +124,26 @@ func TestCallFleetAgentDockContextAggregatesOnlineAndOfflineNodes(t *testing.T) 
 				"skill_ref": "skill://shared/personal-dev-guard", "source_type": "shared", "source_id": "global",
 			}},
 		},
+		"plugins": []any{
+			map[string]any{
+				"name": "demo.plugin", "version": "1.2.3", "enabled": true, "description": "Demo Plugin",
+				"skills_count": 1, "mcp_count": 1, "format": "openai", "adapted": true,
+			},
+		},
 		"dynamic_mcp": []any{
 			map[string]any{"name": "github", "description": "GitHub"},
 			map[string]any{
 				"name": "plugin.demo.plugin.remote", "display_name": "remote", "description": "Plugin MCP",
 				"source_type": "plugin", "plugin_name": "demo.plugin", "status": "idle", "tool_count": 0,
 			},
+		},
+		"acp": map[string]any{
+			"enabled": true, "default_profile": "codex",
+			"profiles": []any{
+				map[string]any{"id": "custom", "kind": "custom"},
+				map[string]any{"id": "codex", "kind": "codex"},
+			},
+			"description": "ACP",
 		},
 		"workflow_templates": []any{map[string]any{"name": "deploy", "description": "Deploy"}},
 		"recall":             map[string]any{"enabled": true, "items": []any{map[string]any{"name": "profile.md", "description": "Profile"}}},
@@ -163,11 +177,22 @@ func TestCallFleetAgentDockContextAggregatesOnlineAndOfflineNodes(t *testing.T) 
 	if fleet.Nodes[0].Context.Skills[1].SourceType != "plugin" || fleet.Nodes[0].Context.Skills[1].PluginName != "demo.plugin" {
 		t.Fatalf("Plugin Skill provenance was not forwarded: %#v", fleet.Nodes[0].Context.Skills)
 	}
+	if len(fleet.Nodes[0].Context.Plugins) != 1 ||
+		fleet.Nodes[0].Context.Plugins[0].Name != "demo.plugin" ||
+		fleet.Nodes[0].Context.Plugins[0].Format != "openai" ||
+		!fleet.Nodes[0].Context.Plugins[0].Adapted {
+		t.Fatalf("Plugin context index was not forwarded: %#v", fleet.Nodes[0].Context.Plugins)
+	}
 	if len(fleet.Nodes[0].Context.DynamicMCP) != 2 ||
 		fleet.Nodes[0].Context.DynamicMCP[0].SourceType != "standalone" ||
 		fleet.Nodes[0].Context.DynamicMCP[1].SourceType != "plugin" ||
 		fleet.Nodes[0].Context.DynamicMCP[1].PluginName != "demo.plugin" {
 		t.Fatalf("Plugin MCP provenance was not forwarded: %#v", fleet.Nodes[0].Context.DynamicMCP)
+	}
+	if fleet.Nodes[0].Context.ACP == nil ||
+		fleet.Nodes[0].Context.ACP.DefaultProfile != "codex" ||
+		len(fleet.Nodes[0].Context.ACP.Profiles) != 2 {
+		t.Fatalf("multi-ACP context was not forwarded: %#v", fleet.Nodes[0].Context.ACP)
 	}
 	if fleet.Nodes[0].Context.CommonSkills == nil || fleet.Nodes[0].Context.CommonSkills.Total != 1 || len(fleet.Nodes[0].Context.CommonSkills.Items) != 1 || fleet.Nodes[0].Context.CommonSkills.Items[0].Name != "personal-dev-guard" {
 		t.Fatalf("common Skill context was not forwarded: %#v", fleet.Nodes[0].Context.CommonSkills)

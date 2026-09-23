@@ -30,6 +30,7 @@ var nexusSharedAgentDockRules = []string{
 type agentDockContext struct {
 	Skills            []agentDockContextSkill       `json:"skills"`
 	CommonSkills      *agentDockContextCommonSkills `json:"common_skills,omitempty"`
+	Plugins           []agentDockContextPlugin      `json:"plugins,omitempty"`
 	DynamicMCP        []agentDockContextDynamicMCP  `json:"dynamic_mcp"`
 	ACP               *agentDockContextACP          `json:"acp,omitempty"`
 	WorkflowTemplates []agentDockContextItem        `json:"workflow_templates"`
@@ -71,6 +72,17 @@ type agentDockContextItem struct {
 	Description string `json:"description,omitempty"`
 }
 
+type agentDockContextPlugin struct {
+	Name        string `json:"name"`
+	Version     string `json:"version"`
+	Enabled     bool   `json:"enabled"`
+	Description string `json:"description"`
+	SkillsCount int    `json:"skills_count"`
+	MCPCount    int    `json:"mcp_count"`
+	Format      string `json:"format"`
+	Adapted     bool   `json:"adapted"`
+}
+
 type agentDockContextDynamicMCP struct {
 	Name          string `json:"name"`
 	DisplayName   string `json:"display_name,omitempty"`
@@ -83,9 +95,16 @@ type agentDockContextDynamicMCP struct {
 }
 
 type agentDockContextACP struct {
-	Enabled     bool   `json:"enabled"`
-	Agent       string `json:"agent"`
-	Description string `json:"description"`
+	Enabled        bool                         `json:"enabled"`
+	DefaultProfile string                       `json:"default_profile,omitempty"`
+	Profiles       []agentDockContextACPProfile `json:"profiles,omitempty"`
+	Agent          string                       `json:"agent,omitempty"` // rolling compatibility with older AgentDock nodes
+	Description    string                       `json:"description"`
+}
+
+type agentDockContextACPProfile struct {
+	ID   string `json:"id"`
+	Kind string `json:"kind"`
 }
 
 type agentDockContextRecall struct {
@@ -118,6 +137,7 @@ type fleetAgentDockContextNode struct {
 type fleetAgentDockNodeContext struct {
 	Skills       []agentDockContextSkill       `json:"skills"`
 	CommonSkills *agentDockContextCommonSkills `json:"common_skills,omitempty"`
+	Plugins      []agentDockContextPlugin      `json:"plugins,omitempty"`
 	DynamicMCP   []agentDockContextDynamicMCP  `json:"dynamic_mcp"`
 	ACP          *agentDockContextACP          `json:"acp,omitempty"`
 	Rules        []string                      `json:"rules"`
@@ -251,6 +271,36 @@ func validateAgentDockContextCapabilities(context *agentDockContext) error {
 			}
 		}
 	}
+	for i, plugin := range context.Plugins {
+		if strings.TrimSpace(plugin.Name) == "" || strings.TrimSpace(plugin.Version) == "" || strings.TrimSpace(plugin.Format) == "" {
+			return fmt.Errorf("agentdock_context plugins[%d] 不符合当前结构化契约", i)
+		}
+		if plugin.SkillsCount < 0 || plugin.MCPCount < 0 {
+			return fmt.Errorf("agentdock_context plugins[%d] 组件计数不符合当前结构化契约", i)
+		}
+	}
+	if context.ACP != nil && context.ACP.Enabled {
+		switch {
+		case len(context.ACP.Profiles) > 0:
+			defaultProfile := strings.TrimSpace(context.ACP.DefaultProfile)
+			foundDefault := false
+			for i, profile := range context.ACP.Profiles {
+				if strings.TrimSpace(profile.ID) == "" || strings.TrimSpace(profile.Kind) == "" {
+					return fmt.Errorf("agentdock_context acp.profiles[%d] 不符合当前结构化契约", i)
+				}
+				if profile.ID == defaultProfile {
+					foundDefault = true
+				}
+			}
+			if defaultProfile == "" || !foundDefault {
+				return errors.New("agentdock_context acp.default_profile 不符合当前结构化契约")
+			}
+		case strings.TrimSpace(context.ACP.Agent) != "":
+			// Rolling compatibility with older AgentDock nodes that expose one ACP agent.
+		default:
+			return errors.New("agentdock_context acp 缺少可用 profile")
+		}
+	}
 	for i := range context.DynamicMCP {
 		item := &context.DynamicMCP[i]
 		if strings.TrimSpace(item.Name) == "" {
@@ -298,7 +348,8 @@ func localAgentDockContext(context agentDockContext) *fleetAgentDockNodeContext 
 		}
 	}
 	return &fleetAgentDockNodeContext{
-		Skills: context.Skills, CommonSkills: context.CommonSkills, DynamicMCP: context.DynamicMCP, ACP: context.ACP,
+		Skills: context.Skills, CommonSkills: context.CommonSkills, Plugins: context.Plugins,
+		DynamicMCP: context.DynamicMCP, ACP: context.ACP,
 		Rules: localRules, Warnings: warnings,
 	}
 }
