@@ -165,13 +165,17 @@ func TestRuntimeMCPServersThroughBridgeReturnsTypedView(t *testing.T) {
 			 "source_type": "plugin", "plugin_name": "context7", "enabled": true, "status": "ready", "tool_count": 2}]}`,
 	})
 	payload := runtimeContractRequest(t, mux, http.MethodGet, "/v1/runtime/nodes/"+nodeID+"/mcp")
-	if payload["ok"] != true || payload["count"] != float64(1) {
+	if payload["ok"] != true || payload["count"] != float64(2) {
 		t.Fatalf("MCP 列表响应错误: %v", payload)
 	}
 	servers, _ := payload["servers"].([]any)
-	server, _ := servers[0].(map[string]any)
-	if server["name"] != "github" || server["source_type"] != "standalone" || server["enabled"] != true || server["tool_count"] != float64(12) {
-		t.Fatalf("MCP 摘要字段错误: %v", server)
+	standalone, _ := servers[0].(map[string]any)
+	pluginMCP, _ := servers[1].(map[string]any)
+	if standalone["name"] != "github" || standalone["source_type"] != "standalone" || standalone["enabled"] != true || standalone["tool_count"] != float64(12) {
+		t.Fatalf("standalone MCP 摘要字段错误: %v", standalone)
+	}
+	if pluginMCP["name"] != "plugin.context7.context7" || pluginMCP["source_type"] != "plugin" || pluginMCP["plugin_name"] != "context7" {
+		t.Fatalf("Plugin MCP 摘要字段错误: %v", pluginMCP)
 	}
 }
 

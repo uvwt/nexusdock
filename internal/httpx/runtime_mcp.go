@@ -42,16 +42,6 @@ func (s *Server) runtimeMCPServers(w http.ResponseWriter, r *http.Request) {
 		writeRuntimeUnavailable(w, err)
 		return
 	}
-	// Plugin 自带的 MCP 组件归属 Plugin 页面；独立 MCP 页面只展示 standalone 服务。
-	// 对旧版 AgentDock 未返回 source_type 的条目继续保留，避免升级期间误隐藏已有服务。
-	standalone := servers[:0]
-	for _, server := range servers {
-		if server.SourceType == "plugin" || server.PluginName != "" {
-			continue
-		}
-		standalone = append(standalone, server)
-	}
-	servers = standalone
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok": true, "node_id": nodeID, "servers": servers, "count": len(servers), "source": "agentdock-runtime-api",
 	})
