@@ -10,15 +10,15 @@ func TestParseRuntimePluginListUsesPortableProvenance(t *testing.T) {
 		"plugins": []any{
 			map[string]any{
 				"name": "cloudflare", "version": "0.1.2", "enabled": true,
-				"package_digest": "sha256:abc", "skill_count": float64(9), "mcp_count": float64(1),
+				"package_digest": "sha256:abc", "format": "openai", "skill_count": float64(9), "mcp_count": float64(1),
 				"provenance": map[string]any{
-					"origin": "https://github.com/openai/plugins", "revision": "deadbeef",
-					"subdir": "plugins/cloudflare", "format": "openai", "adapted": true,
+					"origin": "https://github.com/openai/plugins", "ref": "main", "revision": "deadbeef",
+					"subdir": "plugins/cloudflare",
 				},
 			},
 			map[string]any{
 				"name": "local-demo", "version": "local", "enabled": false,
-				"package_digest": "sha256:def", "skill_count": float64(1), "mcp_count": float64(0),
+				"package_digest": "sha256:def", "format": "portable", "skill_count": float64(1), "mcp_count": float64(0),
 			},
 		},
 	}
@@ -33,14 +33,13 @@ func TestParseRuntimePluginListUsesPortableProvenance(t *testing.T) {
 	if imported.Name != "cloudflare" || imported.Version != "0.1.2" || !imported.Enabled {
 		t.Fatalf("imported plugin summary = %#v", imported)
 	}
-	if imported.SkillCount != 9 || imported.MCPCount != 1 {
+	if imported.Format != "openai" || imported.SkillCount != 9 || imported.MCPCount != 1 {
 		t.Fatalf("component counts = skills %d mcp %d", imported.SkillCount, imported.MCPCount)
 	}
 	if imported.Provenance == nil ||
 		imported.Provenance.Origin != "https://github.com/openai/plugins" ||
-		imported.Provenance.Subdir != "plugins/cloudflare" ||
-		imported.Provenance.Format != "openai" ||
-		!imported.Provenance.Adapted {
+		imported.Provenance.Ref != "main" ||
+		imported.Provenance.Subdir != "plugins/cloudflare" {
 		t.Fatalf("plugin provenance = %#v", imported.Provenance)
 	}
 	if plugins[1].Provenance != nil {
@@ -52,10 +51,10 @@ func TestParseRuntimePluginDetailDerivesComponentCounts(t *testing.T) {
 	payload := map[string]any{
 		"plugin": map[string]any{
 			"name": "cloudflare", "version": "0.1.2", "description": "Cloudflare tools", "enabled": true,
-			"package_digest": "sha256:abc", "installed_at": "2026-09-23T12:00:00Z",
+			"package_digest": "sha256:abc", "format": "openai", "installed_at": "2026-09-23T12:00:00Z",
 			"provenance": map[string]any{
-				"origin": "https://github.com/openai/plugins", "revision": "deadbeef",
-				"subdir": "plugins/cloudflare", "format": "openai", "adapted": true,
+				"origin": "https://github.com/openai/plugins", "ref": "main", "revision": "deadbeef",
+				"subdir": "plugins/cloudflare",
 			},
 			"skills": []any{
 				map[string]any{
@@ -70,12 +69,7 @@ func TestParseRuntimePluginDetailDerivesComponentCounts(t *testing.T) {
 				},
 			},
 			"executables": []any{},
-			"warnings":    []any{},
-			"unsupported": []any{},
-			"compatibility": map[string]any{
-				"format": "portable", "supported": []any{"skills", "mcp"},
-				"unsupported": []any{}, "warnings": []any{},
-			},
+			"warnings":    []any{"MCP server legacy is preserved but not activated"},
 		},
 	}
 	detail, err := parseRuntimePluginDetail("mini", "cloudflare", payload)
@@ -91,10 +85,10 @@ func TestParseRuntimePluginDetailDerivesComponentCounts(t *testing.T) {
 	if len(detail.MCP) != 1 || detail.MCP[0].RuntimeName != "plugin.cloudflare.cloudflare-api" {
 		t.Fatalf("mcp = %#v", detail.MCP)
 	}
-	if detail.Compatibility.Format != "portable" {
-		t.Fatalf("compatibility = %#v", detail.Compatibility)
+	if detail.Format != "openai" || len(detail.Warnings) != 1 {
+		t.Fatalf("format/warnings = %q / %#v", detail.Format, detail.Warnings)
 	}
-	if detail.Provenance == nil || detail.Provenance.Format != "openai" {
+	if detail.Provenance == nil || detail.Provenance.Ref != "main" {
 		t.Fatalf("provenance = %#v", detail.Provenance)
 	}
 }
@@ -104,7 +98,7 @@ func TestParseRuntimePluginListRejectsMalformedProvenance(t *testing.T) {
 		"plugins": []any{
 			map[string]any{
 				"name": "demo", "version": "1.0.0", "enabled": true,
-				"package_digest": "sha256:abc", "provenance": map[string]any{"format": "openai"},
+				"package_digest": "sha256:abc", "format": "openai", "provenance": map[string]any{"revision": "deadbeef"},
 			},
 		},
 	}

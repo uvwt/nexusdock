@@ -75,7 +75,7 @@ func TestWorkspaceContextRoutesToSelectedNodeWithoutForwardingNodeID(t *testing.
 			"name": "demo", "description": "Workspace demo",
 			"file":        "skill://workspace/ws-test/demo/SKILL.md",
 			"skill_ref":   "skill://workspace/ws-test/demo",
-			"source_type": "workspace", "source_id": "ws-test",
+			"source_type": "workspace",
 		}},
 		"warnings": []any{},
 	}

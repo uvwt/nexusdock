@@ -27,7 +27,7 @@ function taskStatusLabel(status: string | undefined, t: TFunction): string {
 type TaskStep = { id: string; title: string; status: string };
 type OpsTask = { id: string; title: string; goal: string; status: string; summary?: string; blocker?: string; current_step?: TaskStep; completed_step_count: number; step_count: number; updated_at: string; file_name: string };
 type OpsTaskDetail = OpsTask & { steps?: unknown[] };
-type OpsSkill = { id: string; title: string; source: string; path: string; description: string; file_count: number; status: string; skill_ref: string; source_type: string; source_id: string; plugin_name?: string; content_digest: string };
+type OpsSkill = { id: string; title: string; source: string; path: string; description: string; file_count: number; status: string; skill_ref: string; source_type: string; plugin_name?: string; content_digest: string };
 type OpsSkillFile = { path: string; kind: string; size_bytes: number; updated_at: string };
 type OpsSkillDetail = OpsSkill & { files?: OpsSkillFile[]; runtime_state?: Record<string, unknown> };
 type TaskCounts = { active: number; blocked: number; completed: number };
@@ -265,7 +265,7 @@ export function SkillsPage({ nodeID, refreshToken }: { nodeID: string; refreshTo
   const filtered = useMemo(() => {
     const needle = query.trim().toLowerCase();
     if (!needle) return resource.data.items;
-    return resource.data.items.filter((item) => [item.id, item.title, item.description, item.skill_ref, item.source_type, item.source_id, item.plugin_name].filter(Boolean).join(' ').toLowerCase().includes(needle));
+    return resource.data.items.filter((item) => [item.id, item.title, item.description, item.skill_ref, item.source_type, item.plugin_name].filter(Boolean).join(' ').toLowerCase().includes(needle));
   }, [query, resource.data.items]);
   const deepLinkedSkill = deepLinkTarget
     ? filtered.find((item) => item.source_type === 'plugin' && item.plugin_name === deepLinkTarget.pluginName && (item.id === deepLinkTarget.skillName || item.title === deepLinkTarget.skillName))
@@ -382,7 +382,6 @@ function SkillDetailContent({ nodeID, skill, detail, loading, error, refreshToke
         <Info label={t('Skill reference')} value={full.skill_ref} />
         <Info label={t('Source type')} value={skillSourceLabel(full.source_type, t)} />
         {full.plugin_name && <Info label={t('Plugin')} value={full.plugin_name} />}
-        <Info label={t('Source ID')} value={full.source_id} />
         <Info label={t('Content digest')} value={full.content_digest} />
       </div>
       {raw && <RawJsonPanel title={t('Runtime raw response')} value={raw} />}

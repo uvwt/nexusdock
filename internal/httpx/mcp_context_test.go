@@ -108,26 +108,26 @@ func TestCallFleetAgentDockContextAggregatesOnlineAndOfflineNodes(t *testing.T) 
 		"skills": []any{
 			map[string]any{
 				"name": "desktop", "description": "Desktop", "file": "skill://managed/desktop/SKILL.md",
-				"skill_ref": "skill://managed/desktop", "source_type": "managed", "source_id": "desktop",
+				"skill_ref": "skill://managed/desktop", "source_type": "managed",
 				"content_digest": "sha256:desktop",
 			},
 			map[string]any{
 				"name": "plugin-skill", "description": "Plugin Skill", "file": "skill://plugin/demo.plugin/plugin-skill/SKILL.md",
-				"skill_ref": "skill://plugin/demo.plugin/plugin-skill", "source_type": "plugin", "source_id": "demo.plugin",
-				"plugin_name": "demo.plugin", "content_digest": "sha256:plugin-skill",
+				"skill_ref": "skill://plugin/demo.plugin/plugin-skill", "source_type": "plugin",
+				"plugin_name": "demo.plugin",
 			},
 		},
 		"common_skills": map[string]any{
 			"root": "/test/agentdock/.agents/skills", "total": 1, "truncated": false,
 			"items": []any{map[string]any{
 				"name": "personal-dev-guard", "description": "Development guard", "file": "skill://shared/personal-dev-guard/SKILL.md",
-				"skill_ref": "skill://shared/personal-dev-guard", "source_type": "shared", "source_id": "global",
+				"skill_ref": "skill://shared/personal-dev-guard", "source_type": "shared",
 			}},
 		},
 		"plugins": []any{
 			map[string]any{
 				"name": "demo.plugin", "version": "1.2.3", "enabled": true, "description": "Demo Plugin",
-				"skills_count": 1, "mcp_count": 1, "format": "openai", "adapted": true,
+				"skills_count": 1, "mcp_count": 1, "format": "openai",
 			},
 		},
 		"dynamic_mcp": []any{
@@ -179,8 +179,7 @@ func TestCallFleetAgentDockContextAggregatesOnlineAndOfflineNodes(t *testing.T) 
 	}
 	if len(fleet.Nodes[0].Context.Plugins) != 1 ||
 		fleet.Nodes[0].Context.Plugins[0].Name != "demo.plugin" ||
-		fleet.Nodes[0].Context.Plugins[0].Format != "openai" ||
-		!fleet.Nodes[0].Context.Plugins[0].Adapted {
+		fleet.Nodes[0].Context.Plugins[0].Format != "openai" {
 		t.Fatalf("Plugin context index was not forwarded: %#v", fleet.Nodes[0].Context.Plugins)
 	}
 	if len(fleet.Nodes[0].Context.DynamicMCP) != 2 ||

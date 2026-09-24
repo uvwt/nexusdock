@@ -214,7 +214,7 @@ func TestRuntimeSkillsThroughBridgeExposeCurrentContentIdentity(t *testing.T) {
 	_, mux, nodeID := runtimeContractTestServer(t, map[string]string{
 		"/internal/runtime/skills": `{"action":"list","count":1,"source":"agentdock-api","skills":[{
 			"skill":"demo","name":"demo","description":"Demo Skill",
-			"skill_ref":"skill://managed/demo","source_type":"managed","source_id":"demo",
+			"skill_ref":"skill://managed/demo","source_type":"managed",
 			"content_digest":"sha256:abc123","file_count":2}]}`,
 	})
 	payload := runtimeContractRequest(t, mux, http.MethodGet, "/v1/runtime/nodes/"+nodeID+"/skills")
@@ -224,7 +224,7 @@ func TestRuntimeSkillsThroughBridgeExposeCurrentContentIdentity(t *testing.T) {
 	}
 	item, _ := items[0].(map[string]any)
 	if item["skill_ref"] != "skill://managed/demo" || item["source_type"] != "managed" ||
-		item["source_id"] != "demo" || item["content_digest"] != "sha256:abc123" {
+		item["content_digest"] != "sha256:abc123" {
 		t.Fatalf("Skill 当前内容身份字段错误: %v", item)
 	}
 	for _, legacy := range []string{"active_version", "versions", "channels"} {

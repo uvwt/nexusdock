@@ -7,10 +7,9 @@ import MobileDrilldownBar from '../MobileDrilldownBar';
 
 type PluginProvenance = {
   origin: string;
+  ref?: string;
   revision?: string;
   subdir?: string;
-  format?: string;
-  adapted?: boolean;
 };
 
 type PluginSummary = {
@@ -19,6 +18,7 @@ type PluginSummary = {
   enabled: boolean;
   package_digest: string;
   provenance?: PluginProvenance;
+  format: string;
   skill_count: number;
   mcp_count: number;
 };
@@ -32,7 +32,6 @@ type PluginMCP = {
   command?: string;
   cwd?: string;
   runtime_name?: string;
-  storage_key?: string;
 };
 
 type PluginDetail = PluginSummary & {
@@ -42,13 +41,6 @@ type PluginDetail = PluginSummary & {
   mcp: PluginMCP[];
   executables: string[];
   warnings: string[];
-  unsupported: string[];
-  compatibility: {
-    format?: string;
-    supported?: string[];
-    unsupported?: string[];
-    warnings?: string[];
-  };
 };
 
 type PluginListResponse = { ok: boolean; items: PluginSummary[]; count: number };
@@ -108,8 +100,8 @@ export default function PluginPage({ nodeID, refreshToken }: { nodeID: string; r
     const needle = query.trim().toLowerCase();
     if (!needle) return plugins;
     return plugins.filter((plugin) => [
-      plugin.name, plugin.version, plugin.provenance?.origin, plugin.provenance?.revision,
-      plugin.provenance?.subdir, plugin.provenance?.format,
+      plugin.name, plugin.version, plugin.provenance?.origin, plugin.provenance?.ref, plugin.provenance?.revision,
+      plugin.provenance?.subdir, plugin.format,
     ].filter(Boolean).join(' ').toLowerCase().includes(needle));
   }, [plugins, query]);
 
@@ -163,17 +155,16 @@ export default function PluginPage({ nodeID, refreshToken }: { nodeID: string; r
             <div><span>{t('Version')}</span><strong>{selected.version}</strong></div>
             <div><span>Skill</span><strong>{detail?.skills.length ?? selected.skill_count}</strong></div>
             <div><span>MCP</span><strong>{detail?.mcp.length ?? selected.mcp_count}</strong></div>
-            <div><span>{t('Format')}</span><strong>{detail?.compatibility.format || 'portable'}</strong></div>
+            <div><span>{t('Format')}</span><strong>{detail?.format || selected.format}</strong></div>
           </section>
 
           <section className="plugin-section">
             <h4>{t('Provenance & installation')}</h4>
             <dl className="plugin-meta">
               <div><dt>{t('Origin')}</dt><dd title={selected.provenance?.origin}>{selected.provenance?.origin || t('Local Portable package')}</dd></div>
+              {selected.provenance?.ref && <div><dt>{t('Ref')}</dt><dd>{selected.provenance.ref}</dd></div>}
               {selected.provenance?.revision && <div><dt>{t('Revision')}</dt><dd>{selected.provenance.revision}</dd></div>}
               {selected.provenance?.subdir && <div><dt>{t('Subdirectory')}</dt><dd>{selected.provenance.subdir}</dd></div>}
-              {selected.provenance?.format && <div><dt>{t('Imported format')}</dt><dd>{selected.provenance.format}</dd></div>}
-              {selected.provenance?.adapted && <div><dt>{t('Adapted')}</dt><dd>{t('Yes')}</dd></div>}
               {detail?.installed_at && <div><dt>{t('Installed at')}</dt><dd>{formatTime(detail.installed_at)}</dd></div>}
               <div><dt>{t('Package digest')}</dt><dd title={selected.package_digest}>{shortDigest(selected.package_digest)}</dd></div>
             </dl>
@@ -198,9 +189,9 @@ export default function PluginPage({ nodeID, refreshToken }: { nodeID: string; r
             <div className="plugin-chip-list">{detail.executables.map((item) => <code key={item}>{item}</code>)}</div>
           </section>}
 
-          {detail && (detail.warnings.length > 0 || detail.unsupported.length > 0) && <section className="plugin-section plugin-warnings">
-            <h4><CircleAlert size={15} />{t('Compatibility notes')}</h4>
-            {[...detail.warnings, ...detail.unsupported].map((message, index) => <p key={`${index}:${message}`}>{message}</p>)}
+          {detail && detail.warnings.length > 0 && <section className="plugin-section plugin-warnings">
+            <h4><CircleAlert size={15} />{t('Runtime notes')}</h4>
+            {detail.warnings.map((message, index) => <p key={`${index}:${message}`}>{message}</p>)}
           </section>}
         </article>
       )}

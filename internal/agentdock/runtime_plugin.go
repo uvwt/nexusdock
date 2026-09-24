@@ -11,10 +11,9 @@ import (
 // Nexus 只展示，不下载、不解释来源，也不参与 Plugin 生命周期。
 type RuntimePluginProvenance struct {
 	Origin   string `json:"origin"`
+	Ref      string `json:"ref,omitempty"`
 	Revision string `json:"revision,omitempty"`
 	Subdir   string `json:"subdir,omitempty"`
-	Format   string `json:"format,omitempty"`
-	Adapted  bool   `json:"adapted,omitempty"`
 }
 
 type RuntimePluginSummary struct {
@@ -23,6 +22,7 @@ type RuntimePluginSummary struct {
 	Enabled       bool                     `json:"enabled"`
 	PackageDigest string                   `json:"package_digest"`
 	Provenance    *RuntimePluginProvenance `json:"provenance,omitempty"`
+	Format        string                   `json:"format"`
 	SkillCount    int                      `json:"skill_count"`
 	MCPCount      int                      `json:"mcp_count"`
 }
@@ -42,26 +42,16 @@ type RuntimePluginMCP struct {
 	Command     string `json:"command,omitempty"`
 	Cwd         string `json:"cwd,omitempty"`
 	RuntimeName string `json:"runtime_name,omitempty"`
-	StorageKey  string `json:"storage_key,omitempty"`
-}
-
-type RuntimePluginCompatibility struct {
-	Format      string   `json:"format,omitempty"`
-	Supported   []string `json:"supported,omitempty"`
-	Unsupported []string `json:"unsupported,omitempty"`
-	Warnings    []string `json:"warnings,omitempty"`
 }
 
 type RuntimePluginDetail struct {
 	RuntimePluginSummary
-	Description   string                     `json:"description,omitempty"`
-	InstalledAt   string                     `json:"installed_at"`
-	Skills        []RuntimePluginSkill       `json:"skills"`
-	MCP           []RuntimePluginMCP         `json:"mcp"`
-	Executables   []string                   `json:"executables"`
-	Warnings      []string                   `json:"warnings"`
-	Unsupported   []string                   `json:"unsupported"`
-	Compatibility RuntimePluginCompatibility `json:"compatibility"`
+	Description string               `json:"description,omitempty"`
+	InstalledAt string               `json:"installed_at"`
+	Skills      []RuntimePluginSkill `json:"skills"`
+	MCP         []RuntimePluginMCP   `json:"mcp"`
+	Executables []string             `json:"executables"`
+	Warnings    []string             `json:"warnings"`
 }
 
 // RuntimePlugins 读取 AgentDock 的已安装 Plugin 快照；生命周期真相仍只存在 AgentDock。
@@ -141,20 +131,12 @@ func parseRuntimePluginDetail(node, requestedName string, payload map[string]any
 	if err != nil {
 		return RuntimePluginDetail{}, err
 	}
-	unsupported, err := p.optionalStringArray("plugin.unsupported", object["unsupported"])
-	if err != nil {
-		return RuntimePluginDetail{}, err
-	}
-	compatibility, err := parseRuntimePluginCompatibility(p, object["compatibility"])
-	if err != nil {
-		return RuntimePluginDetail{}, err
-	}
 	summary.SkillCount = len(skills)
 	summary.MCPCount = len(mcp)
 	return RuntimePluginDetail{
 		RuntimePluginSummary: summary,
 		Description:          description, InstalledAt: installedAt, Skills: skills, MCP: mcp,
-		Executables: executables, Warnings: warnings, Unsupported: unsupported, Compatibility: compatibility,
+		Executables: executables, Warnings: warnings,
 	}, nil
 }
 
@@ -179,6 +161,10 @@ func parseRuntimePluginSummary(p runtimeParser, field string, object map[string]
 	if err != nil {
 		return RuntimePluginSummary{}, err
 	}
+	format, err := p.requiredString(field+".format", object["format"])
+	if err != nil {
+		return RuntimePluginSummary{}, err
+	}
 	skillCount, err := p.optionalInt(field+".skill_count", object["skill_count"])
 	if err != nil {
 		return RuntimePluginSummary{}, err
@@ -189,7 +175,7 @@ func parseRuntimePluginSummary(p runtimeParser, field string, object map[string]
 	}
 	return RuntimePluginSummary{
 		Name: name, Version: version, Enabled: enabled, PackageDigest: digest, Provenance: provenance,
-		SkillCount: skillCount, MCPCount: mcpCount,
+		Format: format, SkillCount: skillCount, MCPCount: mcpCount,
 	}, nil
 }
 
@@ -203,16 +189,13 @@ func parseRuntimePluginProvenance(p runtimeParser, field string, value any) (*Ru
 		return nil, err
 	}
 	provenance := &RuntimePluginProvenance{Origin: origin}
+	if provenance.Ref, err = p.optionalString(field+".ref", object["ref"]); err != nil {
+		return nil, err
+	}
 	if provenance.Revision, err = p.optionalString(field+".revision", object["revision"]); err != nil {
 		return nil, err
 	}
 	if provenance.Subdir, err = p.optionalString(field+".subdir", object["subdir"]); err != nil {
-		return nil, err
-	}
-	if provenance.Format, err = p.optionalString(field+".format", object["format"]); err != nil {
-		return nil, err
-	}
-	if provenance.Adapted, err = p.optionalBool(field+".adapted", object["adapted"]); err != nil {
 		return nil, err
 	}
 	return provenance, nil
@@ -274,7 +257,7 @@ func parseRuntimePluginMCP(p runtimeParser, value any) ([]RuntimePluginMCP, erro
 		entry := RuntimePluginMCP{Name: name, Transport: transport}
 		for key, target := range map[string]*string{
 			"description": &entry.Description, "url": &entry.URL, "command": &entry.Command,
-			"cwd": &entry.Cwd, "runtime_name": &entry.RuntimeName, "storage_key": &entry.StorageKey,
+			"cwd": &entry.Cwd, "runtime_name": &entry.RuntimeName,
 		} {
 			*target, err = p.optionalString(field+"."+key, object[key])
 			if err != nil {
@@ -284,25 +267,4 @@ func parseRuntimePluginMCP(p runtimeParser, value any) ([]RuntimePluginMCP, erro
 		items = append(items, entry)
 	}
 	return items, nil
-}
-
-func parseRuntimePluginCompatibility(p runtimeParser, value any) (RuntimePluginCompatibility, error) {
-	object, err := p.object("plugin.compatibility", value, true)
-	if err != nil || object == nil {
-		return RuntimePluginCompatibility{}, err
-	}
-	result := RuntimePluginCompatibility{}
-	if result.Format, err = p.optionalString("plugin.compatibility.format", object["format"]); err != nil {
-		return RuntimePluginCompatibility{}, err
-	}
-	if result.Supported, err = p.optionalStringArray("plugin.compatibility.supported", object["supported"]); err != nil {
-		return RuntimePluginCompatibility{}, err
-	}
-	if result.Unsupported, err = p.optionalStringArray("plugin.compatibility.unsupported", object["unsupported"]); err != nil {
-		return RuntimePluginCompatibility{}, err
-	}
-	if result.Warnings, err = p.optionalStringArray("plugin.compatibility.warnings", object["warnings"]); err != nil {
-		return RuntimePluginCompatibility{}, err
-	}
-	return result, nil
 }

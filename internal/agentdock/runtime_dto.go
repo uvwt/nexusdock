@@ -92,7 +92,6 @@ type RuntimeSkillSummary struct {
 	Description   string `json:"description"`
 	SkillRef      string `json:"skill_ref"`
 	SourceType    string `json:"source_type"`
-	SourceID      string `json:"source_id"`
 	PluginName    string `json:"plugin_name,omitempty"`
 	ContentDigest string `json:"content_digest"`
 	FileCount     int    `json:"file_count"`
@@ -111,7 +110,6 @@ type RuntimeSkillDetail struct {
 	Description   string             `json:"description"`
 	SkillRef      string             `json:"skill_ref"`
 	SourceType    string             `json:"source_type"`
-	SourceID      string             `json:"source_id"`
 	PluginName    string             `json:"plugin_name,omitempty"`
 	ContentDigest string             `json:"content_digest"`
 	Files         []RuntimeSkillFile `json:"files"`
@@ -610,10 +608,6 @@ func parseRuntimeSkillList(node string, payload map[string]any) ([]RuntimeSkillS
 		if err != nil {
 			return nil, err
 		}
-		sourceID, err := p.requiredString(field+".source_id", object["source_id"])
-		if err != nil {
-			return nil, err
-		}
 		pluginName, err := p.optionalString(field+".plugin_name", object["plugin_name"])
 		if err != nil {
 			return nil, err
@@ -640,7 +634,7 @@ func parseRuntimeSkillList(node string, payload map[string]any) ([]RuntimeSkillS
 		}
 		skills = append(skills, RuntimeSkillSummary{
 			Skill: skill, Name: name, Description: description,
-			SkillRef: skillRef, SourceType: sourceType, SourceID: sourceID, PluginName: pluginName,
+			SkillRef: skillRef, SourceType: sourceType, PluginName: pluginName,
 			ContentDigest: contentDigest, FileCount: fileCount,
 		})
 	}
@@ -673,10 +667,6 @@ func parseRuntimeSkillDetail(node, skillID string, payload map[string]any) (Runt
 		return RuntimeSkillDetail{}, err
 	}
 	sourceType, err := p.requiredString("source_type", payload["source_type"])
-	if err != nil {
-		return RuntimeSkillDetail{}, err
-	}
-	sourceID, err := p.requiredString("source_id", payload["source_id"])
 	if err != nil {
 		return RuntimeSkillDetail{}, err
 	}
@@ -736,7 +726,7 @@ func parseRuntimeSkillDetail(node, skillID string, payload map[string]any) (Runt
 
 	return RuntimeSkillDetail{
 		Skill: skill, Name: name, Description: description,
-		SkillRef: skillRef, SourceType: sourceType, SourceID: sourceID, PluginName: pluginName,
+		SkillRef: skillRef, SourceType: sourceType, PluginName: pluginName,
 		ContentDigest: contentDigest, Files: files,
 	}, nil
 }

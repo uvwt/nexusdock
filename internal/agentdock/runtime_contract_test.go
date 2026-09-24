@@ -265,7 +265,7 @@ func TestParseRuntimeSkillList_CurrentNodeResponse(t *testing.T) {
 	  "action": "list", "count": 1, "source": "agentdock-api",
 	  "skills": [
 	    {"skill": "browser-use", "name": "browser-use", "description": "控制浏览器",
-	     "skill_ref": "skill://managed/browser-use", "source_type": "managed", "source_id": "browser-use",
+	     "skill_ref": "skill://managed/browser-use", "source_type": "managed",
 	     "content_digest": "sha256:abc123", "file_count": 8}
 	  ]
 	}`)
@@ -281,7 +281,7 @@ func TestParseRuntimeSkillList_CurrentNodeResponse(t *testing.T) {
 		t.Fatalf("Skill 摘要解析错误: %#v", skill)
 	}
 	if skill.SkillRef != "skill://managed/browser-use" || skill.SourceType != "managed" ||
-		skill.SourceID != "browser-use" || skill.ContentDigest != "sha256:abc123" {
+		skill.ContentDigest != "sha256:abc123" {
 		t.Fatalf("Skill provenance 解析错误: %#v", skill)
 	}
 }
@@ -289,7 +289,7 @@ func TestParseRuntimeSkillList_CurrentNodeResponse(t *testing.T) {
 func TestParseRuntimeSkillList_MissingSkillRefReturnsContractError(t *testing.T) {
 	payload := fixturePayload(t, `{"skills": [{
 	  "skill": "s", "name": "s", "description": "demo",
-	  "source_type": "managed", "source_id": "s", "content_digest": "sha256:abc", "file_count": 1
+	  "source_type": "managed", "content_digest": "sha256:abc", "file_count": 1
 	}]}`)
 	_, err := parseRuntimeSkillList("node1", payload)
 	assertContractError(t, err, "GET /internal/runtime/skills", "skills[0].skill_ref")
@@ -298,7 +298,7 @@ func TestParseRuntimeSkillList_MissingSkillRefReturnsContractError(t *testing.T)
 func TestParseRuntimeSkillList_WrongDigestTypeReturnsContractError(t *testing.T) {
 	payload := fixturePayload(t, `{"skills": [{
 	  "skill": "s", "name": "s", "description": "demo",
-	  "skill_ref": "skill://managed/s", "source_type": "managed", "source_id": "s",
+	  "skill_ref": "skill://managed/s", "source_type": "managed",
 	  "content_digest": 3, "file_count": 1
 	}]}`)
 	_, err := parseRuntimeSkillList("node1", payload)
@@ -308,7 +308,7 @@ func TestParseRuntimeSkillList_WrongDigestTypeReturnsContractError(t *testing.T)
 func TestParseRuntimeSkillDetail_CurrentNodeResponse(t *testing.T) {
 	payload := fixturePayload(t, `{
 	  "action": "inspect", "skill": "browser-use", "name": "browser-use", "description": "控制浏览器",
-	  "skill_ref": "skill://managed/browser-use", "source_type": "managed", "source_id": "browser-use",
+	  "skill_ref": "skill://managed/browser-use", "source_type": "managed",
 	  "content_digest": "sha256:def456",
 	  "document": {"name": "browser-use", "description": "控制浏览器", "body": "# Browser Use"},
 	  "files": [
@@ -325,7 +325,7 @@ func TestParseRuntimeSkillDetail_CurrentNodeResponse(t *testing.T) {
 		t.Fatalf("Skill 详情字段错误: %#v", detail)
 	}
 	if detail.SkillRef != "skill://managed/browser-use" || detail.SourceType != "managed" ||
-		detail.SourceID != "browser-use" || detail.ContentDigest != "sha256:def456" {
+		detail.ContentDigest != "sha256:def456" {
 		t.Fatalf("Skill 详情 provenance 错误: %#v", detail)
 	}
 	if len(detail.Files) != 2 || detail.Files[1].Path != "scripts/run.ts" || detail.Files[1].SizeBytes != 2048 {
@@ -336,7 +336,7 @@ func TestParseRuntimeSkillDetail_CurrentNodeResponse(t *testing.T) {
 func TestParseRuntimeSkillDetail_MismatchedSkillReturnsContractError(t *testing.T) {
 	payload := fixturePayload(t, `{
 	  "skill": "other", "name": "other", "description": "demo",
-	  "skill_ref": "skill://managed/other", "source_type": "managed", "source_id": "other",
+	  "skill_ref": "skill://managed/other", "source_type": "managed",
 	  "content_digest": "sha256:abc", "document": {}, "files": []
 	}`)
 	_, err := parseRuntimeSkillDetail("node1", "s", payload)
@@ -346,7 +346,7 @@ func TestParseRuntimeSkillDetail_MismatchedSkillReturnsContractError(t *testing.
 func TestParseRuntimeSkillDetail_MissingContentDigestReturnsContractError(t *testing.T) {
 	payload := fixturePayload(t, `{
 	  "skill": "s", "name": "s", "description": "demo",
-	  "skill_ref": "skill://managed/s", "source_type": "managed", "source_id": "s",
+	  "skill_ref": "skill://managed/s", "source_type": "managed",
 	  "document": {}, "files": []
 	}`)
 	_, err := parseRuntimeSkillDetail("node1", "s", payload)
@@ -356,7 +356,7 @@ func TestParseRuntimeSkillDetail_MissingContentDigestReturnsContractError(t *tes
 func TestParseRuntimeSkillDetail_FileWithoutPathReturnsContractError(t *testing.T) {
 	payload := fixturePayload(t, `{
 	  "skill": "s", "name": "s", "description": "demo",
-	  "skill_ref": "skill://managed/s", "source_type": "managed", "source_id": "s",
+	  "skill_ref": "skill://managed/s", "source_type": "managed",
 	  "content_digest": "sha256:abc", "document": {},
 	  "files": [{"kind": "doc", "size_bytes": 1, "updated_at": "2026-01-01T00:00:00Z"}]
 	}`)

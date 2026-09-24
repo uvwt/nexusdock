@@ -40,14 +40,12 @@ type agentDockContext struct {
 }
 
 type agentDockContextSkill struct {
-	Name          string `json:"name"`
-	Description   string `json:"description"`
-	File          string `json:"file"`
-	SkillRef      string `json:"skill_ref"`
-	SourceType    string `json:"source_type"`
-	SourceID      string `json:"source_id"`
-	PluginName    string `json:"plugin_name,omitempty"`
-	ContentDigest string `json:"content_digest,omitempty"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	File        string `json:"file"`
+	SkillRef    string `json:"skill_ref"`
+	SourceType  string `json:"source_type"`
+	PluginName  string `json:"plugin_name,omitempty"`
 }
 
 type agentDockContextCommonSkills struct {
@@ -58,13 +56,11 @@ type agentDockContextCommonSkills struct {
 }
 
 type agentDockContextCommonSkill struct {
-	Name          string `json:"name"`
-	Description   string `json:"description"`
-	File          string `json:"file"`
-	SkillRef      string `json:"skill_ref"`
-	SourceType    string `json:"source_type"`
-	SourceID      string `json:"source_id"`
-	ContentDigest string `json:"content_digest,omitempty"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	File        string `json:"file"`
+	SkillRef    string `json:"skill_ref"`
+	SourceType  string `json:"source_type"`
 }
 
 type agentDockContextItem struct {
@@ -80,7 +76,6 @@ type agentDockContextPlugin struct {
 	SkillsCount int    `json:"skills_count"`
 	MCPCount    int    `json:"mcp_count"`
 	Format      string `json:"format"`
-	Adapted     bool   `json:"adapted"`
 }
 
 type agentDockContextDynamicMCP struct {
@@ -248,9 +243,6 @@ func validateAgentDockContextCapabilities(context *agentDockContext) error {
 		if strings.TrimSpace(skill.SkillRef) == "" {
 			return fmt.Errorf("agentdock_context skills[%d].skill_ref 不符合当前结构化契约", i)
 		}
-		if strings.TrimSpace(skill.SourceID) == "" {
-			return fmt.Errorf("agentdock_context skills[%d] 来源身份不符合当前结构化契约", i)
-		}
 		switch skill.SourceType {
 		case "managed":
 		case "plugin":
@@ -266,8 +258,8 @@ func validateAgentDockContextCapabilities(context *agentDockContext) error {
 			if strings.TrimSpace(skill.SkillRef) == "" {
 				return fmt.Errorf("agentdock_context common_skills.items[%d].skill_ref 不符合当前结构化契约", i)
 			}
-			if skill.SourceType != "shared" || strings.TrimSpace(skill.SourceID) == "" {
-				return fmt.Errorf("agentdock_context common_skills.items[%d] 来源身份不符合当前结构化契约", i)
+			if skill.SourceType != "shared" {
+				return fmt.Errorf("agentdock_context common_skills.items[%d].source_type 不符合当前结构化契约", i)
 			}
 		}
 	}
