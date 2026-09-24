@@ -32,13 +32,6 @@ const runtime: Record<string, string> = {
 
   // MCPPage
   'MCP operation failed': 'MCP 操作失败',
-  'Idle': '空闲',
-  'Ready': '就绪',
-  'Connected': '已连接',
-  'Starting': '启动中',
-  'Stopped': '已停止',
-  'Failed': '失败',
-  'Error': '错误',
   'Added MCP “{{name}}”.': '已添加 MCP「{{name}}」。',
   'Add MCP': '添加 MCP',
   'registered services': '个已注册服务',

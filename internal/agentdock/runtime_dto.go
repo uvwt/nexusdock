@@ -133,6 +133,8 @@ type RuntimeMCPServerSummary struct {
 	Name          string `json:"name"`
 	Description   string `json:"description"`
 	Transport     string `json:"transport"`
+	SourceType    string `json:"source_type,omitempty"`
+	PluginName    string `json:"plugin_name,omitempty"`
 	Enabled       bool   `json:"enabled"`
 	Status        string `json:"status"`
 	ToolCount     int    `json:"tool_count"`
@@ -802,6 +804,14 @@ func (p runtimeParser) parseRuntimeMCPServerSummary(field string, server map[str
 	if err != nil {
 		return RuntimeMCPServerSummary{}, err
 	}
+	sourceType, err := p.optionalString(field+".source_type", server["source_type"])
+	if err != nil {
+		return RuntimeMCPServerSummary{}, err
+	}
+	pluginName, err := p.optionalString(field+".plugin_name", server["plugin_name"])
+	if err != nil {
+		return RuntimeMCPServerSummary{}, err
+	}
 	lastError, err := p.optionalString(field+".last_error", server["last_error"])
 	if err != nil {
 		return RuntimeMCPServerSummary{}, err
@@ -815,7 +825,8 @@ func (p runtimeParser) parseRuntimeMCPServerSummary(field string, server map[str
 		return RuntimeMCPServerSummary{}, err
 	}
 	return RuntimeMCPServerSummary{
-		Name: name, Description: description, Transport: transport, Enabled: enabled, Status: status,
+		Name: name, Description: description, Transport: transport, SourceType: sourceType, PluginName: pluginName,
+		Enabled: enabled, Status: status,
 		ToolCount: toolCount, LastError: lastError, LastErrorCode: lastErrorCode, RefreshedAt: refreshedAt,
 	}, nil
 }

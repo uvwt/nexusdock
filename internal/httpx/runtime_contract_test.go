@@ -158,9 +158,11 @@ func TestRuntimeTasksThroughBridgeRejectsContractDrift(t *testing.T) {
 
 func TestRuntimeMCPServersThroughBridgeReturnsTypedView(t *testing.T) {
 	_, mux, nodeID := runtimeContractTestServer(t, map[string]string{
-		"/internal/runtime/mcp": `{"action": "list", "ok": true, "source": "agentdock-api", "count": 1, "servers": [
+		"/internal/runtime/mcp": `{"action": "list", "ok": true, "source": "agentdock-api", "count": 2, "servers": [
 			{"name": "github", "description": "GitHub MCP", "transport": "streamable_http",
-			 "enabled": true, "status": "ready", "tool_count": 12}]}`,
+			 "source_type": "standalone", "enabled": true, "status": "ready", "tool_count": 12},
+			{"name": "plugin.context7.context7", "description": "Context7 Plugin MCP", "transport": "streamable_http",
+			 "source_type": "plugin", "plugin_name": "context7", "enabled": true, "status": "ready", "tool_count": 2}]}`,
 	})
 	payload := runtimeContractRequest(t, mux, http.MethodGet, "/v1/runtime/nodes/"+nodeID+"/mcp")
 	if payload["ok"] != true || payload["count"] != float64(1) {
@@ -168,7 +170,7 @@ func TestRuntimeMCPServersThroughBridgeReturnsTypedView(t *testing.T) {
 	}
 	servers, _ := payload["servers"].([]any)
 	server, _ := servers[0].(map[string]any)
-	if server["name"] != "github" || server["enabled"] != true || server["tool_count"] != float64(12) {
+	if server["name"] != "github" || server["source_type"] != "standalone" || server["enabled"] != true || server["tool_count"] != float64(12) {
 		t.Fatalf("MCP 摘要字段错误: %v", server)
 	}
 }

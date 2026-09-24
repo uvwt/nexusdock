@@ -55,29 +55,18 @@ function errorMessage(error: unknown, fallback: string): string {
   return error instanceof Error ? error.message : fallback;
 }
 
-function serverStatusLabel(server: Pick<MCPServer, 'enabled' | 'status'>, t: TFunction): string {
-  if (!server.enabled) return t('Disabled');
-  switch (server.status) {
-    case 'idle': return t('Idle');
-    case 'ready': return t('Ready');
-    case 'connected': return t('Connected');
-    case 'running':
-    case 'active': return t('Running');
-    case 'starting': return t('Starting');
-    case 'pending': return t('Pending');
-    case 'stopped': return t('Stopped');
-    case 'failed': return t('Failed');
-    case 'error': return t('Error');
-    default: return server.status || t('Enabled');
-  }
+function isServerAbnormal(server: Pick<MCPServer, 'status' | 'last_error'>): boolean {
+  return server.status === 'error' || server.status === 'failed' || Boolean(server.last_error);
+}
+
+function serverStatusLabel(server: MCPServer, t: TFunction): string {
+  if (!server.enabled) return t('Not enabled');
+  return isServerAbnormal(server) ? t('Abnormal') : t('Normal');
 }
 
 function statusTone(server: MCPServer): string {
   if (!server.enabled) return 'muted';
-  if (['ready', 'connected', 'running', 'active'].includes(server.status)) return 'ok';
-  if (server.status === 'error' || server.status === 'failed' || server.last_error) return 'danger';
-  if (server.status === 'idle' || server.status === 'stopped') return 'muted';
-  return 'warn';
+  return isServerAbnormal(server) ? 'danger' : 'ok';
 }
 
 function mcpSelectionFromHash(): string {
