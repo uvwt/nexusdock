@@ -30,6 +30,8 @@ github.com/segmentio/encoding v0.5.4 h1:OW1VRern8Nw6ITAtwSZ7Idrl3MXCFwXHPgqESYfv
 github.com/segmentio/encoding v0.5.4/go.mod h1:HS1ZKa3kSN32ZHVZ7ZLPLXWvOVIiZtyJnO1gPH1sKt0=
 github.com/uvwt/agentdock-protocol v0.8.2-0.20260925103632-6546a452fcba h1:essgUl1pkHFlzO09P/rLE5zAaNy4Z22b7Ztw33xh+PA=
 github.com/uvwt/agentdock-protocol v0.8.2-0.20260925103632-6546a452fcba/go.mod h1:yoFrGa/mNuAr3b8fupHCFT0b1Kf4Ni/00T4KnwuiFRk=
+github.com/uvwt/agentdock-protocol v0.8.2-0.20260925113710-f07476a66b9c h1:0q31xTIYJJ/mVXy57/iDds14tRUxXd3U1GYq5lyWw6E=
+github.com/uvwt/agentdock-protocol v0.8.2-0.20260925113710-f07476a66b9c/go.mod h1:yoFrGa/mNuAr3b8fupHCFT0b1Kf4Ni/00T4KnwuiFRk=
 github.com/yosida95/uritemplate/v3 v3.0.2 h1:Ed3Oyj9yrmi9087+NczuL5BwkIc4wvTb5zIM+UJPGz4=
 github.com/yosida95/uritemplate/v3 v3.0.2/go.mod h1:ILOh0sOhIJR3+L/8afwt/kE++YT040gmv5BQTMR2HP4=
 golang.org/x/crypto v0.37.0 h1:kJNSjF/Xp7kU0iB2Z+9viTPMW4EqqsrywMXLJOOsXSE=
