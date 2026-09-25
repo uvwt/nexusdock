@@ -10,26 +10,27 @@ import (
 	"github.com/uvwt/agentdock-protocol/mcpcontract"
 )
 
-func TestCentralToolDefinitionsMatchCanonicalContract(t *testing.T) {
-	definitions := make(map[string]any, len(mcpcontract.ToolNames()))
+func TestCentralToolDefinitionsMatchNexusOwnedCanonicalContract(t *testing.T) {
+	definitions := make(map[string]any, len(mcpcontract.ToolNames())-1)
 	for _, tool := range nexusToolDefinitions() {
 		definitions[tool.Name] = tool
 	}
-	if len(definitions) != len(mcpcontract.ToolNames()) {
-		t.Fatalf("central tool count=%d want=%d", len(definitions), len(mcpcontract.ToolNames()))
+	if len(definitions) != len(mcpcontract.ToolNames())-1 {
+		t.Fatalf("central tool count=%d want=%d", len(definitions), len(mcpcontract.ToolNames())-1)
+	}
+	if _, ok := definitions[mcpcontract.ToolWorkspaceContext]; ok {
+		t.Fatal("workspace_context must remain an AgentDock node tool")
 	}
 	for _, name := range mcpcontract.ToolNames() {
+		if name == mcpcontract.ToolWorkspaceContext {
+			continue
+		}
 		raw, ok := definitions[name]
 		if !ok {
 			t.Fatalf("central tool %s missing", name)
 		}
 		tool := raw.(*mcpsdk.Tool)
-		var wantInput map[string]any
-		if name == mcpcontract.ToolWorkspaceContext {
-			wantInput = mcpcontract.NodeWorkspaceContextInputSchema()
-		} else {
-			wantInput, _ = mcpcontract.InputSchema(name)
-		}
+		wantInput, _ := mcpcontract.InputSchema(name)
 		if !reflect.DeepEqual(tool.InputSchema, wantInput) {
 			t.Fatalf("%s input schema drifted from canonical contract", name)
 		}

@@ -20,7 +20,6 @@ func nexusToolDefinitions() []*mcpsdk.Tool {
 func nexusToolDefinitionsWithApps(mcpAppsEnabled bool) []*mcpsdk.Tool {
 	presentations := []centralToolPresentation{
 		{name: mcpcontract.ToolAgentDockContext, title: "AgentDock fleet context", description: "Return one combined context for all enabled AgentDock nodes, including node-local capabilities and Nexus-owned shared Workflow and Recall context.", uiURI: protocol.ContextUIResourceURI},
-		{name: mcpcontract.ToolWorkspaceContext, title: "AgentDock workspace context", description: "Read AGENTS.md guidance and workspace-local Skill index from one selected AgentDock node. node_id selects the node; workdir is request-local on that node."},
 		{name: mcpcontract.ToolRecallSearch, title: "Search NexusDock Recall", description: "Search Markdown documents and cards with lexical retrieval and optional semantic enhancement when embeddings are available."},
 		{name: mcpcontract.ToolRecallRead, title: "Read NexusDock Recall entry", description: "Read one central Recall entry by path."},
 		{name: mcpcontract.ToolRecallWrite, title: "Write NexusDock Recall entry", description: "Plan, create, replace, append, patch, update facts, diff, or delete central Recall content. The model must choose target and action explicitly.", uiURI: protocol.RecallUIResourceURI},
@@ -40,15 +39,9 @@ func canonicalCentralTool(presentation centralToolPresentation) *mcpsdk.Tool {
 }
 
 func canonicalCentralToolWithApps(presentation centralToolPresentation, mcpAppsEnabled bool) *mcpsdk.Tool {
-	var input map[string]any
-	if presentation.name == mcpcontract.ToolWorkspaceContext {
-		input = mcpcontract.NodeWorkspaceContextInputSchema()
-	} else {
-		var inputOK bool
-		input, inputOK = mcpcontract.InputSchema(presentation.name)
-		if !inputOK {
-			panic("missing canonical MCP input contract: " + presentation.name)
-		}
+	input, inputOK := mcpcontract.InputSchema(presentation.name)
+	if !inputOK {
+		panic("missing canonical MCP input contract: " + presentation.name)
 	}
 	var output map[string]any
 	if presentation.name == mcpcontract.ToolAgentDockContext {

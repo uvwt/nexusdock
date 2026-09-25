@@ -43,6 +43,13 @@ func NewPublishedToolBridge(store *Store, logger *slog.Logger) *PublishedToolBri
 	return &PublishedToolBridge{store: store, logger: logger, published: make(map[string]PublishedTool)}
 }
 
+// isNexusOwnedCanonicalTool 区分“共享 canonical 契约”和“Nexus 运行时所有权”。
+// workspace_context 的 schema 由 mcpcontract 统一定义，但执行仍属于具体 AgentDock 节点；
+// 其他 canonical 工具由 Nexus 自己提供，不能再次从节点 fleet 发布。
+func isNexusOwnedCanonicalTool(name string) bool {
+	return mcpcontract.IsCanonicalTool(name) && name != mcpcontract.ToolWorkspaceContext
+}
+
 // SetPublishHandlers 绑定公开契约变化的协议层回调：publish 在工具首次公开或公开
 // descriptor 变化时收到完整描述符，retire 在工具彻底下架时收到工具名。
 // 必须在触发任何契约变化（LoadPublished、ObserveNodeHello 等）之前调用一次。
@@ -51,8 +58,8 @@ func (b *PublishedToolBridge) SetPublishHandlers(publish func(descriptor ToolDes
 	b.retire = retire
 }
 
-// LoadPublished 从持久化层恢复已公开契约并重新发布。已提升为 Nexus 中央工具的
-// 旧节点契约不再属于 fleet 发布状态，启动时直接清掉持久化残留。
+// LoadPublished 从持久化层恢复已公开契约并重新发布。由 Nexus 自己提供的 canonical 工具
+// 不再属于 node fleet 发布状态，启动时直接清掉历史持久化残留。
 func (b *PublishedToolBridge) LoadPublished(ctx context.Context) error {
 	contracts, err := b.store.ListPublishedToolContracts(ctx)
 	if err != nil {
@@ -61,7 +68,7 @@ func (b *PublishedToolBridge) LoadPublished(ctx context.Context) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	for _, contract := range contracts {
-		if mcpcontract.IsCanonicalTool(contract.ToolName) {
+		if isNexusOwnedCanonicalTool(contract.ToolName) {
 			if err := b.store.DeletePublishedToolContract(ctx, contract.ToolName); err != nil {
 				return err
 			}
@@ -93,7 +100,7 @@ func (b *PublishedToolBridge) LoadPublished(ctx context.Context) error {
 func (b *PublishedToolBridge) ObserveNodeHello(node Node, hello Hello) {
 	helloToolNames := make(map[string]struct{}, len(hello.Tools))
 	for _, descriptor := range hello.Tools {
-		if mcpcontract.IsCanonicalTool(descriptor.Name) || strings.TrimSpace(descriptor.Name) == "" {
+		if isNexusOwnedCanonicalTool(descriptor.Name) || strings.TrimSpace(descriptor.Name) == "" {
 			continue
 		}
 		helloToolNames[descriptor.Name] = struct{}{}
@@ -155,9 +162,9 @@ func (b *PublishedToolBridge) ReconcileNames(names []string) {
 	seen := make(map[string]struct{}, len(names))
 	for _, name := range names {
 		name = strings.TrimSpace(name)
-		// 节点启停或删除后的 fleet 重算也会收到完整 descriptor 名单；中央工具始终由
-		// Nexus 唯一持有，不能在这条旁路中被重新发布为要求 node_id 的节点工具。
-		if name == "" || mcpcontract.IsCanonicalTool(name) {
+		// 节点启停或删除后的 fleet 重算也会收到完整 descriptor 名单；Nexus-owned canonical
+		// 工具不能在这条旁路中被重新发布为要求 node_id 的节点工具。
+		if name == "" || isNexusOwnedCanonicalTool(name) {
 			continue
 		}
 		if _, ok := seen[name]; ok {
@@ -180,7 +187,7 @@ func (b *PublishedToolBridge) ReconcilePublished() {
 // 没有任何 provider（含被禁用节点）时才真正下架公开工具。
 func (b *PublishedToolBridge) reconcile(name string) error {
 	name = strings.TrimSpace(name)
-	if name == "" || mcpcontract.IsCanonicalTool(name) {
+	if name == "" || isNexusOwnedCanonicalTool(name) {
 		return nil
 	}
 	b.reconcileMu.Lock()

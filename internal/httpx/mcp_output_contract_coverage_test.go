@@ -19,7 +19,6 @@ type centralOutputContractCoverageEntry struct {
 // 节点工具由 AgentDock 负责 runtime contract，Nexus 这里只验证代理层保持 outputSchema 与结果透明。
 var centralOutputContractCoverageInventory = map[string]centralOutputContractCoverageEntry{
 	"agentdock_context":        {Variants: []string{"success"}},
-	"workspace_context":        {Variants: []string{"success"}},
 	"recall_search":            {Variants: []string{"success"}},
 	"recall_read":              {Variants: []string{"success"}},
 	"recall_write":             {Variants: []string{"plan", "create", "replace", "append", "patch", "update_fact", "diff", "delete"}},

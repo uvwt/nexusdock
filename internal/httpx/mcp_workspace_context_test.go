@@ -29,6 +29,9 @@ func canonicalWorkspaceContextDescriptor(t *testing.T) agentdock.ToolDescriptor 
 		Title:        "Workspace context",
 		InputSchema:  input,
 		OutputSchema: output,
+		Meta: map[string]any{
+			"ui": map[string]any{"resourceUri": protocol.WorkspaceUIResourceURI},
+		},
 	}
 }
 
@@ -36,7 +39,10 @@ func TestWorkspaceContextRoutesToSelectedNodeWithoutForwardingNodeID(t *testing.
 	store := newHTTPTestAgentDockStore(t)
 	descriptor := canonicalWorkspaceContextDescriptor(t)
 	node := pairHTTPTestNode(t, store, "device_workspace_context", "DockMini", "2.0.0", descriptor)
-	hub := agentdock.NewHub(store)
+	server := newGatewayTestServer(t, store)
+	server.mcpAppsEnabledState = true
+	server.agentDockHub.SetHelloHandler(server.registerNodeTools)
+	hub := server.agentDockHub
 
 	connected := make(chan struct{})
 	bridge := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -57,7 +63,11 @@ func TestWorkspaceContextRoutesToSelectedNodeWithoutForwardingNodeID(t *testing.
 		Type: protocol.MessageNodeHello, ProtocolVersion: agentdock.ConnectionProtocolVersion,
 		Hello: &protocol.Hello{
 			DeviceID: node.DeviceID, Version: node.Version, ProtocolVersion: agentdock.ConnectionProtocolVersion,
-			Capabilities: []string{descriptor.Name}, Tools: []protocol.ToolDescriptor{descriptor}, UIResources: []protocol.UIResourceCapability{},
+			Capabilities: []string{descriptor.Name},
+			Tools:        []protocol.ToolDescriptor{descriptor},
+			UIResources: []protocol.UIResourceCapability{{
+				URI: protocol.WorkspaceUIResourceURI, Contract: protocol.WorkspaceUIContract, MIMEType: protocol.MCPAppMIMEType,
+			}},
 		},
 	}); err != nil {
 		t.Fatal(err)
@@ -67,6 +77,41 @@ func TestWorkspaceContextRoutesToSelectedNodeWithoutForwardingNodeID(t *testing.
 		t.Fatalf("ready=%#v err=%v", ready, err)
 	}
 	<-connected
+
+	published, ok := server.publishedToolBridge.Published(mcpcontract.ToolWorkspaceContext)
+	if !ok {
+		t.Fatal("workspace_context was not published through the node tool bridge")
+	}
+	publishedTool := nodeMCPTool(published.Descriptor)
+	properties := publishedTool.InputSchema.(map[string]any)["properties"].(map[string]any)
+	if _, ok := properties["node_id"]; !ok {
+		t.Fatalf("workspace_context published input missing node_id: %#v", publishedTool.InputSchema)
+	}
+	if _, ok := properties["workdir"]; !ok {
+		t.Fatalf("workspace_context published input lost AgentDock workdir: %#v", publishedTool.InputSchema)
+	}
+	ui, ok := publishedTool.Meta["ui"].(map[string]any)
+	if !ok || ui["resourceUri"] != protocol.WorkspaceUIResourceURI {
+		t.Fatalf("workspace_context Apps UI binding was not relayed: %#v", publishedTool.Meta)
+	}
+	resources, err := server.publishedMCPAppResourceURIs(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := resources[protocol.WorkspaceUIResourceURI]; !ok {
+		t.Fatalf("Workspace MCP App resource was not published: %#v", resources)
+	}
+	publishedHash, err := agentdock.ToolContractHash(published.Descriptor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canonicalHash, err := agentdock.ToolContractHash(descriptor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if publishedHash != canonicalHash {
+		t.Fatalf("workspace_context published contract drifted: got=%s want=%s", publishedHash, canonicalHash)
+	}
 
 	wantStructured := map[string]any{
 		"workdir": "/repo/service", "workspace_root": "/repo",
@@ -79,7 +124,6 @@ func TestWorkspaceContextRoutesToSelectedNodeWithoutForwardingNodeID(t *testing.
 		}},
 		"warnings": []any{},
 	}
-	assertCentralToolResultMatchesOutputSchema(t, mcpcontract.ToolWorkspaceContext, wantStructured)
 	serveDone := make(chan error, 1)
 	go func() {
 		var invoke protocol.Message
@@ -114,7 +158,6 @@ func TestWorkspaceContextRoutesToSelectedNodeWithoutForwardingNodeID(t *testing.
 		serveDone <- socket.WriteJSON(protocol.Message{Type: protocol.MessageToolResult, RequestID: invoke.RequestID, Result: result})
 	}()
 
-	server := &Server{agentDock: store, agentDockHub: hub}
 	result, err := server.callNodeTool(t.Context(), mcpcontract.ToolWorkspaceContext, map[string]any{
 		"node_id": node.ID, "workdir": "/repo/service",
 	})
@@ -129,27 +172,29 @@ func TestWorkspaceContextRoutesToSelectedNodeWithoutForwardingNodeID(t *testing.
 	}
 }
 
-func TestWorkspaceContextRejectsNodeWithDriftedCanonicalContract(t *testing.T) {
+func TestWorkspaceContextRejectsNodeOutsidePublishedContract(t *testing.T) {
 	store := newHTTPTestAgentDockStore(t)
-	descriptor := canonicalWorkspaceContextDescriptor(t)
-	descriptor.InputSchema = map[string]any{
-		"type": "object", "properties": map[string]any{"legacy": map[string]any{"type": "boolean"}},
-		"required": []string{}, "additionalProperties": false,
-	}
-	node := pairHTTPTestNode(t, store, "device_workspace_context_drift", "DockOld", "1.0.0", descriptor)
-	server := &Server{agentDock: store, agentDockHub: agentdock.NewHub(store)}
+	current := canonicalWorkspaceContextDescriptor(t)
+	currentNode := pairHTTPTestNode(t, store, "device_workspace_context_current", "DockMini", "2.0.0", current)
 
-	result, err := server.callNodeTool(t.Context(), mcpcontract.ToolWorkspaceContext, map[string]any{"node_id": node.ID})
+	drifted := canonicalWorkspaceContextDescriptor(t)
+	drifted.InputSchema["properties"].(map[string]any)["workdir"] = map[string]any{"type": "integer"}
+	driftedNode := pairHTTPTestNode(t, store, "device_workspace_context_drift", "DockOld", "1.0.0", drifted)
+
+	server := newGatewayTestServer(t, store)
+	server.registerNodeTools(currentNode, agentdock.Hello{Tools: []agentdock.ToolDescriptor{current}})
+	server.registerNodeTools(driftedNode, agentdock.Hello{Tools: []agentdock.ToolDescriptor{drifted}})
+
+	result, err := server.callNodeTool(t.Context(), mcpcontract.ToolWorkspaceContext, map[string]any{"node_id": driftedNode.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !result.IsError {
-		t.Fatalf("drifted canonical contract was accepted: %#v", result.StructuredContent)
+		t.Fatalf("workspace_context accepted a node outside the published contract: %#v", result.StructuredContent)
 	}
 	structured, _ := result.StructuredContent.(map[string]any)
-	message, _ := structured["error"].(string)
-	if !strings.Contains(message, "canonical contract") {
-		t.Fatalf("drift error is not actionable: %#v", structured)
+	if structured["code"] != "TOOL_CONTRACT_MISMATCH" {
+		t.Fatalf("workspace_context contract mismatch is not actionable: %#v", structured)
 	}
 }
 
