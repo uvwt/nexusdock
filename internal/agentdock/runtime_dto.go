@@ -960,3 +960,13 @@ func parseRuntimeTaskDeleteResult(node, taskID string, payload map[string]any) (
 	}
 	return RuntimeTaskDeleteResult{TaskID: deletedTaskID, DeletedTask: deletedTask}, nil
 }
+
+// RuntimeMCPOAuthCallback 只承载 OAuth Provider 的一次性浏览器回调结果。
+// 这些字段只经 Nexus Bridge 短暂转发，不写入 Nexus 数据库或日志。
+type RuntimeMCPOAuthCallback struct {
+	State            string `json:"state"`
+	Code             string `json:"code,omitempty"`
+	Issuer           string `json:"iss,omitempty"`
+	Error            string `json:"error,omitempty"`
+	ErrorDescription string `json:"error_description,omitempty"`
+}

@@ -358,7 +358,7 @@ func connectResourceTestNode(t *testing.T, hub *agentdock.Hub, node agentdock.No
 	t.Helper()
 	connected := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := hub.Accept(w, r, node.ID); err != nil {
+		if err := hub.Accept(w, r, node.ID, ""); err != nil {
 			t.Errorf("accept resource node: %v", err)
 			return
 		}

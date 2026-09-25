@@ -100,7 +100,7 @@ func (s *Server) agentDockNodeConnect(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "INVALID_DEVICE_TOKEN", "AgentDock Device Token 无效")
 		return
 	}
-	if err := s.agentDockHub.Accept(w, r, principal.Actor.ID); err != nil {
+	if err := s.agentDockHub.Accept(w, r, principal.Actor.ID, s.cfg.PublicURL); err != nil {
 		// WebSocket Upgrade 成功后不能再写 HTTP 响应；连接端会收到关闭事件并重连。
 		return
 	}

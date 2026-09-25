@@ -1206,6 +1206,7 @@ def build_openapi(schemas: dict[str, Any]) -> dict[str, Any]:
             "post": operation("manageRuntimeMCPServer", "管理指定 AgentDock 节点的动态 MCP 服务", params=[p("RuntimeNodeId")], request=body()),
         },
         "/v1/runtime/nodes/{nodeID}/mcp/{name}": {"get": operation("getRuntimeMCPServer", "读取指定 AgentDock 节点的动态 MCP 服务", params=[p("RuntimeNodeId"), p("RuntimeMCPName")])},
+        "/v1/runtime/nodes/{nodeID}/mcp/{name}/authorize": {"post": operation("authorizeRuntimeMCPServer", "通过当前 Nexus 浏览器为指定 AgentDock 节点的 Remote MCP 发起 OAuth 授权", params=[p("RuntimeNodeId"), p("RuntimeMCPName")])},
         "/v1/runtime/nodes/{nodeID}/mcp/{name}/environment": {"get": operation("getRuntimeMCPEnvironment", "读取指定 AgentDock 节点的 MCP 隔离环境元数据", params=[p("RuntimeNodeId"), p("RuntimeMCPName")])},
         "/v1/workflow-templates": {
             "get": operation(

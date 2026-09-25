@@ -26,7 +26,7 @@ func TestHubInvokesConnectedNode(t *testing.T) {
 	hub := NewHub(store)
 	connected := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := hub.Accept(w, r, node.ID); err != nil {
+		if err := hub.Accept(w, r, node.ID, "https://nexus.example.test/"); err != nil {
 			t.Errorf("accept: %v", err)
 			return
 		}
@@ -47,6 +47,9 @@ func TestHubInvokesConnectedNode(t *testing.T) {
 	var ready connectionMessage
 	if err := socket.ReadJSON(&ready); err != nil || ready.Type != protocol.MessageNodeReady {
 		t.Fatalf("ready=%#v err=%v", ready, err)
+	}
+	if ready.PublicURL != "https://nexus.example.test" {
+		t.Fatalf("ready public_url = %q", ready.PublicURL)
 	}
 	<-connected
 
@@ -109,7 +112,7 @@ func TestHubRejectsStructurallyInvalidBridgeV2UIResourceHandshake(t *testing.T) 
 			hub := NewHub(store)
 			acceptErr := make(chan error, 1)
 			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				acceptErr <- hub.Accept(w, r, node.ID)
+				acceptErr <- hub.Accept(w, r, node.ID, "")
 			}))
 			defer server.Close()
 

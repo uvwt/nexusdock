@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { Cable, KeyRound, Link, Power, RefreshCw, Server, Terminal, Trash2 } from 'lucide-react';
+import { Cable, KeyRound, Link, LogIn, Power, RefreshCw, Server, Terminal, Trash2 } from 'lucide-react';
 import { ApiError, api } from '../../api/client';
 import Dialog from '../Dialog';
 import MobileDrilldownBar from '../MobileDrilldownBar';
@@ -32,6 +32,7 @@ type MCPConfig = {
 type MCPListResponse = { ok: boolean; servers: MCPServer[]; count: number };
 type MCPDetailResponse = { ok: boolean; server: MCPServer; config: MCPConfig };
 type MCPEnvResponse = { ok: boolean; items: Array<{ key: string; configured: boolean }>; count: number };
+type MCPAuthorizeResponse = { ok: boolean; authorization_url?: string; callback_id?: string; expires_at?: string };
 type Notice = { tone: 'success' | 'error'; text: string };
 
 type AddForm = {
@@ -56,16 +57,20 @@ function errorMessage(error: unknown, fallback: string): string {
 }
 
 function isServerAbnormal(server: Pick<MCPServer, 'status' | 'last_error'>): boolean {
+  if (server.status === 'auth_required' || server.status === 'authorizing') return false;
   return server.status === 'error' || server.status === 'failed' || Boolean(server.last_error);
 }
 
 function serverStatusLabel(server: MCPServer, t: TFunction): string {
   if (!server.enabled) return t('Not enabled');
+  if (server.status === 'auth_required') return t('Authorization required');
+  if (server.status === 'authorizing') return t('Authorizing…');
   return isServerAbnormal(server) ? t('Abnormal') : t('Normal');
 }
 
 function statusTone(server: MCPServer): string {
   if (!server.enabled) return 'muted';
+  if (server.status === 'auth_required' || server.status === 'authorizing') return 'warn';
   return isServerAbnormal(server) ? 'danger' : 'ok';
 }
 
@@ -161,6 +166,11 @@ export default function MCPPage({ nodeID, refreshToken, addOpen, onAddOpenChange
     setDetail(null);
     if (selected?.name) void loadDetail(selected.name);
   }, [selected?.name, nodeID]);
+  useEffect(() => {
+    if (!servers.some((server) => server.status === 'authorizing')) return;
+    const timer = window.setInterval(() => { void loadServers(selectedName); }, 2_000);
+    return () => window.clearInterval(timer);
+  }, [servers, selectedName, nodeID]);
 
   async function manage(action: string, name: string, payload: Record<string, unknown> = {}): Promise<boolean> {
     setBusy(`${action}:${name}`);
@@ -174,6 +184,30 @@ export default function MCPPage({ nodeID, refreshToken, addOpen, onAddOpenChange
     } catch (error) {
       setNotice({ tone: 'error', text: errorMessage(error, t('MCP operation failed')) });
       return false;
+    } finally {
+      setBusy('');
+    }
+  }
+
+  async function authorize(name: string) {
+    setBusy(`authorize:${name}`);
+    setNotice(null);
+    const authWindow = window.open('', 'agentdock-mcp-oauth', 'popup,width=720,height=760');
+    try {
+      const result = await api<MCPAuthorizeResponse>(`${runtimeBase}/mcp/${encodeURIComponent(name)}/authorize`, { method: 'POST' });
+      if (!result.authorization_url) throw new Error(t('AgentDock did not return an authorization URL.'));
+      if (authWindow) {
+        try { authWindow.opener = null; } catch { /* browser policy may already isolate it */ }
+        authWindow.location.replace(result.authorization_url);
+      } else {
+        window.location.assign(result.authorization_url);
+      }
+      await loadServers(name);
+      await loadDetail(name);
+      setNotice({ tone: 'success', text: t('Authorization opened for “{{name}}”. Complete consent in the new window.', { name }) });
+    } catch (error) {
+      authWindow?.close();
+      setNotice({ tone: 'error', text: errorMessage(error, t('MCP authorization failed')) });
     } finally {
       setBusy('');
     }
@@ -264,6 +298,7 @@ export default function MCPPage({ nodeID, refreshToken, addOpen, onAddOpenChange
           onSaveEnvironment={saveEnvironment}
           onRemoveEnvironment={removeEnvironment}
           onRefresh={() => void manage('refresh', selected.name)}
+          onAuthorize={() => void authorize(selected.name)}
           onToggle={() => void manage(selected.enabled ? 'disable' : 'enable', selected.name)}
           onRemove={() => setRemoveTarget(selected)}
         /> : <div className="mcp-empty is-detail"><Server size={28} /><strong>{t('Select an MCP service')}</strong><span>{t('View connection details, tool counts, and isolated environment variables.')}</span></div>}
@@ -292,7 +327,7 @@ export default function MCPPage({ nodeID, refreshToken, addOpen, onAddOpenChange
   </section>;
 }
 
-function MCPDetail({ server, config, envItems, envKey, envValue, busy, onEnvKey, onEnvValue, onSaveEnvironment, onRemoveEnvironment, onRefresh, onToggle, onRemove }: {
+function MCPDetail({ server, config, envItems, envKey, envValue, busy, onEnvKey, onEnvValue, onSaveEnvironment, onRemoveEnvironment, onRefresh, onAuthorize, onToggle, onRemove }: {
   server: MCPServer;
   config: MCPConfig;
   envItems: MCPEnvResponse['items'];
@@ -304,6 +339,7 @@ function MCPDetail({ server, config, envItems, envKey, envValue, busy, onEnvKey,
   onSaveEnvironment: (event: FormEvent) => void;
   onRemoveEnvironment: (key: string) => void;
   onRefresh: () => void;
+  onAuthorize: () => void;
   onToggle: () => void;
   onRemove: () => void;
 }) {
@@ -314,12 +350,13 @@ function MCPDetail({ server, config, envItems, envKey, envValue, busy, onEnvKey,
       <span className={`status-badge tone-${statusTone(server)}`}><span />{serverStatusLabel(server, t)}</span>
     </header>
     <div className="mcp-actions">
-      <button type="button" className="nx-button is-secondary" disabled={!!busy || !server.enabled} title={server.enabled ? t('Rediscover MCP tools') : t('Please enable the MCP service first')} onClick={onRefresh}><RefreshCw size={15} />{t('Refresh tools')}</button>
+      {server.transport === 'streamable_http' && (server.status === 'auth_required' || server.status === 'authorizing') ? <button type="button" className="nx-button" disabled={!!busy || !server.enabled} onClick={onAuthorize}><LogIn size={15} />{server.status === 'authorizing' ? t('Open authorization') : t('Authorize')}</button> : null}
+      <button type="button" className="nx-button is-secondary" disabled={!!busy || !server.enabled || server.status === 'auth_required' || server.status === 'authorizing'} title={server.enabled ? t('Rediscover MCP tools') : t('Please enable the MCP service first')} onClick={onRefresh}><RefreshCw size={15} />{t('Refresh tools')}</button>
       <button type="button" className="nx-button is-secondary" disabled={!!busy} onClick={onToggle}><Power size={15} />{server.enabled ? t('Disable') : t('Enable')}</button>
       <button type="button" className="nx-button is-danger" disabled={!!busy} onClick={onRemove}><Trash2 size={15} />{t('Remove')}</button>
     </div>
     <section className="mcp-metrics"><div><span>{t('Tools')}</span><strong>{server.tool_count || 0}</strong></div><div><span>{t('Transport')}</span><strong>{server.transport}</strong></div><div><span>{t('Status')}</span><strong>{serverStatusLabel(server, t)}</strong></div></section>
-    {server.last_error && <div className="nx-alert is-error">{server.last_error}</div>}
+    {server.last_error && <div className={`nx-alert is-${server.status === 'auth_required' || server.status === 'authorizing' ? 'warning' : 'error'}`}>{server.last_error}</div>}
     <section className="mcp-section"><h4>{t('Connection configuration')}</h4><dl><div><dt>{config.transport === 'stdio' ? t('Command') : 'URL'}</dt><dd>{config.transport === 'stdio' ? [config.command, ...(config.args || [])].filter(Boolean).join(' ') : config.url || t('None')}</dd></div>{config.cwd && <div><dt>{t('Working directory')}</dt><dd>{config.cwd}</dd></div>}</dl></section>
     <section className="mcp-section"><div className="mcp-section-head"><div><h4>{t('Isolated Environment')}</h4><p>{t('Only shows variable names and configuration status; original values are never read.')}</p></div><KeyRound size={18} /></div>
       <div className="mcp-env-list">{envItems.length === 0 ? <p className="empty-mini">{t('No environment variables configured.')}</p> : envItems.map((item) => <div key={item.key}><span><strong>{item.key}</strong><small>{item.configured ? t('Configured') : t('Empty')}</small></span><button type="button" disabled={!!busy} onClick={() => onRemoveEnvironment(item.key)}>{t('Delete')}</button></div>)}</div>

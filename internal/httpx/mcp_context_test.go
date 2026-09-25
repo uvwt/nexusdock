@@ -312,7 +312,7 @@ func connectFleetContextTestNode(t *testing.T, hub *agentdock.Hub, node agentdoc
 	t.Helper()
 	connected := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := hub.Accept(w, r, node.ID); err != nil {
+		if err := hub.Accept(w, r, node.ID, ""); err != nil {
 			t.Errorf("accept context node: %v", err)
 			return
 		}
@@ -414,7 +414,7 @@ func connectStalledFleetContextTestNode(t *testing.T, hub *agentdock.Hub, node a
 	t.Helper()
 	connected := make(chan struct{})
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := hub.Accept(w, r, node.ID); err != nil {
+		if err := hub.Accept(w, r, node.ID, ""); err != nil {
 			t.Errorf("accept stalled context node: %v", err)
 			return
 		}

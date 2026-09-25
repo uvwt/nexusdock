@@ -9,6 +9,7 @@ import (
 var runtimeMCPActions = map[string]bool{
 	"add": true, "remove": true, "enable": true, "disable": true,
 	"env_set": true, "env_unset": true, "env_list": true, "refresh": true,
+	"authorize": true, "auth_clear": true,
 }
 
 type runtimeMCPRequest struct {
@@ -26,12 +27,14 @@ type runtimeMCPRequest struct {
 	TimeoutMS   int               `json:"timeout_ms,omitempty"`
 	Key         string            `json:"key,omitempty"`
 	Value       string            `json:"value,omitempty"`
+	CallbackID  string            `json:"callback_id,omitempty"`
 }
 
 func (s *Server) registerRuntimeMCPRoutes(mux *http.ServeMux, protected func(http.HandlerFunc) http.HandlerFunc) {
 	mux.HandleFunc("GET /v1/runtime/nodes/{nodeID}/mcp", protected(s.runtimeMCPServers))
 	mux.HandleFunc("GET /v1/runtime/nodes/{nodeID}/mcp/{name}/environment", protected(s.runtimeMCPEnvironment))
 	mux.HandleFunc("GET /v1/runtime/nodes/{nodeID}/mcp/{name}", protected(s.runtimeMCPServer))
+	mux.HandleFunc("POST /v1/runtime/nodes/{nodeID}/mcp/{name}/authorize", protected(s.runtimeMCPAuthorize))
 	mux.HandleFunc("POST /v1/runtime/nodes/{nodeID}/mcp", protected(s.runtimeMCPManage))
 }
 
@@ -103,6 +106,28 @@ func (s *Server) runtimeMCPManage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// 响应是随 action 变化的透传 map（密钥值已在 agentdock 层强制移除），Nexus 不解读其内容。
+	payload, err := s.agentDockHub.RuntimeMCPManage(r.Context(), nodeID, body)
+	if err != nil {
+		writeRuntimeUnavailable(w, err)
+		return
+	}
+	payload["node_id"] = nodeID
+	writeJSON(w, http.StatusOK, payload)
+}
+
+func (s *Server) runtimeMCPAuthorize(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.PathValue("name"))
+	if name == "" || strings.Contains(name, "/") {
+		writeError(w, http.StatusBadRequest, "INVALID_MCP_NAME", "MCP 名称不能为空")
+		return
+	}
+	nodeID := r.PathValue("nodeID")
+	body, err := json.Marshal(runtimeMCPRequest{Action: "authorize", Name: name, CallbackID: "nexus"})
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, "INTERNAL_ERROR", "编码 MCP 授权请求失败")
+		return
+	}
+	// Nexus UI 本身就是 callback 选择：服务端固定 nexus，浏览器不能注入任意 redirect URI。
 	payload, err := s.agentDockHub.RuntimeMCPManage(r.Context(), nodeID, body)
 	if err != nil {
 		writeRuntimeUnavailable(w, err)

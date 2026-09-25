@@ -32,6 +32,13 @@ const runtime: Record<string, string> = {
 
   // MCPPage
   'MCP operation failed': 'MCP 操作失败',
+  'MCP authorization failed': 'MCP 授权失败',
+  'Authorization required': '待授权',
+  'Authorizing…': '授权中…',
+  'Authorize': '授权',
+  'Open authorization': '打开授权',
+  'AgentDock did not return an authorization URL.': 'AgentDock 没有返回授权地址。',
+  'Authorization opened for “{{name}}”. Complete consent in the new window.': '已为「{{name}}」打开授权页面，请在新窗口完成授权。',
   'Added MCP “{{name}}”.': '已添加 MCP「{{name}}」。',
   'Add MCP': '添加 MCP',
   'registered services': '个已注册服务',

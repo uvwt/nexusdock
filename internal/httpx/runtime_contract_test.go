@@ -43,7 +43,7 @@ func runtimeContractTestServer(t *testing.T, canned map[string]string) (*Server,
 	}
 	hub := agentdock.NewHub(store)
 	bridge := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if err := hub.Accept(w, r, node.ID); err != nil {
+		if err := hub.Accept(w, r, node.ID, ""); err != nil {
 			t.Errorf("accept node: %v", err)
 		}
 	}))
@@ -247,5 +247,49 @@ func TestRuntimeSkillFileThroughBridgeRejectsWrongType(t *testing.T) {
 	}
 	if !strings.Contains(response.Body.String(), "file.size_bytes") {
 		t.Fatalf("错误缺少字段路径: %s", response.Body.String())
+	}
+}
+
+func TestMCPOAuthCallbackRelaysToTargetNodeWithoutWebSession(t *testing.T) {
+	server, _, nodeID := runtimeContractTestServer(t, map[string]string{
+		"/internal/runtime/mcp/oauth/callback": `{"accepted": true}`,
+	})
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet,
+		"/oauth/mcp/nodes/"+nodeID+"/callback?code=code-1&state=state-1&iss=https%3A%2F%2Fissuer.example.test", nil)
+	request.SetPathValue("nodeID", nodeID)
+
+	server.mcpOAuthCallback(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	if response.Header().Get("Cache-Control") != "no-store" || response.Header().Get("Referrer-Policy") != "no-referrer" {
+		t.Fatalf("callback security headers = %#v", response.Header())
+	}
+	if strings.Contains(response.Body.String(), "code-1") || strings.Contains(response.Body.String(), "state-1") {
+		t.Fatalf("callback response echoed one-time credentials: %s", response.Body.String())
+	}
+}
+
+func TestRuntimeMCPAuthorizeAlwaysUsesNexusCallback(t *testing.T) {
+	server, _, nodeID := runtimeContractTestServer(t, map[string]string{
+		"/internal/runtime/mcp": `{"action":"authorize","name":"cloudflare","authorization_url":"https://auth.example.test/authorize","callback_id":"nexus"}`,
+	})
+	mux := http.NewServeMux()
+	server.registerRuntimeMCPRoutes(mux, func(next http.HandlerFunc) http.HandlerFunc { return next })
+	response := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/v1/runtime/nodes/"+nodeID+"/mcp/cloudflare/authorize", nil)
+	mux.ServeHTTP(response, request)
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload["callback_id"] != "nexus" || payload["authorization_url"] == "" {
+		t.Fatalf("authorize payload = %#v", payload)
 	}
 }

@@ -175,3 +175,15 @@ func (h *Hub) RuntimeEvolve(ctx context.Context, nodeID string, payload json.Raw
 	_, err := h.invokeRuntime(ctx, nodeID, http.MethodPost, "/internal/runtime/evolve", nil, payload)
 	return err
 }
+
+// RuntimeMCPOAuthCallback 把 OAuth Provider 回到 Nexus 的一次性 code/state 原样投递给
+// 目标 AgentDock。Nexus 不保存 PKCE verifier、access token 或 refresh token；真正的
+// token exchange 仍只发生在节点本地。
+func (h *Hub) RuntimeMCPOAuthCallback(ctx context.Context, nodeID string, callback RuntimeMCPOAuthCallback) error {
+	body, err := json.Marshal(callback)
+	if err != nil {
+		return fmt.Errorf("编码 Remote MCP OAuth callback: %w", err)
+	}
+	_, err = h.invokeRuntime(ctx, nodeID, http.MethodPost, "/internal/runtime/mcp/oauth/callback", nil, body)
+	return err
+}

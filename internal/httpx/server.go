@@ -204,6 +204,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /ready", s.ready)
 	mux.HandleFunc("GET /artifacts/public/{nodeID}/{artifactID}/{filename}", s.servePublicArtifact)
 	mux.HandleFunc("HEAD /artifacts/public/{nodeID}/{artifactID}/{filename}", s.servePublicArtifact)
+	mux.HandleFunc("GET /oauth/mcp/nodes/{nodeID}/callback", s.mcpOAuthCallback)
 	if s.mcpHandler != nil {
 		gateway := s.withMCPAccess(s.mcpHandler.ServeHTTP)
 		mux.HandleFunc("GET /mcp", gateway)
