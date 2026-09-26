@@ -218,7 +218,7 @@ export default function WorkflowTemplatesPage({ refreshToken }: { refreshToken: 
         <div className="workflow-toolbar">
           <label className="workflow-search"><Search size={15} /><input aria-label={t('Search workflow templates')} value={query} onChange={(event) => { setQuery(event.target.value); setMobileDetailOpen(false); }} placeholder={t('Search title or keywords')} /></label>
         </div>
-        <div className="workflow-list-summary"><strong>{filtered.length}</strong><span>{t('workflow templates')}</span><em>{t('Only current version shown')}</em></div>
+        <div className="workflow-list-summary"><strong>{filtered.length}</strong><span>{t('workflow templates')}</span></div>
         <div className="workflow-list">
           {loading ? <p className="empty-mini">{t('Loading workflow templates…')}</p> : filtered.length === 0 ? <p className="empty-mini">{t('No matching templates.')}</p> : filtered.map((item) => <button type="button" key={item.id} className={selectedCurrent?.id === item.id ? 'is-active' : ''} aria-pressed={selectedCurrent?.id === item.id} onClick={() => void openCurrentTemplate(item, true)}>
             <span className="workflow-file-icon"><FileJson size={16} /></span>

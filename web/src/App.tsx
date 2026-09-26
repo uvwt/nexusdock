@@ -5,7 +5,7 @@ import i18n from './i18n';
 import {
   Activity, BrainCircuit, Cable, ChevronRight,
   CircleAlert, CirclePlus, Database, FileJson, Home, ListChecks, Menu, RefreshCw,
-  Package, ServerCog, Settings, ShieldCheck, UserRound, Wrench, X,
+  Package, ServerCog, Settings, UserRound, Wrench, X,
 } from 'lucide-react';
 import RecallWorkspace from './RecallWorkspace';
 import { type WebSession } from './Auth';
@@ -206,7 +206,6 @@ export default function App() {
             })}
           </div>)}
         </nav>
-        <div className="nexus-sidebar-foot"><ShieldCheck size={16} /><span><strong>Private workspace</strong><small>Local-first console</small></span></div>
       </aside>
       {menuOpen && <button type="button" className="nexus-scrim" aria-label={t('Close menu')} onClick={() => setMenuOpen(false)} />}
       <main className="nexus-main">
@@ -307,7 +306,10 @@ function HomePage({ refreshToken, runtimeNodes, navigate }: { refreshToken: numb
   const offlineNodes = enabledNodes.filter((node) => !node.online);
   const runtimeErrors = Object.entries(runtimeMetrics.errors).map(([nodeID, message]) => {
     const node = runtimeNodes.nodes.find((item) => item.id === nodeID);
-    return `${node?.name || nodeID}: ${message}`;
+    const displayMessage = message === t('Request failed') || message === 'Request failed'
+      ? t('Request failed. Check whether AgentDock and NexusDock need to be updated.')
+      : message;
+    return `${node?.name || nodeID}: ${displayMessage}`;
   });
   const serviceErrors = [system.error, runtimeNodes.error].filter(Boolean) as string[];
   const errors = [...serviceErrors, ...runtimeErrors];
@@ -321,7 +323,7 @@ function HomePage({ refreshToken, runtimeNodes, navigate }: { refreshToken: numb
 
   return <>
     <section className="nexus-overview-strip">
-      <div><span className="nexus-kicker">{t('Personal console')}</span><h2>{coreNeedsAttention ? t('Items need attention') : t('Core services are healthy')}</h2><p>{t('Database {{database}} · Nodes {{nodes}}', { database: system.data.database || 'unknown', nodes: nodeSummary })}</p></div>
+      <div><span className="nexus-kicker">{t('System overview')}</span><h2>{coreNeedsAttention ? t('Items need attention') : t('Running normally')}</h2></div>
       <div className="nexus-overview-status"><StatusBadge tone={systemTone}>Nexus</StatusBadge><StatusBadge tone={nodesTone}>{t('Nodes {{summary}}', { summary: nodeSummary })}</StatusBadge></div>
     </section>
     {serviceErrors.length > 0 && <InlineAlert tone="danger" title={t('Some data could not be loaded')} message={serviceErrors.join('; ')} />}
@@ -330,7 +332,7 @@ function HomePage({ refreshToken, runtimeNodes, navigate }: { refreshToken: numb
 
     {needsAttention && <Panel className="dashboard-attention-panel" icon={CircleAlert} title={t('Needs attention')} subtitle={t('Only issues that affect normal use are shown')}>
       {databaseAbnormal && <button type="button" className="attention-row" onClick={() => navigate('settings')}><StatusBadge tone="danger">{t('Abnormal')}</StatusBadge><span><strong>{t('Database abnormal')}</strong><small>{system.data.database || 'unknown'}</small></span><ChevronRight size={16} /></button>}
-      {offlineNodes.map((node) => <button type="button" className="attention-row" key={node.id} onClick={() => { window.location.hash = 'settings/system'; }}><StatusBadge tone="danger">{t('Offline')}</StatusBadge><span><strong>{node.name}</strong><small>{formatTime(node.last_seen_at, { compact: true })}</small></span><ChevronRight size={16} /></button>)}
+      {offlineNodes.map((node) => <button type="button" className="attention-row" key={node.id} onClick={() => { window.location.hash = 'settings/system'; }}><StatusBadge tone="danger">{t('Offline')}</StatusBadge><span><strong>{node.name}</strong></span><small className="attention-row-time">{formatTime(node.last_seen_at, { compact: true })}</small><ChevronRight size={16} /></button>)}
       {errors.map((message) => <div className="nx-alert is-error" key={message}>{message}</div>)}
     </Panel>}
   </>;
@@ -339,6 +341,10 @@ function HomePage({ refreshToken, runtimeNodes, navigate }: { refreshToken: numb
 function NodeOverview({ runtimeNodes, runtimeMetrics }: { runtimeNodes: RuntimeNodesState; runtimeMetrics: RuntimeMetricsState }) {
   const { t } = useTranslation();
   const onlineCount = runtimeNodes.nodes.filter((node) => node.enabled && node.online).length;
+  const orderedNodes = [
+    ...runtimeNodes.nodes.filter((node) => node.enabled),
+    ...runtimeNodes.nodes.filter((node) => !node.enabled),
+  ];
   return <section className="dashboard-node-section">
     <header>
       <div className="dashboard-node-heading"><span className="nexus-panel-icon"><ServerCog size={17} /></span><div><h3>{t('AgentDock nodes')}</h3><p>{runtimeNodes.loading ? t('Loading node status…') : t('{{count}} nodes · {{online}} online', { count: runtimeNodes.nodes.length, online: onlineCount })}</p></div></div>
@@ -347,9 +353,9 @@ function NodeOverview({ runtimeNodes, runtimeMetrics }: { runtimeNodes: RuntimeN
     <div className="dashboard-node-list">
       {runtimeNodes.loading && runtimeNodes.nodes.length === 0 && <EmptyMini text={t('Loading AgentDock nodes…')} />}
       {!runtimeNodes.loading && runtimeNodes.nodes.length === 0 && <EmptyMini text={t('No AgentDock nodes have been paired.')} />}
-      {runtimeNodes.nodes.map((node) => {
+      {orderedNodes.map((node) => {
         const statusTone: Tone = !node.enabled ? 'muted' : node.online ? 'ok' : 'danger';
-        const statusLabel = !node.enabled ? t('Disabled') : node.online ? t('Online') : t('Offline');
+        const statusLabel = !node.enabled ? t('Node disabled') : node.online ? t('Online') : t('Offline');
         const metrics = runtimeMetrics.data[node.id];
         const metricValue = (value?: number | null) => {
           if (!node.enabled || !node.online) return '—';
@@ -464,7 +470,7 @@ function SystemSettingsPage({ refreshToken, runtimeNodes }: { refreshToken: numb
       <Panel icon={Activity} title={t('System')} subtitle={t('Runtime status and data locations')}>
         <SettingValue label={t('Service')} value={system.data.service || 'nexusdock'} tone={system.data.ok ? 'ok' : 'danger'} />
         <SettingValue label={t('Database')} value={system.data.database || 'unknown'} tone={system.data.database === 'ok' ? 'ok' : 'danger'} />
-        <details className="nexus-technical-details"><summary>{t('Data & version')}</summary><SettingValue label={t('Version')} value={system.data.version || 'dev'} mono /><SettingValue label={t('Revision')} value={system.data.revision || 'unknown'} mono /><SettingValue label="Schema" value={String(system.data.schema_version || 0)} /><SettingValue label={t('Nexus data')} value={system.data.nexus_data_dir || t('None')} mono /><SettingValue label={t('Recall repository')} value={system.data.recall_repo_dir || t('None')} mono /></details>
+        <section className="nexus-technical-details"><SettingValue label={t('Version')} value={system.data.version || 'dev'} mono /><SettingValue label={t('Revision')} value={system.data.revision || 'unknown'} mono /><SettingValue label="Schema" value={String(system.data.schema_version || 0)} /><SettingValue label={t('Nexus data')} value={system.data.nexus_data_dir || t('None')} mono /><SettingValue label={t('Recall repository')} value={system.data.recall_repo_dir || t('None')} mono /></section>
       </Panel>
     </section>
   </section>;

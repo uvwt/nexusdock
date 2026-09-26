@@ -35,6 +35,8 @@
 
   --nx-radius: 6px;
   --nx-radius-large: 10px;
+  --nx-master-rail-width: 320px;
+  --nx-master-detail-gap: 10px;
 }
 
 * { box-sizing: border-box; }

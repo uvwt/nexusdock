@@ -41,13 +41,10 @@
 }
 
 .nexus-brand strong,
-.nexus-brand small,
-.nexus-sidebar-foot strong,
-.nexus-sidebar-foot small { display: block; }
+.nexus-brand small { display: block; }
 
 .nexus-brand strong { font-size: 14px; }
-.nexus-brand small,
-.nexus-sidebar-foot small { margin-top: 2px; color: var(--nx-muted); font-size: 10px; }
+.nexus-brand small { margin-top: 2px; color: var(--nx-muted); font-size: 10px; }
 
 .nexus-sidebar nav { display: grid; gap: 2px; }
 .nexus-nav-group { display: grid; gap: 2px; }
@@ -78,16 +75,6 @@
 
 .nexus-sidebar nav button:hover { border-color: #d8d8d8; background: #e8e8e8; color: #171717; }
 .nexus-sidebar nav button.active { border-color: #171717; background: #171717; color: #fff; }
-
-.nexus-sidebar-foot {
-  margin-top: auto;
-  padding: 14px 8px 0;
-  display: flex;
-  gap: 9px;
-  align-items: center;
-  border-top: 1px solid var(--nx-line);
-  color: #555;
-}
 
 .nexus-main { min-width: 0; }
 
@@ -390,7 +377,7 @@
   min-height: 48px;
   padding: 8px 0;
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
   gap: 10px;
   align-items: center;
   border: 0;
@@ -400,6 +387,8 @@
   text-align: left;
 }
 .attention-row:last-child { border-bottom: 0; }
+.attention-row > svg:last-child { grid-column: -1; }
+.attention-row-time { color: var(--nx-muted); font-size: 11px; white-space: nowrap; text-align: right; }
 button.attention-row { cursor: pointer; }
 
 .nexus-technical-details,
@@ -409,7 +398,6 @@ button.attention-row { cursor: pointer; }
   border-top: 1px solid var(--nx-line);
 }
 
-.nexus-technical-details > summary,
 .ops-secondary-details > summary,
 .workflow-secondary-details > summary,
 .ops-json-panel > summary,
@@ -417,10 +405,13 @@ button.attention-row { cursor: pointer; }
   padding: 10px 0;
   list-style: none;
   color: var(--nx-muted);
-  cursor: pointer;
   font-size: 11px;
   font-weight: 700;
 }
+.ops-secondary-details > summary,
+.workflow-secondary-details > summary,
+.ops-json-panel > summary,
+.workflow-runtime-json > summary { cursor: pointer; }
 summary::-webkit-details-marker { display: none; }
 
 
@@ -502,6 +493,7 @@ summary::-webkit-details-marker { display: none; }
 .agentdock-node-check input { width: 15px; height: 15px; margin: 0; }
 .agentdock-node-form input { height: 36px; padding: 0 10px; border: 1px solid var(--nx-line-strong); border-radius: 6px; }
 .agentdock-node-form .is-wide { grid-column: 1 / -1; }
+.agentdock-node-form footer { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 7px; }
 .agentdock-pairing > p { margin: 0 0 7px; color: var(--nx-text); }
 .agentdock-pairing-hint { margin-top: 10px !important; margin-bottom: 0 !important; color: var(--nx-muted) !important; font-size: 11px; text-align: right; }
 .agentdock-pair-command {
@@ -571,13 +563,13 @@ summary::-webkit-details-marker { display: none; }
 .ops-auto-refresh { display: flex; align-items: center; gap: 5px; }
 .ops-auto-refresh i { width: 6px; height: 6px; border-radius: 50%; background: var(--nx-success); }
 
-.ops-master-detail { display: grid; grid-template-columns: minmax(280px, 330px) minmax(0, 1fr); gap: 12px; align-items: start; }
+.ops-master-detail { display: grid; grid-template-columns: var(--nx-master-rail-width) minmax(0, 1fr); gap: var(--nx-master-detail-gap); align-items: start; }
 
 .skills-workspace {
   min-width: 0;
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: var(--nx-master-rail-width) minmax(0, 1fr);
+  gap: var(--nx-master-detail-gap);
   align-items: start;
 }
 .skills-catalog,
@@ -634,8 +626,8 @@ summary::-webkit-details-marker { display: none; }
 .plugin-layout {
   min-width: 0;
   display: grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  gap: 10px;
+  grid-template-columns: var(--nx-master-rail-width) minmax(0, 1fr);
+  gap: var(--nx-master-detail-gap);
   align-items: start;
 }
 .plugin-list-panel,
@@ -841,7 +833,7 @@ summary::-webkit-details-marker { display: none; }
 
 /* 工作流模板 */
 .workflow-page { display: grid; gap: 12px; }
-.workflow-layout { display: grid; grid-template-columns: 320px minmax(0,1fr); gap: 12px; align-items: start; }
+.workflow-layout { display: grid; grid-template-columns: var(--nx-master-rail-width) minmax(0,1fr); gap: var(--nx-master-detail-gap); align-items: start; }
 .workflow-list-panel { padding: 10px; border: 1px solid var(--nx-line); border-radius: 7px; background: #fff; }
 .workflow-toolbar { display: grid; gap: 8px; }
 .workflow-toolbar > label { display: grid; gap: 5px; color: var(--nx-muted); font-size: 10px; }
@@ -914,7 +906,7 @@ summary::-webkit-details-marker { display: none; }
 
 /* MCP */
 .mcp-page { display: grid; gap: 12px; }
-.mcp-layout { display: grid; grid-template-columns: 300px minmax(0,1fr); gap: 12px; align-items: start; }
+.mcp-layout { display: grid; grid-template-columns: var(--nx-master-rail-width) minmax(0,1fr); gap: var(--nx-master-detail-gap); align-items: start; }
 .mcp-list-panel,
 .mcp-detail-card { border: 1px solid var(--nx-line); border-radius: 7px; background: #fff; }
 .mcp-list-panel { padding: 8px; }
@@ -931,6 +923,7 @@ summary::-webkit-details-marker { display: none; }
 .mcp-server-list em { color: var(--nx-muted); font-size: 10px; font-style: normal; }
 
 .mcp-detail-card > header { padding: 14px 16px; display: flex; justify-content: space-between; gap: 14px; border-bottom: 1px solid var(--nx-line); }
+.mcp-detail-card > header .status-badge { align-self: flex-start; }
 .mcp-detail-card h3 { margin: 4px 0; font-size: 18px; }
 .mcp-detail-card header p { margin: 0; color: var(--nx-muted); font-size: 10px; }
 .mcp-actions { padding: 9px 16px; display: flex; gap: 7px; flex-wrap: wrap; border-bottom: 1px solid var(--nx-line); }
@@ -1022,7 +1015,7 @@ summary::-webkit-details-marker { display: none; }
 .settings-system-grid { grid-template-columns: 1fr; }
 
 /* MCP 接入：固定凭据单独成页，避免与管理员账号或运行时配置混在一起。 */
-.mcp-access-panel { width: min(100%, 860px); display: grid; gap: 14px; }
+.mcp-access-panel { width: 100%; display: grid; gap: 14px; }
 .mcp-access-card { overflow: hidden; border: 1px solid var(--nx-line); border-radius: 7px; background: #fff; }
 .mcp-access-card > header { padding: 15px 17px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--nx-line); }
 .mcp-access-card > header h3 { margin: 0; font-size: 14px; }
@@ -1253,8 +1246,8 @@ summary::-webkit-details-marker { display: none; }
   .settings-grid { grid-template-columns: 1fr; }
   .settings-page { grid-template-columns: 1fr; gap: 10px; }
   .settings-subnav { position: static; grid-template-columns: repeat(4, minmax(0, 1fr)); padding: 4px; }
-  .settings-subnav button { min-height: 44px; padding: 7px; gap: 6px; }
-  .settings-subnav-icon { width: 27px; height: 27px; }
+  .settings-subnav button { min-height: 44px; padding: 7px; grid-template-columns: 1fr; justify-items: center; text-align: center; }
+  .settings-subnav-icon { display: none; }
   .settings-subnav small { display: none; }
   .settings-subnav strong { font-size: 11px; white-space: nowrap; }
   .agentdock-node-actions { width: 100%; }
@@ -1345,6 +1338,7 @@ summary::-webkit-details-marker { display: none; }
 
   .agentdock-node-form { grid-template-columns: 1fr; }
   .agentdock-node-form .is-wide { grid-column: auto; }
+  .agentdock-node-form footer { grid-column: auto; }
   .mcp-access-value { grid-template-columns: minmax(0, 1fr) auto; }
   .mcp-access-value .nx-button:last-child { grid-column: 1 / -1; width: 100%; }
   .mcp-access-footer { align-items: stretch; display: grid; }

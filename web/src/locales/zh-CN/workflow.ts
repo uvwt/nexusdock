@@ -30,7 +30,6 @@ const workflow: Record<string, string> = {
   'Search workflow templates': '搜索工作流模板',
   'Search title or keywords': '搜索标题或关键词',
   'workflow templates': '个工作流模板',
-  'Only current version shown': '仅显示当前版本',
   'Loading workflow templates…': '正在读取工作流模板…',
   'No matching templates.': '没有匹配的模板。',
 
