@@ -19,6 +19,9 @@
   --nx-control-bg: #171717;
   --nx-control-hover: #000000;
   --nx-control-fg: #ffffff;
+  --nx-nav-active-bg: #e8e8e8;
+  --nx-nav-active-line: #d4d4d4;
+  --nx-nav-active-fg: #171717;
   --nx-toggle-thumb: #ffffff;
   --nx-soft: #efefef;
   --nx-soft-2: #f4f4f4;
@@ -60,9 +63,12 @@
     --nx-inverse: #171717;
     --nx-soft: #272727;
     --nx-soft-2: #202020;
-    --nx-control-bg: #ededed;
-    --nx-control-hover: #ffffff;
-    --nx-control-fg: #171717;
+    --nx-control-bg: #4a4a4a;
+    --nx-control-hover: #565656;
+    --nx-control-fg: #f1f1f1;
+    --nx-nav-active-bg: #343434;
+    --nx-nav-active-line: #4b4b4b;
+    --nx-nav-active-fg: #f1f1f1;
     --nx-toggle-thumb: #f1f1f1;
 
     --nx-success: #78c99a;

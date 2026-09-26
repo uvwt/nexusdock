@@ -74,7 +74,7 @@
 }
 
 .nexus-sidebar nav button:hover { border-color: var(--nx-line-strong); background: var(--nx-soft); color: var(--nx-text); }
-.nexus-sidebar nav button.active { border-color: var(--nx-control-bg); background: var(--nx-control-bg); color: var(--nx-control-fg); }
+.nexus-sidebar nav button.active { border-color: var(--nx-nav-active-line); background: var(--nx-nav-active-bg); color: var(--nx-nav-active-fg); }
 
 .nexus-main { min-width: 0; }
 
