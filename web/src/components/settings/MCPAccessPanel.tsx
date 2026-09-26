@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { AppWindow, Cable, Copy, Eye, EyeOff, RotateCcw, ShieldCheck } from 'lucide-react';
+import { AppWindow, Cable, Copy, Eye, EyeOff, RotateCcw } from 'lucide-react';
 import { ApiError, api } from '../../api/client';
 import Dialog from '../Dialog';
 
@@ -136,7 +136,7 @@ export default function MCPAccessPanel({ refreshToken }: { refreshToken: number 
         </label>
       </div>
       <footer className="mcp-access-footer">
-        <div><ShieldCheck size={16} /><span><strong>{t('MCP only')}</strong><small>{t('This Token cannot access the NexusDock /v1 management API.')}</small></span></div>
+        <div className="mcp-access-authorization"><strong>Authorization</strong><code>Bearer {'<Access Token>'}</code><span>{t('Resetting immediately revokes the previous Token. OAuth clients are unaffected.')}</span></div>
         <button type="button" className="nx-button is-danger" onClick={() => setResetOpen(true)} disabled={loading || resetting}><RotateCcw size={15} />{t('Reset Token')}</button>
       </footer>
     </section>
@@ -153,8 +153,6 @@ export default function MCPAccessPanel({ refreshToken }: { refreshToken: number 
         </label>
       </div>
     </section>
-
-    <div className="mcp-access-hint"><strong>Authorization</strong><code>Bearer {'<Access Token>'}</code><span>{t('Resetting immediately revokes the previous Token. OAuth clients are unaffected.')}</span></div>
 
     {resetOpen && <Dialog title={t('Reset MCP Token')} description={t('The current Token will become invalid immediately. Clients using it must be reconfigured.')} onClose={() => !resetting && setResetOpen(false)}>
       <div className="mcp-token-reset-dialog">

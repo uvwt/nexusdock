@@ -60,7 +60,7 @@ const common: Record<string, string> = {
   'No AgentDock nodes have been paired.': '尚未配对 AgentDock 节点。',
   'Disabled': '已停用',
   'Unknown': '未知',
-  'In progress (24h)': '24h 进行中',
+  'In progress (24h)': '24h内进行任务',
   'Tools': '工具',
   '{{count}} tools': '{{count}} 个',
   'Last online': '最近在线',

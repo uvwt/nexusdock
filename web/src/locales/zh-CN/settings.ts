@@ -41,8 +41,6 @@ const settings: Record<string, string> = {
   'Copy': '复制',
   'Hide Token': '隐藏 Token',
   'Show Token': '显示 Token',
-  'MCP only': '仅用于 MCP',
-  'This Token cannot access the NexusDock /v1 management API.': '这个 Token 不能访问 NexusDock 的 /v1 管理 API。',
   'Reset Token': '重置 Token',
   'Chat cards': '聊天卡片',
   'Control whether NexusDock publishes interactive chat cards to MCP clients.': '控制 NexusDock 是否向 MCP 客户端发布交互式聊天卡片。',
