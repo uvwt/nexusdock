@@ -139,6 +139,7 @@ func (s *Server) runtimeOverview(w http.ResponseWriter, r *http.Request) {
 	tasks, taskErr := s.agentDockHub.RuntimeTasks(r.Context(), nodeID, runtimeTaskListLimit)
 	skills, skillErr := s.agentDockHub.RuntimeSkills(r.Context(), nodeID)
 	servers, mcpErr := s.agentDockHub.RuntimeMCPServers(r.Context(), nodeID)
+	plugins, pluginErr := s.agentDockHub.RuntimePlugins(r.Context(), nodeID)
 	// 概览只展示前 6 个 Skill，先按安装名排序保证结果稳定。
 	sort.SliceStable(skills, func(i, j int) bool { return skills[i].Skill < skills[j].Skill })
 	counts := map[string]int{"active": 0, "completed": 0, "blocked": 0, "active_recent_24h": 0}
@@ -154,10 +155,13 @@ func (s *Server) runtimeOverview(w http.ResponseWriter, r *http.Request) {
 		skillItems = append(skillItems, runtimeSkillSummaryView(skill))
 	}
 	payload := map[string]any{
-		"ok":         taskErr == nil && skillErr == nil && mcpErr == nil,
-		"tasks":      counts,
-		"skills":     map[string]any{"count": len(skillItems), "items": firstSkills(skillItems, 6)},
-		"mcp":        map[string]any{"count": len(servers)},
+		"ok":     taskErr == nil && skillErr == nil && mcpErr == nil,
+		"tasks":  counts,
+		"skills": map[string]any{"count": len(skillItems), "items": firstSkills(skillItems, 6)},
+		"mcp":    map[string]any{"count": len(servers)},
+		// Plugin runtime API 在旧版 AgentDock（如 v0.8.3）中不存在。
+		// 插件数量是增量指标，读取失败时只标记不可用，不能拖垮已有的 Task/Skill/MCP 概览。
+		"plugins":    map[string]any{"count": len(plugins), "available": pluginErr == nil},
 		"paths":      s.opsPaths(),
 		"node_id":    nodeID,
 		"source":     "agentdock-runtime-api",

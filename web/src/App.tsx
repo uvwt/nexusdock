@@ -48,11 +48,13 @@ type RuntimeOverview = {
   tasks?: { active_recent_24h?: number };
   skills?: { count?: number };
   mcp?: { count?: number };
+  plugins?: { count?: number; available?: boolean };
 };
 
 type RuntimeNodeMetrics = {
   skills: number;
   mcp: number;
+  plugins: number | null;
   activeRecent24h: number;
 };
 
@@ -281,6 +283,7 @@ function useRuntimeNodeMetrics(runtimeNodes: RuntimeNodesState, refreshToken: nu
           data[result.nodeID] = {
             skills: result.summary.skills?.count || 0,
             mcp: result.summary.mcp?.count || 0,
+            plugins: result.summary.plugins?.available === false ? null : (result.summary.plugins?.count ?? 0),
             activeRecent24h: result.summary.tasks?.active_recent_24h || 0,
           };
         } else if ('error' in result && result.error) {
@@ -348,10 +351,11 @@ function NodeOverview({ runtimeNodes, runtimeMetrics }: { runtimeNodes: RuntimeN
         const statusTone: Tone = !node.enabled ? 'muted' : node.online ? 'ok' : 'danger';
         const statusLabel = !node.enabled ? t('Disabled') : node.online ? t('Online') : t('Offline');
         const metrics = runtimeMetrics.data[node.id];
-        const metricValue = (value?: number) => {
+        const metricValue = (value?: number | null) => {
           if (!node.enabled || !node.online) return '—';
           if (runtimeMetrics.loading && !metrics) return t('Loading');
-          return metrics ? String(value ?? 0) : '—';
+          if (!metrics || value == null) return '—';
+          return String(value);
         };
         return <article className="dashboard-node-row" key={node.id}>
           <div className="dashboard-node-identity">
@@ -362,6 +366,7 @@ function NodeOverview({ runtimeNodes, runtimeMetrics }: { runtimeNodes: RuntimeN
             <span><small>AgentDock</small><strong>{node.version ? `v${node.version}` : t('Unknown')}</strong></span>
             <span><small>Skill</small><strong>{metricValue(metrics?.skills)}</strong></span>
             <span><small>MCP</small><strong>{metricValue(metrics?.mcp)}</strong></span>
+            <span><small>Plugin</small><strong>{metricValue(metrics?.plugins)}</strong></span>
             <span><small>{t('In progress (24h)')}</small><strong>{metricValue(metrics?.activeRecent24h)}</strong></span>
             <span><small>{t('Tools')}</small><strong>{t('{{count}} tools', { count: node.capabilities?.length || 0 })}</strong></span>
             <span><small>{t('Last online')}</small><strong>{formatTime(node.last_seen_at, { compact: true })}</strong></span>

@@ -110,6 +110,45 @@ func runtimeContractRequest(t *testing.T, mux *http.ServeMux, method, target str
 	return payload
 }
 
+func TestRuntimeOverviewIncludesPluginCount(t *testing.T) {
+	_, mux, nodeID := runtimeContractTestServer(t, map[string]string{
+		"/internal/runtime/tasks":  `{"ok":true,"tasks":[]}`,
+		"/internal/runtime/skills": `{"ok":true,"skills":[]}`,
+		"/internal/runtime/mcp":    `{"ok":true,"servers":[]}`,
+		"/internal/runtime/plugins": `{"ok":true,"plugins":[
+			{"name":"cloudflare","version":"0.1.2","enabled":true,"package_digest":"sha256:cloudflare","format":"portable","skill_count":9,"mcp_count":1},
+			{"name":"context7","version":"local","enabled":true,"package_digest":"sha256:context7","format":"claude","skill_count":0,"mcp_count":1}
+		]}`,
+	})
+	payload := runtimeContractRequest(t, mux, http.MethodGet, "/v1/runtime/nodes/"+nodeID+"/overview")
+	plugins, _ := payload["plugins"].(map[string]any)
+	if plugins["count"] != float64(2) || plugins["available"] != true {
+		t.Fatalf("Plugin overview = %v, want count=2 available=true; payload=%v", plugins, payload)
+	}
+}
+
+func TestRuntimeOverviewKeepsExistingMetricsWhenPluginContractDrifts(t *testing.T) {
+	_, mux, nodeID := runtimeContractTestServer(t, map[string]string{
+		"/internal/runtime/tasks":   `{"ok":true,"tasks":[]}`,
+		"/internal/runtime/skills":  `{"ok":true,"skills":[]}`,
+		"/internal/runtime/mcp":     `{"ok":true,"servers":[]}`,
+		"/internal/runtime/plugins": `{"ok":true,"plugins":{"name":"broken"}}`,
+	})
+	payload := runtimeContractRequest(t, mux, http.MethodGet, "/v1/runtime/nodes/"+nodeID+"/overview")
+	if payload["ok"] != true {
+		t.Fatalf("Plugin 不可用不应让 overview 失败: %v", payload)
+	}
+	plugins, _ := payload["plugins"].(map[string]any)
+	if plugins["available"] != false || plugins["count"] != float64(0) {
+		t.Fatalf("Plugin unavailable overview = %v, want count=0 available=false", plugins)
+	}
+	skills, _ := payload["skills"].(map[string]any)
+	mcp, _ := payload["mcp"].(map[string]any)
+	if skills["count"] != float64(0) || mcp["count"] != float64(0) {
+		t.Fatalf("Plugin 不可用不应影响已有指标: %v", payload)
+	}
+}
+
 func TestRuntimeTasksThroughBridgeReturnsTypedView(t *testing.T) {
 	_, mux, nodeID := runtimeContractTestServer(t, map[string]string{
 		"/internal/runtime/tasks": `{"ok": true, "source": "agentdock-api", "action": "list", "count": 1, "tasks": [{
