@@ -27,8 +27,8 @@
   display: grid;
   place-items: center;
   border-radius: 5px;
-  color: #fff;
-  background: #171717;
+  color: var(--nx-control-fg);
+  background: var(--nx-control-bg);
   font-size: 13px;
   font-weight: 800;
 }
@@ -40,7 +40,7 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  color: #9a9a9a;
+  color: var(--nx-subtle);
   font-size: 10px;
 }
 
@@ -59,7 +59,7 @@
   gap: 16px;
   border: 1px solid var(--nx-line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--nx-surface);
 }
 
 .auth-card > header {
@@ -79,7 +79,7 @@
   border: 1px solid var(--nx-line);
   border-radius: 6px;
   background: var(--nx-soft);
-  color: #333;
+  color: var(--nx-text-soft);
 }
 
 .auth-card h2,
@@ -110,12 +110,12 @@
   width: 100%;
   height: 42px;
   padding: 0 12px;
-  border: 1px solid #d1d1d1;
+  border: 1px solid var(--nx-line);
   border-radius: 6px;
   outline: 0;
 }
 
-.auth-card input:focus { border-color: #777; }
+.auth-card input:focus { border-color: var(--nx-subtle); }
 
 .auth-check {
   display: inline-flex;
@@ -132,10 +132,10 @@
 .session-toolbar button,
 .session-revoke {
   min-height: 39px;
-  border: 1px solid #171717;
+  border: 1px solid var(--nx-control-bg);
   border-radius: 6px;
-  background: #171717;
-  color: #fff;
+  background: var(--nx-control-bg);
+  color: var(--nx-control-fg);
   cursor: pointer;
 }
 
@@ -149,7 +149,7 @@
   font-weight: 700;
 }
 
-.auth-primary:hover:not(:disabled) { background: #000; }
+.auth-primary:hover:not(:disabled) { background: var(--nx-control-hover); }
 
 .auth-help {
   margin: 0;
@@ -176,7 +176,7 @@
   padding: 14px 16px;
   border: 1px solid var(--nx-line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--nx-surface);
 }
 
 .language-settings-panel > header,
@@ -189,14 +189,14 @@
 .language-settings-panel > header h2 { margin: 0; font-size: 14px; }
 .language-settings-panel > header p { margin: 3px 0 0; color: var(--nx-muted); font-size: 11px; }
 .language-settings-panel > label { justify-content: space-between; gap: 16px; margin-top: 14px; font-size: 12px; font-weight: 600; }
-.language-settings-panel select { min-width: 180px; height: 34px; padding: 0 30px 0 10px; border: 1px solid var(--nx-line-strong); border-radius: 6px; background: #fff; }
+.language-settings-panel select { min-width: 180px; height: 34px; padding: 0 30px 0 10px; border: 1px solid var(--nx-line-strong); border-radius: 6px; background: var(--nx-surface); }
 .language-settings-panel > small { display: block; margin-top: 8px; color: var(--nx-muted); font-size: 11px; }
 
 .security-panel {
   overflow: hidden;
   border: 1px solid var(--nx-line);
   border-radius: 8px;
-  background: #fff;
+  background: var(--nx-surface);
 }
 
 .security-head,
@@ -233,8 +233,8 @@
   justify-content: center;
   gap: 6px;
   border-color: var(--nx-line-strong);
-  background: #fff;
-  color: #333;
+  background: var(--nx-surface);
+  color: var(--nx-text-soft);
   font-size: 12px;
 }
 
@@ -252,11 +252,11 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  border-bottom: 1px solid #ededed;
+  border-bottom: 1px solid var(--nx-line);
 }
 
 .session-row:last-child { border-bottom: 0; }
-.session-row.is-current { background: #fafafa; }
+.session-row.is-current { background: var(--nx-surface-soft); }
 
 .session-copy { min-width: 0; }
 .session-copy > div { display: flex; align-items: center; gap: 8px; }

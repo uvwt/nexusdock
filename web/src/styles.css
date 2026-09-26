@@ -1,5 +1,5 @@
 :root {
-  color-scheme: only light;
+  color-scheme: light dark;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -16,6 +16,13 @@
   --nx-subtle: #8b8b8b;
   --nx-strong: #000000;
   --nx-inverse: #ffffff;
+  --nx-control-bg: #171717;
+  --nx-control-hover: #000000;
+  --nx-control-fg: #ffffff;
+  --nx-nav-active-bg: #e8e8e8;
+  --nx-nav-active-line: #d4d4d4;
+  --nx-nav-active-fg: #171717;
+  --nx-toggle-thumb: #ffffff;
   --nx-soft: #efefef;
   --nx-soft-2: #f4f4f4;
 
@@ -37,6 +44,46 @@
   --nx-radius-large: 10px;
   --nx-master-rail-width: 320px;
   --nx-master-detail-gap: 10px;
+}
+
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --nx-bg: #101010;
+    --nx-surface: #181818;
+    --nx-surface-soft: #202020;
+    --nx-sidebar: #141414;
+    --nx-line: #2b2b2b;
+    --nx-line-strong: #3d3d3d;
+    --nx-text: #f1f1f1;
+    --nx-text-soft: #c9c9c9;
+    --nx-muted: #a3a3a3;
+    --nx-subtle: #7f7f7f;
+    --nx-strong: #ffffff;
+    --nx-inverse: #171717;
+    --nx-soft: #272727;
+    --nx-soft-2: #202020;
+    --nx-control-bg: #4a4a4a;
+    --nx-control-hover: #565656;
+    --nx-control-fg: #f1f1f1;
+    --nx-nav-active-bg: #343434;
+    --nx-nav-active-line: #4b4b4b;
+    --nx-nav-active-fg: #f1f1f1;
+    --nx-toggle-thumb: #f1f1f1;
+
+    --nx-success: #78c99a;
+    --nx-success-bg: #172b20;
+    --nx-success-line: #315d41;
+    --nx-warning: #e7b766;
+    --nx-warning-bg: #302411;
+    --nx-warning-line: #684d24;
+    --nx-danger: #f09188;
+    --nx-danger-bg: #351b19;
+    --nx-danger-line: #6d3732;
+    --nx-info: #8eb6df;
+    --nx-info-bg: #17283a;
+    --nx-info-line: #355472;
+  }
 }
 
 * { box-sizing: border-box; }
@@ -75,11 +122,11 @@ input:focus-visible,
 select:focus-visible,
 textarea:focus-visible,
 summary:focus-visible {
-  outline: 2px solid rgba(0, 0, 0, .28);
+  outline: 2px solid color-mix(in srgb, var(--nx-text) 28%, transparent);
   outline-offset: 2px;
 }
 
-::selection { background: #d8d8d8; }
+::selection { background: var(--nx-line-strong); }
 
 pre,
 code {
