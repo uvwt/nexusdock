@@ -195,7 +195,7 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
     <form className="ai-settings-form-page" onSubmit={submit}>
       <section className="ai-config-section">
         <header className="ai-config-head">
-          <div className="ai-config-title"><span className="nexus-panel-icon"><BrainCircuit size={17} /></span><div><h3>{t('Stage 3 model')}</h3><p>{t('Provides low-frequency semantic gap filling across Task and Evolution, submitting only candidates for AgentDock to decide.')}</p></div></div>
+          <div className="ai-config-title"><span className="nexus-panel-icon"><BrainCircuit size={17} /></span><div><h3>{t('AI experience discovery')}</h3><p>{t('Periodically analyzes historical tasks and existing experiences to uncover overlooked patterns and reusable knowledge, then hands candidates to AgentDock for further validation.')}</p></div></div>
           <label className="ai-switch-row">
             <input type="checkbox" checked={form.stage3.enabled} onChange={(event) => setForm({ ...form, stage3: { ...form.stage3, enabled: event.target.checked } })} />
             <span><strong>{stage3State}</strong><small>{form.stage3.enabled ? t('External model calls are allowed') : t('External models will not be called')}</small></span>
