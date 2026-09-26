@@ -466,8 +466,7 @@ summary::-webkit-details-marker { display: none; }
 .runtime-node-required h3 { margin: 6px 0 0; }
 .runtime-node-required p { margin: 0; color: var(--nx-muted); }
 
-.agentdock-nodes-panel { margin-bottom: 12px; border: 1px solid var(--nx-line); border-radius: 8px; background: #fff; }
-.agentdock-nodes-panel > header { padding: 13px 14px; display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--nx-line); }
+.agentdock-nodes-panel { overflow: hidden; margin-bottom: 12px; border: 1px solid var(--nx-line); border-radius: 7px; background: #fff; }
 .agentdock-node-actions { align-items: center; }
 .agentdock-node-list { display: grid; gap: 8px; padding: 12px 14px; }
 .agentdock-node-list > article {
@@ -1068,7 +1067,8 @@ summary::-webkit-details-marker { display: none; }
   background: #fff;
 }
 
-.ai-config-head {
+.ai-config-head,
+.agentdock-nodes-head {
   padding: 16px 18px;
   display: flex;
   align-items: center;
@@ -1077,8 +1077,10 @@ summary::-webkit-details-marker { display: none; }
   border-bottom: 1px solid var(--nx-line);
 }
 
-.ai-config-title { min-width: 0; display: flex; align-items: center; gap: 10px; }
-.ai-config-title h3 { margin: 0; font-size: 14px; }
+.ai-config-title,
+.agentdock-nodes-title { min-width: 0; display: flex; align-items: center; gap: 10px; }
+.ai-config-title h3,
+.agentdock-nodes-title h3 { margin: 0; font-size: 14px; }
 .ai-config-title p { margin: 3px 0 0; color: var(--nx-muted); font-size: 11px; line-height: 1.45; }
 .ai-config-head-actions { display: flex; align-items: center; justify-content: flex-end; gap: 16px; }
 
@@ -1260,7 +1262,6 @@ summary::-webkit-details-marker { display: none; }
   .settings-subnav-icon { width: 27px; height: 27px; }
   .settings-subnav small { display: none; }
   .settings-subnav strong { font-size: 11px; white-space: nowrap; }
-  .agentdock-nodes-panel > header { display: grid; }
   .agentdock-node-actions { width: 100%; }
   .agentdock-node-actions .nx-button { flex: 1; }
   .agentdock-node-list > article { grid-template-columns: auto minmax(0, 1fr); }
@@ -1357,7 +1358,8 @@ summary::-webkit-details-marker { display: none; }
   .mcp-access-hint code { width: fit-content; white-space: normal; overflow-wrap: anywhere; }
   .mcp-token-reset-dialog footer { display: grid; grid-template-columns: 1fr 1fr; }
   .mcp-token-reset-dialog footer .nx-button { width: 100%; }
-  .ai-config-head { padding: 14px; display: grid; align-items: start; }
+  .ai-config-head,
+  .agentdock-nodes-head { padding: 14px; display: grid; align-items: start; }
   .ai-config-head-actions { width: 100%; display: grid; gap: 10px; justify-content: stretch; }
   .ai-service-status { padding-bottom: 2px; }
   .ai-switch-row { width: 100%; grid-template-columns: auto minmax(0, 1fr); }

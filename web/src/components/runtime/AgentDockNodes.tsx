@@ -168,8 +168,11 @@ export function AgentDockNodesPanel({ nodes, selectedNodeID, loading, error, onR
     : '';
 
   return <section className="agentdock-nodes-panel">
-    <header>
-      <div><span className="nexus-eyebrow">RUNTIME NODES</span><h2>{t('AgentDock nodes')}</h2></div>
+    <header className="agentdock-nodes-head">
+      <div className="agentdock-nodes-title">
+        <span className="nexus-panel-icon"><Server size={17} /></span>
+        <div><h3>{t('AgentDock nodes')}</h3></div>
+      </div>
       <div className="agentdock-node-actions">
         <button type="button" className="nx-button" onClick={() => void createPairingCode()} disabled={busy === 'pair'}><CirclePlus size={15} />{busy === 'pair' ? t('Generating…') : t('Pair device')}</button>
       </div>
