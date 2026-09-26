@@ -306,19 +306,22 @@ function HomePage({ refreshToken, runtimeNodes, navigate }: { refreshToken: numb
     const node = runtimeNodes.nodes.find((item) => item.id === nodeID);
     return `${node?.name || nodeID}: ${message}`;
   });
-  const errors = [system.error, runtimeNodes.error, ...runtimeErrors].filter(Boolean) as string[];
+  const serviceErrors = [system.error, runtimeNodes.error].filter(Boolean) as string[];
+  const errors = [...serviceErrors, ...runtimeErrors];
   const systemTone = system.data.ok ? 'ok' : 'danger';
   const nodesTone: Tone = runtimeNodes.loading ? 'muted' : offlineNodes.length > 0 ? 'danger' : enabledNodes.length > 0 ? 'ok' : 'muted';
   const nodeSummary = runtimeNodes.loading ? t('Loading') : enabledNodes.length > 0 ? t('{{online}}/{{total}} online', { online: onlineNodes.length, total: enabledNodes.length }) : t('No nodes');
   const databaseAbnormal = system.live && !system.data.ok;
   const needsAttention = databaseAbnormal || offlineNodes.length > 0 || errors.length > 0;
+  // 节点离线或单节点概览读取失败不代表 Nexus 核心服务异常，顶部状态只反映中心服务本身。
+  const coreNeedsAttention = databaseAbnormal || serviceErrors.length > 0;
 
   return <>
     <section className="nexus-overview-strip">
-      <div><span className="nexus-kicker">{t('Personal console')}</span><h2>{needsAttention ? t('Items need attention') : t('Core services are healthy')}</h2><p>{t('Database {{database}} · Nodes {{nodes}}', { database: system.data.database || 'unknown', nodes: nodeSummary })}</p></div>
+      <div><span className="nexus-kicker">{t('Personal console')}</span><h2>{coreNeedsAttention ? t('Items need attention') : t('Core services are healthy')}</h2><p>{t('Database {{database}} · Nodes {{nodes}}', { database: system.data.database || 'unknown', nodes: nodeSummary })}</p></div>
       <div className="nexus-overview-status"><StatusBadge tone={systemTone}>Nexus</StatusBadge><StatusBadge tone={nodesTone}>{t('Nodes {{summary}}', { summary: nodeSummary })}</StatusBadge></div>
     </section>
-    {errors.length > 0 && <InlineAlert tone="danger" title={t('Some data could not be loaded')} message={errors.join('; ')} />}
+    {serviceErrors.length > 0 && <InlineAlert tone="danger" title={t('Some data could not be loaded')} message={serviceErrors.join('; ')} />}
 
     <NodeOverview runtimeNodes={runtimeNodes} runtimeMetrics={runtimeMetrics} />
 
