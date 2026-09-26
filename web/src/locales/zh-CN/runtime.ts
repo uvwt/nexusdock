@@ -11,7 +11,6 @@ const runtime: Record<string, string> = {
   'Failed to save node': '节点保存失败',
   'Deleted {{name}}': '已删除 {{name}}',
   'Failed to delete node': '节点删除失败',
-  'AgentDock actively connects to Nexus; no public device address needed, and no need to provide AgentDock token to Nexus.': 'AgentDock 主动连接 Nexus；无需设备公网地址，也无需向 Nexus 提供 AgentDock Token。',
   'Generating…': '生成中…',
   'Pair device': '配对设备',
   '{{count}} node tools': '{{count}} 个节点工具',
