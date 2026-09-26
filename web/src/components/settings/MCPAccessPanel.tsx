@@ -104,7 +104,7 @@ export default function MCPAccessPanel({ refreshToken }: { refreshToken: number 
         body: JSON.stringify({ mcp_apps_enabled: enabled }),
       });
       setMCPAppsEnabled(result.mcp_apps_enabled);
-      setNotice({ tone: 'success', text: result.mcp_apps_enabled ? t('MCP Apps UI enabled.') : t('MCP Apps UI disabled.') });
+      setNotice({ tone: 'success', text: result.mcp_apps_enabled ? t('Chat cards enabled.') : t('Chat cards disabled.') });
     } catch (error) {
       setMCPAppsEnabled(previous);
       setNotice({ tone: 'error', text: errorMessage(error, t) });
@@ -144,12 +144,12 @@ export default function MCPAccessPanel({ refreshToken }: { refreshToken: number 
     <section className="mcp-access-card">
       <header>
         <span className="nexus-panel-icon"><AppWindow size={17} /></span>
-        <div><h3>MCP Apps UI</h3><p>{t('Control whether NexusDock publishes interactive Apps UI to MCP clients.')}</p></div>
+        <div><h3>{t('Chat cards')}</h3><p>{t('Control whether NexusDock publishes interactive chat cards to MCP clients.')}</p></div>
       </header>
       <div className="mcp-access-body">
         <label className="mcp-apps-toggle">
           <input type="checkbox" checked={mcpAppsEnabled} onChange={(event) => void updateMCPAppsEnabled(event.target.checked)} disabled={loading || savingApps} />
-          <span><strong>{t('Enable MCP Apps UI')}</strong><small>{t('Provide interactive views to clients that support MCP Apps. Tool functionality is unaffected when disabled.')}</small></span>
+          <span><strong>{t('Enable chat cards')}</strong><small>{t('Provide interactive chat cards to clients that support MCP Apps. Tool functionality is unaffected when disabled.')}</small></span>
         </label>
       </div>
     </section>
