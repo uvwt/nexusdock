@@ -330,6 +330,45 @@ func TestMCPAppResourceSelectsOnlyExplicitCapableProvider(t *testing.T) {
 	}
 }
 
+func TestImageMCPAppResourceRelaysAgentDockHTML(t *testing.T) {
+	store := newHTTPTestAgentDockStore(t)
+	descriptor := agentdock.ToolDescriptor{
+		Name: "view_image", InputSchema: map[string]any{"type": "object"},
+		Meta: map[string]any{"ui": map[string]any{"resourceUri": protocol.ImageUIResourceURI}},
+	}
+	node := pairHTTPTestNode(t, store, "device_image_resource", "DockMini", "2.0.0", descriptor)
+	hub := agentdock.NewHub(store)
+	capability := agentdock.UIResourceCapability{
+		URI: protocol.ImageUIResourceURI, Contract: protocol.ImageUIContract, MIMEType: protocol.MCPAppMIMEType,
+	}
+	const imageHTML = "<!doctype html><title>AgentDock Image passthrough</title>"
+	invoked := connectResourceTestNode(
+		t, hub, node, descriptor, []agentdock.UIResourceCapability{capability},
+		protocol.ImageUIResourceURI, imageHTML, true,
+	)
+
+	nodes, err := store.List(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := &Server{
+		agentDock: store, agentDockHub: hub,
+		cfg: config.Config{PublicURL: "https://nexus.example.test"},
+	}
+	read, err := server.readMCPAppResourceWithTimeout(t.Context(), nodes, protocol.ImageUIResourceURI, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(read.Contents) != 1 || read.Contents[0].Text != imageHTML {
+		t.Fatalf("Image App relay changed AgentDock HTML: %#v", read.Contents)
+	}
+	select {
+	case <-invoked:
+	case <-time.After(time.Second):
+		t.Fatal("AgentDock Image App provider was not invoked")
+	}
+}
+
 func TestMCPAppResourceBoundsStalledCompatibleProvider(t *testing.T) {
 	store := newHTTPTestAgentDockStore(t)
 	descriptor := agentdock.ToolDescriptor{Name: "task_manage", InputSchema: map[string]any{"type": "object"}}
