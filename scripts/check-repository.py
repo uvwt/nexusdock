@@ -57,12 +57,17 @@ REQUIRED_COMPOSE_TOKENS = (
     'gid=10001',
 )
 REQUIRED_WEB_SHELL_TOKENS = (
-    '<meta name="color-scheme" content="light" />',
-    '<meta name="supported-color-schemes" content="light" />',
-    '<meta name="theme-color" content="#f5f5f5" />',
+    '<meta name="color-scheme" content="light dark" />',
+    '<meta name="supported-color-schemes" content="light dark" />',
+    '<meta name="theme-color" content="#f5f5f5" media="(prefers-color-scheme: light)" />',
+    '<meta name="theme-color" content="#101010" media="(prefers-color-scheme: dark)" />',
+)
+REQUIRED_SYSTEM_THEME_TOKENS = (
+    "color-scheme: light dark;",
+    "@media (prefers-color-scheme: dark)",
 )
 FORBIDDEN_WEB_SHELL_TOKENS = (
-    "color-scheme: dark",
+    "color-scheme: only light",
     'meta[name="theme-color"]',
 )
 REQUIRED_MOBILE_SIDEBAR_TOKENS = (
@@ -168,7 +173,12 @@ def main() -> int:
     web_index = (ROOT / "web" / "index.html").read_text(encoding="utf-8")
     for token in REQUIRED_WEB_SHELL_TOKENS:
         if token not in web_index:
-            errors.append(f"Web 外壳缺少 iOS Safari 浅色声明: {token}")
+            errors.append(f"Web 外壳缺少系统主题声明: {token}")
+
+    global_styles = (ROOT / "web" / "src" / "styles.css").read_text(encoding="utf-8")
+    for token in REQUIRED_SYSTEM_THEME_TOKENS:
+        if token not in global_styles:
+            errors.append(f"Web 全局样式缺少系统主题适配: {token}")
 
     for path in (ROOT / "web" / "src").rglob("*"):
         if not path.is_file() or path.suffix not in {".css", ".ts", ".tsx"}:
@@ -177,7 +187,7 @@ def main() -> int:
         for token in FORBIDDEN_WEB_SHELL_TOKENS:
             if token in text:
                 errors.append(
-                    f"Web 页面不应动态或局部切回深色浏览器外壳: {path.relative_to(ROOT)}: {token}"
+                    f"Web 页面不应绕过全局系统主题边界: {path.relative_to(ROOT)}: {token}"
                 )
 
     nexus_css = (ROOT / "web" / "src" / "nexus.css").read_text(encoding="utf-8")
