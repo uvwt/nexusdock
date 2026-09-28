@@ -1,7 +1,6 @@
 package recall
 
 import (
-	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -93,38 +92,6 @@ type Record struct {
 	Metadata Metadata `json:"metadata"`
 }
 
-type SearchRequest struct {
-	Query      string   `json:"query"`
-	Prefix     string   `json:"prefix,omitempty"`
-	Scopes     []Scope  `json:"scopes,omitempty"`
-	Statuses   []Status `json:"statuses,omitempty"`
-	Project    string   `json:"project,omitempty"`
-	Device     string   `json:"device,omitempty"`
-	Agent      string   `json:"agent,omitempty"`
-	Skill      string   `json:"skill,omitempty"`
-	MaxResults int      `json:"max_results,omitempty"`
-}
-
-type ListRequest struct {
-	Prefix     string   `json:"prefix,omitempty"`
-	Scopes     []Scope  `json:"scopes,omitempty"`
-	Statuses   []Status `json:"statuses,omitempty"`
-	Project    string   `json:"project,omitempty"`
-	Device     string   `json:"device,omitempty"`
-	Agent      string   `json:"agent,omitempty"`
-	Skill      string   `json:"skill,omitempty"`
-	MaxEntries int      `json:"max_entries,omitempty"`
-}
-
-type MemoryService interface {
-	Search(context.Context, SearchRequest) ([]Record, error)
-	Read(context.Context, string) (Record, error)
-	List(context.Context, ListRequest) ([]Record, error)
-	DetectConflict(context.Context, DetectConflictRequest) ([]RecallConflict, error)
-	ProposeUpdate(context.Context, ProposeUpdateRequest) (UpdateProposal, error)
-	ApplyUpdate(context.Context, ApplyUpdateRequest) (Record, error)
-}
-
 func MetadataFromRecall(mem Recall) Metadata {
 	fm := mem.Frontmatter
 	scope := Scope(strings.ToLower(strings.TrimSpace(fm["scope"])))
@@ -163,6 +130,17 @@ func MetadataFromRecall(mem Recall) Metadata {
 			SourceDevice: strings.TrimSpace(fm["source_device"]), SourceAgent: strings.TrimSpace(fm["source_agent"]), Confidence: confidence,
 		},
 	}
+}
+
+func recordFromRecall(mem Recall) Record {
+	return Record{Recall: mem, Metadata: MetadataFromRecall(mem)}
+}
+
+func verifiedTime(meta Metadata) time.Time {
+	if meta.Verification.VerifiedAt == nil {
+		return time.Time{}
+	}
+	return *meta.Verification.VerifiedAt
 }
 
 func inferScope(path string) Scope {

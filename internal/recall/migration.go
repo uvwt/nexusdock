@@ -1,6 +1,7 @@
 package recall
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -109,6 +110,51 @@ func MigrateRepository(req MigrationRequest) (MigrationReport, error) {
 	}
 	report.Verified = true
 	return report, nil
+}
+
+// ValidateRepository 确认所有可见 Recall 文本在迁移前后都能被正常读取。
+func ValidateRepository(store *Store) error {
+	entries, err := store.List("", 1000)
+	if err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		if entry.Type != "file" || !IsTextFile(entry.Path) {
+			continue
+		}
+		if _, err := store.Read(entry.Path); err != nil {
+			return fmt.Errorf("validate %s: %w", entry.Path, err)
+		}
+	}
+	return nil
+}
+
+// SnapshotFiles 计算可见 Recall 文件的内容摘要，用于无损迁移校验。
+func SnapshotFiles(root string) (map[string]string, error) {
+	out := map[string]string{}
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			if strings.HasPrefix(entry.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		rel, err := filepath.Rel(root, path)
+		if err != nil {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(data)
+		out[filepath.ToSlash(rel)] = fmt.Sprintf("%x", sum)
+		return nil
+	})
+	return out, err
 }
 
 func migrationInventory(root string) ([]string, int64, error) {

@@ -1,7 +1,6 @@
 package recall_test
 
 import (
-	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -54,17 +53,17 @@ func TestLegacyRepositoryMigrationIsLosslessAndUpdatable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	svc, _ := recall.NewService(store)
 	index, err := store.BuildContextIndex(recall.ContextIndexRequest{Project: "agentdock", MaxBytes: 4096})
 	if err != nil || len(index.Items) < 2 {
 		t.Fatalf("context index regressed: %#v err=%v", index, err)
 	}
 
-	proposal, err := svc.ProposeUpdate(context.Background(), recall.ProposeUpdateRequest{Path: "recall/docs/projects/agentdock/project.md", Content: "# AgentDock\nupdated", Scope: recall.ScopeProject, Status: recall.StatusActive, Project: "agentdock", Source: "user_edit", Confidence: recall.ConfidenceHigh})
+	_, err = store.Write(recall.WriteRequest{
+		Path: "recall/docs/projects/agentdock/project.md", Content: "# AgentDock\nupdated",
+		Scope: "project", Status: "active", Project: "agentdock", Source: "user_edit", Confidence: "high",
+		Confirmed: true, Overwrite: true,
+	})
 	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := svc.ApplyUpdate(context.Background(), recall.ApplyUpdateRequest{Proposal: proposal, Approved: true}); err != nil {
 		t.Fatal(err)
 	}
 	updated, err := store.Read("recall/docs/projects/agentdock/project.md")

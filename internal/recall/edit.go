@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"unicode/utf8"
 )
 
 // ApplyMarkdownPatch applies the model-facing recall patch operations in the
@@ -227,4 +228,18 @@ func UnifiedDiff(path, oldText, newText string, maxBytes int) string {
 		return truncateUTF8(out, maxBytes)
 	}
 	return out
+}
+
+func truncateUTF8(value string, maxBytes int) string {
+	if maxBytes <= 0 {
+		return ""
+	}
+	if len(value) <= maxBytes {
+		return value
+	}
+	cut := maxBytes
+	for cut > 0 && !utf8.ValidString(value[:cut]) {
+		cut--
+	}
+	return value[:cut]
 }
