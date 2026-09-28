@@ -77,9 +77,9 @@ func (w *trackedResponseWriter) Flush() {
 }
 
 type Server struct {
-	mu                   sync.RWMutex
+	mcpAppsMu            sync.RWMutex
 	cfg                  config.Config
-	aiCfg                settings.RuntimeAIConfig
+	runtimeAI            runtimeAIState
 	mcpAppsEnabledState  bool
 	db                   *sql.DB
 	store                *recall.Store
@@ -90,12 +90,9 @@ type Server struct {
 	auth                 *auth.Service
 	oauth                *auth.OAuthService
 	oauthRegisterLimiter *fixedWindowLimiter
-	embedding            *recall.EmbeddingService
-	settings             *settings.Store
 	mcpSettings          *settings.MCPStore
 	mcpToken             *auth.MCPTokenStore
 	workflowRegistry     *workflow.Registry
-	evolutionWorker      *stage3.Worker
 	publishedToolBridge  *agentdock.PublishedToolBridge
 	mcp                  *mcpGateway
 	artifacts            *agentdock.ArtifactService
@@ -121,15 +118,15 @@ func WithWebAuthentication(authService *auth.Service) ServerOption {
 }
 
 func WithEmbeddingService(service *recall.EmbeddingService) ServerOption {
-	return func(server *Server) { server.embedding = service }
+	return func(server *Server) { server.runtimeAI.embedding = service }
 }
 
 func WithRuntimeSettings(store *settings.Store) ServerOption {
-	return func(server *Server) { server.settings = store }
+	return func(server *Server) { server.runtimeAI.settingsStore = store }
 }
 
 func WithRuntimeAIConfig(cfg settings.RuntimeAIConfig) ServerOption {
-	return func(server *Server) { server.aiCfg = cfg }
+	return func(server *Server) { server.runtimeAI.config = cfg }
 }
 
 func WithMCPSettings(store *settings.MCPStore) ServerOption {
@@ -157,7 +154,7 @@ func WithWorkflowRegistry(registry *workflow.Registry) ServerOption {
 // WithEvolutionWorker 注入组合根拥有的 Stage 3 进化 Worker；
 // HTTP 层只在运行期 AI 设置保存成功后唤醒它，不参与调度与执行。
 func WithEvolutionWorker(worker *stage3.Worker) ServerOption {
-	return func(server *Server) { server.evolutionWorker = worker }
+	return func(server *Server) { server.runtimeAI.evolutionWorker = worker }
 }
 
 // WithPublishedToolBridge 注入组合根创建的节点工具契约 Bridge；
@@ -174,7 +171,7 @@ func WithArtifactService(service *agentdock.ArtifactService) ServerOption {
 
 func NewServer(cfg config.Config, store *recall.Store, logger *slog.Logger, options ...ServerOption) *Server {
 	server := &Server{
-		cfg: cfg, aiCfg: settings.DefaultRuntimeAIConfig(), mcpAppsEnabledState: settings.DefaultMCPAppsEnabled,
+		cfg: cfg, runtimeAI: newRuntimeAIState(store), mcpAppsEnabledState: settings.DefaultMCPAppsEnabled,
 		store: store, logger: logger,
 	}
 	for _, option := range options {
@@ -520,7 +517,7 @@ func (s *Server) searchCards(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) embeddingStatus(w http.ResponseWriter, r *http.Request) {
-	embedding := s.currentEmbedding()
+	embedding := s.runtimeAI.currentEmbedding()
 	if embedding == nil {
 		writeJSON(w, http.StatusOK, recall.EmbeddingStatus{
 			OK: true, Model: recall.DefaultEmbeddingModel,
@@ -532,7 +529,7 @@ func (s *Server) embeddingStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) reindexEmbeddings(w http.ResponseWriter, r *http.Request) {
-	embedding := s.currentEmbedding()
+	embedding := s.runtimeAI.currentEmbedding()
 	if embedding == nil {
 		writeError(w, http.StatusServiceUnavailable, "EMBEDDING_DISABLED", "embedding service is not configured")
 		return
@@ -550,7 +547,7 @@ func (s *Server) reindexEmbeddings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) searchEmbeddings(w http.ResponseWriter, r *http.Request) {
-	embedding := s.currentEmbedding()
+	embedding := s.runtimeAI.currentEmbedding()
 	if embedding == nil {
 		writeError(w, http.StatusServiceUnavailable, "EMBEDDING_DISABLED", "embedding service is not configured")
 		return

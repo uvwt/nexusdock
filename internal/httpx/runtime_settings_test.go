@@ -180,3 +180,36 @@ func TestRuntimeAIConnectionTestsUseSavedSecrets(t *testing.T) {
 		t.Fatalf("embedding authorization=%q", embeddingAuthorization)
 	}
 }
+
+func TestRuntimeAIOptionsPopulateDedicatedState(t *testing.T) {
+	store, err := recall.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg := settings.DefaultRuntimeAIConfig()
+	cfg.EmbeddingEnabled = true
+	cfg.EmbeddingEndpoint = "https://embedding.example.test"
+	cfg.EmbeddingModel = "dedicated-state-model"
+	embedding := recall.NewEmbeddingService(store, recall.EmbeddingConfig{
+		Enabled: true, Endpoint: cfg.EmbeddingEndpoint, Model: cfg.EmbeddingModel,
+	})
+
+	server := NewServer(
+		config.Config{},
+		store,
+		slog.Default(),
+		WithRuntimeAIConfig(cfg),
+		WithEmbeddingService(embedding),
+		WithMCPAppsEnabled(false),
+	)
+
+	if got := server.runtimeAI.currentConfig(); got.EmbeddingModel != cfg.EmbeddingModel || got.EmbeddingEndpoint != cfg.EmbeddingEndpoint {
+		t.Fatalf("runtime AI config not populated: %#v", got)
+	}
+	if got := server.runtimeAI.currentEmbedding(); got != embedding {
+		t.Fatal("runtime AI embedding instance not populated")
+	}
+	if server.mcpAppsEnabled() {
+		t.Fatal("MCP Apps state changed independently from configured false value")
+	}
+}

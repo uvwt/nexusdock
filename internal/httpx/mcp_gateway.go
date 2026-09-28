@@ -153,8 +153,8 @@ func (s *Server) mcpAppsEnabled() bool {
 	if s == nil {
 		return false
 	}
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mcpAppsMu.RLock()
+	defer s.mcpAppsMu.RUnlock()
 	return s.mcpAppsEnabledState
 }
 
@@ -162,10 +162,10 @@ func (s *Server) setMCPAppsEnabled(enabled bool) {
 	if s == nil {
 		return
 	}
-	s.mu.Lock()
+	s.mcpAppsMu.Lock()
 	changed := s.mcpAppsEnabledState != enabled
 	s.mcpAppsEnabledState = enabled
-	s.mu.Unlock()
+	s.mcpAppsMu.Unlock()
 	if !changed || s.mcp == nil || s.mcp.server == nil {
 		return
 	}
@@ -710,19 +710,21 @@ func (s *Server) callRecallMaintainOperation(ctx context.Context, input recallMa
 	case "lint":
 		return s.lintRecall(input)
 	case "embedding_status":
-		if s.currentEmbedding() == nil {
+		embedding := s.runtimeAI.currentEmbedding()
+		if embedding == nil {
 			return map[string]any{"enabled": false}, nil
 		}
-		return embeddingStatusMCPResult(s.currentEmbedding().Status(ctx)), nil
+		return embeddingStatusMCPResult(embedding.Status(ctx)), nil
 	case "reindex", "reindex_cards":
-		if s.currentEmbedding() == nil {
+		embedding := s.runtimeAI.currentEmbedding()
+		if embedding == nil {
 			return nil, errors.New("embedding service is not configured")
 		}
 		prefix := strings.TrimSpace(input.Prefix)
 		if action == "reindex_cards" && prefix == "" {
 			prefix = "recall/managed/cards"
 		}
-		result, err := s.currentEmbedding().Reindex(ctx, recall.EmbeddingReindexRequest{Prefix: prefix})
+		result, err := embedding.Reindex(ctx, recall.EmbeddingReindexRequest{Prefix: prefix})
 		return asBoundaryMap(result, err)
 	default:
 		return nil, fmt.Errorf("unsupported recall maintenance action: %s", action)

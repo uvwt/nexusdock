@@ -160,7 +160,7 @@ func (s *Server) workflowTemplateVectorIndexRead(w http.ResponseWriter, r *http.
 // workflowAIConfig 把运行期可变的 AI 设置映射成 workflow 包需要的 embedding 子集。
 // 设置可能随时通过设置页更新，因此每次请求都重新读取而不是启动时固定。
 func (s *Server) workflowAIConfig() workflow.AIConfig {
-	cfg := s.currentAIConfig()
+	cfg := s.runtimeAI.currentConfig()
 	return workflow.AIConfig{
 		Enabled: cfg.EmbeddingEnabled, Endpoint: cfg.EmbeddingEndpoint, Model: cfg.EmbeddingModel,
 		APIKey: cfg.EmbeddingAPIKey, Timeout: cfg.EmbeddingTimeout,
