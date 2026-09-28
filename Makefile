@@ -34,6 +34,7 @@ tidy-check:
 	go mod tidy -diff
 
 contracts:
+	python3 scripts/test_check_contracts.py
 	python3 scripts/check-contracts.py
 
 repository-check:

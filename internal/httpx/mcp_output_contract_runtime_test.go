@@ -58,7 +58,7 @@ func TestCentralRuntimeOutputContractRecallSearch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	result, err := server.callNexusTool(t.Context(), mcpcontract.ToolRecallSearch, map[string]any{
+	result, err := callNexusToolForTest(t, server, t.Context(), mcpcontract.ToolRecallSearch, map[string]any{
 		"query": "schema validation",
 		"kind":  "markdown",
 	})
@@ -86,13 +86,13 @@ func TestCentralRuntimeOutputContractRecallBasics(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	read, err := server.callNexusTool(t.Context(), mcpcontract.ToolRecallRead, map[string]any{"path": path})
+	read, err := callNexusToolForTest(t, server, t.Context(), mcpcontract.ToolRecallRead, map[string]any{"path": path})
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertCentralToolResultMatchesOutputSchema(t, mcpcontract.ToolRecallRead, read)
 
-	write, err := server.callNexusTool(t.Context(), mcpcontract.ToolRecallWrite, map[string]any{
+	write, err := callNexusToolForTest(t, server, t.Context(), mcpcontract.ToolRecallWrite, map[string]any{
 		"target": "markdown", "action": "plan", "path": "recall/docs/inbox/planned.md", "content": "# Planned\n",
 	})
 	if err != nil {
@@ -100,13 +100,13 @@ func TestCentralRuntimeOutputContractRecallBasics(t *testing.T) {
 	}
 	assertCentralToolResultMatchesOutputSchema(t, mcpcontract.ToolRecallWrite, write)
 
-	maintain, err := server.callNexusTool(t.Context(), mcpcontract.ToolRecallMaintain, map[string]any{"action": "list"})
+	maintain, err := callNexusToolForTest(t, server, t.Context(), mcpcontract.ToolRecallMaintain, map[string]any{"action": "list"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertCentralToolResultMatchesOutputSchema(t, mcpcontract.ToolRecallMaintain, maintain)
 
-	lint, err := server.callNexusTool(t.Context(), mcpcontract.ToolRecallMaintain, map[string]any{
+	lint, err := callNexusToolForTest(t, server, t.Context(), mcpcontract.ToolRecallMaintain, map[string]any{
 		"action": "lint", "terms": []string{"definitely-not-present"},
 	})
 	if err != nil {
@@ -114,13 +114,13 @@ func TestCentralRuntimeOutputContractRecallBasics(t *testing.T) {
 	}
 	assertCentralToolResultMatchesOutputSchema(t, mcpcontract.ToolRecallMaintain, lint)
 
-	embeddingStatus, err := server.callNexusTool(t.Context(), mcpcontract.ToolRecallMaintain, map[string]any{"action": "embedding_status"})
+	embeddingStatus, err := callNexusToolForTest(t, server, t.Context(), mcpcontract.ToolRecallMaintain, map[string]any{"action": "embedding_status"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertCentralToolResultMatchesOutputSchema(t, mcpcontract.ToolRecallMaintain, embeddingStatus)
 
-	card, err := server.callNexusTool(t.Context(), mcpcontract.ToolRecallWrite, map[string]any{
+	card, err := callNexusToolForTest(t, server, t.Context(), mcpcontract.ToolRecallWrite, map[string]any{
 		"target": "card", "action": "plan", "title": "Output contract card",
 		"content": "Reusable output contract regression knowledge for central Recall validation.",
 	})
@@ -137,7 +137,7 @@ func TestCentralRuntimeOutputContractPrivateNoteSearchAndStatus(t *testing.T) {
 	}
 	server := &Server{privateNotes: store}
 
-	search, err := server.callNexusTool(t.Context(), mcpcontract.ToolPrivateNoteManage, map[string]any{
+	search, err := callNexusToolForTest(t, server, t.Context(), mcpcontract.ToolPrivateNoteManage, map[string]any{
 		"action": "search", "query": "no matching note",
 	})
 	if err != nil {
@@ -148,7 +148,7 @@ func TestCentralRuntimeOutputContractPrivateNoteSearchAndStatus(t *testing.T) {
 		t.Fatalf("private note search identity = %#v", normalizedSearch)
 	}
 
-	status, err := server.callNexusTool(t.Context(), mcpcontract.ToolPrivateNoteManage, map[string]any{
+	status, err := callNexusToolForTest(t, server, t.Context(), mcpcontract.ToolPrivateNoteManage, map[string]any{
 		"action": "status", "status_action": "check",
 	})
 	if err != nil {
@@ -156,7 +156,7 @@ func TestCentralRuntimeOutputContractPrivateNoteSearchAndStatus(t *testing.T) {
 	}
 	assertCentralToolResultMatchesOutputSchema(t, mcpcontract.ToolPrivateNoteManage, status)
 
-	maintain, err := server.callNexusTool(t.Context(), mcpcontract.ToolPrivateNoteManage, map[string]any{
+	maintain, err := callNexusToolForTest(t, server, t.Context(), mcpcontract.ToolPrivateNoteManage, map[string]any{
 		"action": "maintain", "maintenance_action": "init-encryption",
 	})
 	if err != nil {
@@ -164,7 +164,7 @@ func TestCentralRuntimeOutputContractPrivateNoteSearchAndStatus(t *testing.T) {
 	}
 	assertCentralToolResultMatchesOutputSchema(t, mcpcontract.ToolPrivateNoteManage, maintain)
 
-	written, err := server.callNexusTool(t.Context(), mcpcontract.ToolPrivateNoteManage, map[string]any{
+	written, err := callNexusToolForTest(t, server, t.Context(), mcpcontract.ToolPrivateNoteManage, map[string]any{
 		"action": "write", "title": "Output contract note", "content": "private contract fixture", "confirmed": true,
 	})
 	if err != nil {
@@ -176,7 +176,7 @@ func TestCentralRuntimeOutputContractPrivateNoteSearchAndStatus(t *testing.T) {
 		t.Fatalf("private note write path = %#v", written["path"])
 	}
 
-	read, err := server.callNexusTool(t.Context(), mcpcontract.ToolPrivateNoteManage, map[string]any{
+	read, err := callNexusToolForTest(t, server, t.Context(), mcpcontract.ToolPrivateNoteManage, map[string]any{
 		"action": "read", "path": path,
 	})
 	if err != nil {
@@ -184,7 +184,7 @@ func TestCentralRuntimeOutputContractPrivateNoteSearchAndStatus(t *testing.T) {
 	}
 	assertCentralToolResultMatchesOutputSchema(t, mcpcontract.ToolPrivateNoteManage, read)
 
-	deleted, err := server.callNexusTool(t.Context(), mcpcontract.ToolPrivateNoteManage, map[string]any{
+	deleted, err := callNexusToolForTest(t, server, t.Context(), mcpcontract.ToolPrivateNoteManage, map[string]any{
 		"action": "delete", "path": path, "confirmed": true,
 	})
 	if err != nil {
@@ -203,7 +203,7 @@ func TestCentralRuntimeOutputContractRecallSearchRejectsMissingPublicURL(t *test
 		t.Fatal(err)
 	}
 
-	result, err := server.callNexusTool(t.Context(), mcpcontract.ToolRecallSearch, map[string]any{
+	result, err := callNexusToolForTest(t, server, t.Context(), mcpcontract.ToolRecallSearch, map[string]any{
 		"query": "schema validation",
 		"kind":  "markdown",
 	})
@@ -220,7 +220,7 @@ func TestCentralRuntimeOutputContractRecallSearchRejectsMissingPublicURL(t *test
 
 func TestCentralRuntimeOutputContractRecallSearchAllowsEmptyResultsWithoutPublicURL(t *testing.T) {
 	server, _ := newRecallToolTestServer(t)
-	result, err := server.callNexusTool(t.Context(), mcpcontract.ToolRecallSearch, map[string]any{
+	result, err := callNexusToolForTest(t, server, t.Context(), mcpcontract.ToolRecallSearch, map[string]any{
 		"query": "no matching document",
 		"kind":  "markdown",
 	})

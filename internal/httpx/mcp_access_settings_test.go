@@ -62,14 +62,14 @@ func TestMCPAccessTokenSettingsReadAndReset(t *testing.T) {
 	}
 
 	called := false
-	wrapped := server.withMCPAccess(func(w http.ResponseWriter, _ *http.Request) {
+	wrapped := server.withMCPAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
-	})
+	}))
 	oldReq := httptest.NewRequest(http.MethodPost, "https://nexus.example/mcp", nil)
 	oldReq.Header.Set("Authorization", "Bearer "+oldToken)
 	oldRes := httptest.NewRecorder()
-	wrapped(oldRes, oldReq)
+	wrapped.ServeHTTP(oldRes, oldReq)
 	if called || oldRes.Code != http.StatusUnauthorized {
 		t.Fatalf("old token remained valid: called=%v status=%d", called, oldRes.Code)
 	}
@@ -77,7 +77,7 @@ func TestMCPAccessTokenSettingsReadAndReset(t *testing.T) {
 	newReq := httptest.NewRequest(http.MethodPost, "https://nexus.example/mcp", nil)
 	newReq.Header.Set("Authorization", "Bearer "+resetBody.Token)
 	newRes := httptest.NewRecorder()
-	wrapped(newRes, newReq)
+	wrapped.ServeHTTP(newRes, newReq)
 	if !called || newRes.Code != http.StatusNoContent {
 		t.Fatalf("new token rejected: called=%v status=%d", called, newRes.Code)
 	}

@@ -16,13 +16,13 @@ func TestCentralWorkflowTemplateManageUsesNexusRegistry(t *testing.T) {
 		}
 	}
 
-	listed, err := server.callWorkflowTemplateManage(t.Context(), map[string]any{"action": "list", "template_status": "active"})
+	listed, err := callWorkflowTemplateManageForTest(t, server, t.Context(), map[string]any{"action": "list", "template_status": "active"})
 	if err != nil || listed["count"] != 2 {
 		t.Fatalf("list=%#v err=%v", listed, err)
 	}
 	assertCentralToolResultMatchesOutputSchema(t, "workflow_template_manage", listed)
 
-	loaded, err := server.callWorkflowTemplateManage(t.Context(), map[string]any{"action": "get", "template_id": "development.demo"})
+	loaded, err := callWorkflowTemplateManageForTest(t, server, t.Context(), map[string]any{"action": "get", "template_id": "development.demo"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -32,7 +32,7 @@ func TestCentralWorkflowTemplateManageUsesNexusRegistry(t *testing.T) {
 		t.Fatalf("get=%#v", loaded)
 	}
 
-	many, err := server.callWorkflowTemplateManage(t.Context(), map[string]any{
+	many, err := callWorkflowTemplateManageForTest(t, server, t.Context(), map[string]any{
 		"action": "get_many", "template_ids": []string{"development.demo", "development.review"},
 	})
 	if err != nil || many["count"] != 2 || many["composition_required"] != true || many["next_required_action"] != workflowCompositionNextAction {
@@ -40,7 +40,7 @@ func TestCentralWorkflowTemplateManageUsesNexusRegistry(t *testing.T) {
 	}
 	assertCentralToolResultMatchesOutputSchema(t, "workflow_template_manage", many)
 
-	matched, err := server.callWorkflowTemplateManage(t.Context(), map[string]any{
+	matched, err := callWorkflowTemplateManageForTest(t, server, t.Context(), map[string]any{
 		"action": "match", "goal": "demo development", "device": "DockMini", "type": "development",
 	})
 	if err != nil {
@@ -51,7 +51,7 @@ func TestCentralWorkflowTemplateManageUsesNexusRegistry(t *testing.T) {
 		t.Fatalf("match=%#v", matched)
 	}
 
-	vectorIndex, err := server.callWorkflowTemplateManage(t.Context(), map[string]any{"action": "vector_index"})
+	vectorIndex, err := callWorkflowTemplateManageForTest(t, server, t.Context(), map[string]any{"action": "vector_index"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,7 +93,7 @@ func TestCentralWorkflowListDefaultsToCurrentVersionPerTemplate(t *testing.T) {
 		}
 	}
 
-	listed, err := server.callWorkflowTemplateManage(t.Context(), map[string]any{"action": "list"})
+	listed, err := callWorkflowTemplateManageForTest(t, server, t.Context(), map[string]any{"action": "list"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,7 +105,7 @@ func TestCentralWorkflowListDefaultsToCurrentVersionPerTemplate(t *testing.T) {
 		t.Fatalf("default current templates=%#v", listed["templates"])
 	}
 
-	retired, err := server.callWorkflowTemplateManage(t.Context(), map[string]any{"action": "list", "template_status": "retired"})
+	retired, err := callWorkflowTemplateManageForTest(t, server, t.Context(), map[string]any{"action": "list", "template_status": "retired"})
 	if err != nil || retired["count"] != 1 {
 		t.Fatalf("retired history=%#v err=%v", retired, err)
 	}
@@ -114,18 +114,18 @@ func TestCentralWorkflowListDefaultsToCurrentVersionPerTemplate(t *testing.T) {
 func TestCentralWorkflowPublishRetireOutputContract(t *testing.T) {
 	dataDir := t.TempDir()
 	server := &Server{cfg: config.Config{NexusDataDir: dataDir}, workflowRegistry: newTestWorkflowRegistry(dataDir)}
-	template, err := asMap(testWorkflowTemplate("development.contract", "1.0.0"))
+	template, err := asBoundaryMap(testWorkflowTemplate("development.contract", "1.0.0"))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	published, err := server.callWorkflowTemplateManage(t.Context(), map[string]any{"action": "publish", "template": template})
+	published, err := callWorkflowTemplateManageForTest(t, server, t.Context(), map[string]any{"action": "publish", "template": template})
 	if err != nil {
 		t.Fatal(err)
 	}
 	assertCentralToolResultMatchesOutputSchema(t, "workflow_template_manage", published)
 
-	retired, err := server.callWorkflowTemplateManage(t.Context(), map[string]any{
+	retired, err := callWorkflowTemplateManageForTest(t, server, t.Context(), map[string]any{
 		"action": "retire", "template_id": "development.contract", "template_version": "1.0.0",
 	})
 	if err != nil {

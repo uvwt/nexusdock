@@ -10,6 +10,7 @@ import (
 	pathpkg "path"
 	"regexp"
 	"strings"
+	"sync"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	protocol "github.com/uvwt/agentdock-protocol"
@@ -25,14 +26,46 @@ const nexusServerInstructions = "NexusDock 可以连接并统一操作多台 Age
 	"需要查找或读取长期记忆时使用 `recall_*`；需要查找或使用 Workflow 模板时使用 `workflow_template_manage`；" +
 	"处理多步骤任务时使用 `task_manage` 记录和维护任务进度。根据用户需求选择合适的设备和能力，检查、操作并验证设备状态。"
 
-func (s *Server) initializeMCPGateway() {
-	s.mcpServer = mcpsdk.NewServer(
-		&mcpsdk.Implementation{Name: "nexusdock", Version: "1"},
-		&mcpsdk.ServerOptions{
-			Capabilities: &mcpsdk.ServerCapabilities{},
-			Instructions: nexusServerInstructions,
-		},
+type mcpGateway struct {
+	server      *mcpsdk.Server
+	handler     http.Handler
+	resourcesMu sync.RWMutex
+	resources   map[string]struct{}
+}
+
+func newMCPGateway() *mcpGateway {
+	gateway := &mcpGateway{
+		server: mcpsdk.NewServer(
+			&mcpsdk.Implementation{Name: "nexusdock", Version: "1"},
+			&mcpsdk.ServerOptions{
+				Capabilities: &mcpsdk.ServerCapabilities{},
+				Instructions: nexusServerInstructions,
+			},
+		),
+		resources: make(map[string]struct{}),
+	}
+	gateway.handler = mcpsdk.NewStreamableHTTPHandler(
+		func(*http.Request) *mcpsdk.Server { return gateway.server },
+		&mcpsdk.StreamableHTTPOptions{Stateless: true, JSONResponse: true, MaxRequestBodyBytes: 1 << 20, PropagateRequestCancellation: true},
 	)
+	return gateway
+}
+
+func (s *Server) initializeMCPGateway() {
+	if s == nil {
+		return
+	}
+	s.mcp = newMCPGateway()
+	s.bindMCPGateway()
+}
+
+// bindMCPGateway 把已经创建好的 MCP 协议运行态接到 Nexus 业务能力。
+// mcpGateway 只持有 MCP SDK server、HTTP handler 与 resource registry 的协议状态；
+// 业务依赖和工具编排仍由 Server 负责，避免制造 Server -> gateway -> Server 的假抽象。
+func (s *Server) bindMCPGateway() {
+	if s == nil || s.mcp == nil {
+		return
+	}
 	s.registerCentralTools()
 	s.bindPublishedToolBridge()
 	if s.agentDockHub != nil {
@@ -56,10 +89,6 @@ func (s *Server) initializeMCPGateway() {
 	}
 	// Nexus 自有的 Context / Recall / Workflow Apps 不依赖任何 AgentDock 节点，启动时始终注册。
 	s.syncMCPAppResources()
-	s.mcpHandler = mcpsdk.NewStreamableHTTPHandler(
-		func(*http.Request) *mcpsdk.Server { return s.mcpServer },
-		&mcpsdk.StreamableHTTPOptions{Stateless: true, JSONResponse: true, MaxRequestBodyBytes: 1 << 20, PropagateRequestCancellation: true},
-	)
 }
 
 // bindPublishedToolBridge 把契约 Bridge 的公开/退休回调映射为 MCP SDK 的工具注册与下架。
@@ -73,38 +102,50 @@ func (s *Server) bindPublishedToolBridge() {
 
 // publishNodeTool 把 Bridge 公开的 fleet 契约映射为 MCP 工具注册（含 MCP Apps 展示元数据过滤）。
 func (s *Server) publishNodeTool(descriptor agentdock.ToolDescriptor) {
-	if s.mcpServer == nil {
+	if s.mcp == nil || s.mcp.server == nil {
 		return
 	}
-	s.mcpServer.AddTool(nodeMCPToolWithApps(descriptor, s.mcpAppsEnabled()), s.nodeToolHandler(descriptor.Name))
+	s.mcp.server.AddTool(nodeMCPToolWithApps(descriptor, s.mcpAppsEnabled()), s.nodeToolHandler(descriptor.Name))
 }
 
 // retireNodeTool 把 Bridge 的工具下架映射为 MCP SDK 的工具移除。
 func (s *Server) retireNodeTool(toolName string) {
-	if s.mcpServer == nil {
+	if s.mcp == nil || s.mcp.server == nil {
 		return
 	}
-	s.mcpServer.RemoveTools(toolName)
+	s.mcp.server.RemoveTools(toolName)
 }
 
 func (s *Server) registerCentralTools() {
-	if s == nil || s.mcpServer == nil {
+	if s == nil || s.mcp == nil || s.mcp.server == nil {
 		return
 	}
 	for _, definition := range nexusToolDefinitionsWithApps(s.mcpAppsEnabled()) {
 		definition := definition
-		s.mcpServer.AddTool(definition, func(ctx context.Context, request *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
-			arguments, err := toolArguments(request)
-			if err != nil {
-				return nil, err
-			}
-			result, err := s.callNexusTool(ctx, definition.Name, arguments)
-			response, responseErr := s.gatewayToolResult(definition.Name, result, err)
-			if responseErr == nil && response != nil {
-				response.Meta = centralToolResultMetaWithApps(definition.Name, arguments, s.mcpAppsEnabled())
-			}
-			return response, responseErr
-		})
+		// Nexus 自有工具使用 SDK 的 typed AddTool 入口，让协议仓库声明的 InputSchema /
+		// OutputSchema 在真实调用时执行校验；工具内部仍按各自明确输入结构解码，避免 map
+		// 成为业务数据模型。节点透传工具契约由远端 AgentDock 决定，继续走动态边界。
+		mcpsdk.AddTool[map[string]any, map[string]any](
+			s.mcp.server,
+			definition,
+			func(ctx context.Context, request *mcpsdk.CallToolRequest, _ map[string]any) (*mcpsdk.CallToolResult, map[string]any, error) {
+				arguments := json.RawMessage(nil)
+				if request != nil && request.Params != nil {
+					arguments = request.Params.Arguments
+				}
+				result, err := s.callNexusTool(ctx, definition.Name, arguments)
+				meta := centralToolResultMetaWithApps(definition.Name, arguments, s.mcpAppsEnabled())
+				if err == nil {
+					// 让 SDK 直接序列化并校验成功结果，避免 map -> JSON -> CallToolResult 的二次往返。
+					return &mcpsdk.CallToolResult{Meta: meta}, result, nil
+				}
+				response, responseErr := s.gatewayToolResult(definition.Name, result, err)
+				if responseErr == nil && response != nil {
+					response.Meta = meta
+				}
+				return response, nil, responseErr
+			},
+		)
 	}
 }
 
@@ -125,7 +166,7 @@ func (s *Server) setMCPAppsEnabled(enabled bool) {
 	changed := s.mcpAppsEnabledState != enabled
 	s.mcpAppsEnabledState = enabled
 	s.mu.Unlock()
-	if !changed || s.mcpServer == nil {
+	if !changed || s.mcp == nil || s.mcp.server == nil {
 		return
 	}
 
@@ -133,7 +174,7 @@ func (s *Server) setMCPAppsEnabled(enabled bool) {
 	s.registerCentralTools()
 	if s.publishedToolBridge != nil {
 		for _, published := range s.publishedToolBridge.PublishedTools() {
-			s.mcpServer.AddTool(nodeMCPToolWithApps(published.Descriptor, enabled), s.nodeToolHandler(published.Descriptor.Name))
+			s.mcp.server.AddTool(nodeMCPToolWithApps(published.Descriptor, enabled), s.nodeToolHandler(published.Descriptor.Name))
 		}
 	}
 	s.syncMCPAppResources()
@@ -190,7 +231,7 @@ func nodeMCPToolWithApps(descriptor agentdock.ToolDescriptor, mcpAppsEnabled boo
 
 func (s *Server) nodeToolHandler(name string) mcpsdk.ToolHandler {
 	return func(ctx context.Context, request *mcpsdk.CallToolRequest) (*mcpsdk.CallToolResult, error) {
-		arguments, err := toolArguments(request)
+		arguments, err := dynamicToolArguments(request)
 		if err != nil {
 			return nil, err
 		}
@@ -220,7 +261,7 @@ func (s *Server) callNodeTool(ctx context.Context, name string, arguments map[st
 		return s.gatewayToolResult(name, nil, err)
 	}
 	if mismatch != nil {
-		details, encodeErr := asMap(mismatch)
+		details, encodeErr := asBoundaryMap(mismatch)
 		if encodeErr != nil {
 			return nil, encodeErr
 		}
@@ -281,7 +322,9 @@ func nodeInputSchema(schema map[string]any) map[string]any {
 	return cloned
 }
 
-func toolArguments(request *mcpsdk.CallToolRequest) (map[string]any, error) {
+func dynamicToolArguments(request *mcpsdk.CallToolRequest) (map[string]any, error) {
+	// 节点工具是 Nexus 不理解的开放协议载荷；这里保持动态 JSON 仅用于透明转发，
+	// 不把它继续传入 Nexus 自有 Recall / Workflow / Private Note 编排。
 	arguments := map[string]any{}
 	if request == nil || request.Params == nil || len(request.Params.Arguments) == 0 || string(request.Params.Arguments) == "null" {
 		return arguments, nil
@@ -360,7 +403,7 @@ func (s *Server) decorateRecallSearchResults(results []recall.SearchResult) ([]m
 		return nil, errors.New("NEXUS_PUBLIC_URL is required to generate recall_search citation URLs")
 	}
 	for _, result := range results {
-		item, err := asMap(result)
+		item, err := asBoundaryMap(result)
 		if err != nil {
 			return nil, err
 		}
@@ -384,81 +427,126 @@ func (s *Server) decorateRecallSearchResults(results []recall.SearchResult) ([]m
 	return decorated, nil
 }
 
-func (s *Server) callNexusTool(ctx context.Context, name string, args map[string]any) (map[string]any, error) {
+func (s *Server) callRecallSearch(ctx context.Context, input recallSearchInput) (map[string]any, error) {
+	query := strings.TrimSpace(input.Query)
+	if query == "" {
+		return nil, errors.New("query is required")
+	}
+	kind := strings.ToLower(strings.TrimSpace(input.Kind))
+	if kind == "" {
+		kind = "all"
+	}
+	options := recall.SearchOptions{Query: query, MaxResults: normalizedPositive(input.MaxResults, 20)}
+	switch kind {
+	case "card":
+		options.Prefix = "recall/managed/cards"
+	case "markdown":
+		options.ExcludePrefix = "recall/managed/cards"
+	case "all":
+	default:
+		return nil, fmt.Errorf("unsupported recall_search kind: %s", kind)
+	}
+	results, err := s.executeRecallSearch(ctx, options)
+	if err != nil {
+		return nil, err
+	}
+	decorated, err := s.decorateRecallSearchResults(results)
+	if err != nil {
+		return nil, err
+	}
+	return asBoundaryMap(map[string]any{
+		"query": query, "recall_kind": kind, "results": decorated, "count": len(decorated),
+		"recall_store": "NexusDock Recall", "recall_endpoint": s.cfg.PublicURL,
+	})
+}
+
+func (s *Server) callRecallRead(input recallReadInput) (map[string]any, error) {
+	path := strings.TrimSpace(input.Path)
+	if strings.HasPrefix(path, "private-notes/") {
+		return nil, errors.New("private notes must be read through private_note_manage")
+	}
+	memory, err := s.store.Read(path)
+	if err != nil {
+		return nil, err
+	}
+	item, err := asBoundaryMap(memory)
+	if err != nil {
+		return nil, err
+	}
+	content, _ := item["content"].(string)
+	delete(item, "content")
+	if input.IncludeRaw {
+		item["raw_content"] = content
+	}
+	return asBoundaryMap(map[string]any{
+		"recall": item, "recall_store": "NexusDock Recall", "recall_endpoint": s.cfg.PublicURL,
+	})
+}
+
+func (s *Server) callNexusTool(ctx context.Context, name string, raw json.RawMessage) (map[string]any, error) {
 	switch name {
 	case "agentdock_context":
 		return s.callFleetAgentDockContext(ctx)
 	case "workflow_template_manage":
-		return s.callWorkflowTemplateManage(ctx, args)
+		var input workflowTemplateManageInput
+		if err := decodeToolInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return s.callWorkflowTemplateManage(ctx, input)
 	case "recall_search":
-		query := stringArgument(args, "query")
-		if query == "" {
-			return nil, errors.New("query is required")
-		}
-		kind := strings.ToLower(stringArgumentDefault(args, "kind", "all"))
-		options := recall.SearchOptions{Query: query, MaxResults: intArgument(args, "max_results", 20)}
-		switch kind {
-		case "card":
-			options.Prefix = "recall/managed/cards"
-		case "markdown":
-			options.ExcludePrefix = "recall/managed/cards"
-		case "all":
-		default:
-			return nil, fmt.Errorf("unsupported recall_search kind: %s", kind)
-		}
-		results, err := s.searchRecall(ctx, options)
-		if err != nil {
+		var input recallSearchInput
+		if err := decodeToolInput(raw, &input); err != nil {
 			return nil, err
 		}
-		decorated, err := s.decorateRecallSearchResults(results)
-		if err != nil {
-			return nil, err
-		}
-		return asMap(map[string]any{"query": query, "recall_kind": kind, "results": decorated, "count": len(decorated), "recall_store": "NexusDock Recall", "recall_endpoint": s.cfg.PublicURL})
+		return s.callRecallSearch(ctx, input)
 	case "recall_read":
-		path := stringArgument(args, "path")
-		if strings.HasPrefix(path, "private-notes/") {
-			return nil, errors.New("private notes must be read through private_note_manage")
-		}
-		memory, err := s.store.Read(path)
-		if err != nil {
+		var input recallReadInput
+		if err := decodeToolInput(raw, &input); err != nil {
 			return nil, err
 		}
-		item, err := asMap(memory)
-		if err != nil {
-			return nil, err
-		}
-		content, _ := item["content"].(string)
-		delete(item, "content")
-		if boolArgument(args, "include_raw") {
-			item["raw_content"] = content
-		}
-		return asMap(map[string]any{"recall": item, "recall_store": "NexusDock Recall", "recall_endpoint": s.cfg.PublicURL})
+		return s.callRecallRead(input)
 	case "recall_write":
-		return s.callRecallWrite(ctx, args)
+		input, err := decodeRecallWriteInput(raw)
+		if err != nil {
+			return nil, err
+		}
+		return s.callRecallWrite(ctx, input)
 	case "recall_maintain":
-		return s.callRecallMaintain(ctx, args)
+		var input recallMaintainInput
+		if err := decodeToolInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return s.callRecallMaintain(ctx, input)
 	case "private_note_manage":
-		return s.callPrivateNote(ctx, args)
+		var input privateNoteManageInput
+		if err := decodeToolInput(raw, &input); err != nil {
+			return nil, err
+		}
+		return s.callPrivateNote(ctx, input)
 	default:
 		return nil, fmt.Errorf("unknown NexusDock tool: %s", name)
 	}
 }
 
-func centralToolResultMeta(name string, args map[string]any) mcpsdk.Meta {
-	return centralToolResultMetaWithApps(name, args, true)
+func centralToolResultMeta(name string, raw json.RawMessage) mcpsdk.Meta {
+	return centralToolResultMetaWithApps(name, raw, true)
 }
 
-func centralToolResultMetaWithApps(name string, args map[string]any, mcpAppsEnabled bool) mcpsdk.Meta {
-	if mcpAppsEnabled && name == "workflow_template_manage" && strings.EqualFold(stringArgument(args, "action"), "match") {
+func centralToolResultMetaWithApps(name string, raw json.RawMessage, mcpAppsEnabled bool) mcpsdk.Meta {
+	if !mcpAppsEnabled || name != "workflow_template_manage" {
+		return nil
+	}
+	var input workflowTemplateManageInput
+	if decodeToolInput(raw, &input) == nil && strings.EqualFold(strings.TrimSpace(input.Action), "match") {
 		return centralToolUIResourceMeta(protocol.WorkflowUIResourceURI)
 	}
 	return nil
 }
 
-func (s *Server) callRecallWrite(ctx context.Context, args map[string]any) (map[string]any, error) {
-	target, action := strings.ToLower(stringArgument(args, "target")), strings.ToLower(stringArgument(args, "action"))
-	result, err := s.callRecallWriteOperation(ctx, args, target, action)
+func (s *Server) callRecallWrite(ctx context.Context, input recallWriteInput) (map[string]any, error) {
+	target := strings.ToLower(strings.TrimSpace(input.Target))
+	action := strings.ToLower(strings.TrimSpace(input.Action))
+	result, err := s.callRecallWriteOperation(ctx, input, target, action)
 	if result != nil {
 		delete(result, "ok")
 		result["recall_target"] = target
@@ -468,18 +556,18 @@ func (s *Server) callRecallWrite(ctx context.Context, args map[string]any) (map[
 	return result, err
 }
 
-func (s *Server) callRecallWriteOperation(ctx context.Context, args map[string]any, target, action string) (map[string]any, error) {
-	dryRun := boolArgument(args, "dry_run")
-	confirmed := boolArgument(args, "confirmed")
+func (s *Server) callRecallWriteOperation(ctx context.Context, input recallWriteInput, target, action string) (map[string]any, error) {
+	dryRun := input.DryRun
+	confirmed := input.Confirmed
 	if target == "card" {
 		previewOnly := dryRun || !confirmed
-		var request recall.CardRequest
-		if err := decodeMap(args, &request); err != nil {
-			return nil, err
+		request := recall.CardRequest{
+			Title: input.Title, Content: input.Content, Summary: input.Summary, Path: input.Path,
+			Confirmed: input.Confirmed, Overwrite: input.Overwrite, AllowWarnings: input.AllowWarnings,
 		}
 		if action == "plan" || (action == "create" && previewOnly) {
 			result, err := s.store.CaptureCard(request)
-			mapped, mapErr := asMap(result, err)
+			mapped, mapErr := asBoundaryMap(result, err)
 			if mapErr != nil {
 				return nil, mapErr
 			}
@@ -490,32 +578,31 @@ func (s *Server) callRecallWriteOperation(ctx context.Context, args map[string]a
 			return nil, errors.New("card only supports plan and create")
 		}
 		result, err := s.store.WriteCard(request)
-		return asMap(result, err)
+		return asBoundaryMap(result, err)
 	}
 	if target != "markdown" {
 		return nil, errors.New("target must be card or markdown")
 	}
-	path := stringArgument(args, "path")
+	path := strings.TrimSpace(input.Path)
 	if action == "delete" {
 		if dryRun {
 			current, err := s.store.Read(path)
 			if err != nil {
 				return nil, err
 			}
-			return asMap(map[string]any{"path": path, "dry_run": true, "would_delete": true, "size_bytes": current.SizeBytes})
+			return asBoundaryMap(map[string]any{"path": path, "dry_run": true, "would_delete": true, "size_bytes": current.SizeBytes})
 		}
 		if !confirmed {
 			return nil, recall.ErrConfirmationNeeded
 		}
 		err := s.store.Delete(path, true)
-		return asMap(map[string]any{"path": path, "deleted": err == nil}, err)
+		return asBoundaryMap(map[string]any{"path": path, "deleted": err == nil}, err)
 	}
 	if action == "update_fact" {
-		return s.updateRecallFacts(ctx, path, args)
+		return s.updateRecallFacts(ctx, input)
 	}
-	var request recall.WriteRequest
-	if err := decodeMap(args, &request); err != nil {
-		return nil, err
+	request := recall.WriteRequest{
+		Path: path, Content: input.Content, Confirmed: input.Confirmed, Overwrite: input.Overwrite,
 	}
 	var beforeEdit string
 	hasBeforeEdit := false
@@ -529,9 +616,9 @@ func (s *Server) callRecallWriteOperation(ctx context.Context, args map[string]a
 		if err != nil {
 			return nil, err
 		}
-		appendText := stringArgument(args, "append")
+		appendText := input.Append
 		if action == "append" && strings.TrimSpace(appendText) == "" {
-			appendText = stringArgument(args, "content")
+			appendText = input.Content
 		}
 		if action == "append" && strings.TrimSpace(appendText) == "" {
 			return nil, errors.New("append or content is required")
@@ -539,10 +626,10 @@ func (s *Server) callRecallWriteOperation(ctx context.Context, args map[string]a
 		old, replacement := "", ""
 		section, sectionContent := "", ""
 		if action == "patch" {
-			old, replacement = stringArgument(args, "old"), stringArgument(args, "new")
-			section, sectionContent = stringArgument(args, "section"), stringArgument(args, "section_content")
+			old, replacement = input.Old, input.New
+			section, sectionContent = input.Section, input.SectionContent
 			if strings.TrimSpace(section) != "" && sectionContent == "" {
-				sectionContent = stringArgument(args, "content")
+				sectionContent = input.Content
 			}
 		}
 		content, _, err := recall.ApplyMarkdownPatch(current.Content, old, replacement, section, sectionContent, appendText)
@@ -556,24 +643,19 @@ func (s *Server) callRecallWriteOperation(ctx context.Context, args map[string]a
 		if err != nil {
 			return nil, err
 		}
-		proposed := stringArgument(args, "content")
+		proposed := input.Content
 		changeCount := 0
 		if proposed == "" {
 			proposed, changeCount, err = recall.ApplyMarkdownPatch(
-				current.Content,
-				stringArgument(args, "old"), stringArgument(args, "new"),
-				stringArgument(args, "section"), stringArgument(args, "section_content"), stringArgument(args, "append"),
+				current.Content, input.Old, input.New, input.Section, input.SectionContent, input.Append,
 			)
 			if err != nil {
 				return nil, err
 			}
 		}
-		maxBytes := intArgument(args, "max_bytes", 60000)
-		if maxBytes <= 0 {
-			maxBytes = 60000
-		}
+		maxBytes := normalizedPositive(input.MaxBytes, 60000)
 		diff := recall.UnifiedDiff(path, current.Content, proposed, maxBytes)
-		return asMap(map[string]any{
+		return asBoundaryMap(map[string]any{
 			"path": path, "changed": current.Content != proposed, "diff": diff,
 			"truncated": len(diff) >= maxBytes, "change_count": changeCount,
 		})
@@ -594,24 +676,24 @@ func (s *Server) callRecallWriteOperation(ctx context.Context, args map[string]a
 			"proposed_content": preview.ProposedContent, "overwrite": preview.Overwrite,
 		}
 		if hasBeforeEdit {
-			maxBytes := intArgument(args, "max_bytes", 60000)
-			if maxBytes <= 0 {
-				maxBytes = 60000
-			}
+			maxBytes := normalizedPositive(input.MaxBytes, 60000)
 			diff := recall.UnifiedDiff(path, beforeEdit, preview.ProposedContent, maxBytes)
 			result["changed"] = beforeEdit != preview.ProposedContent
 			result["diff"] = diff
 			result["truncated"] = len(diff) >= maxBytes
 		}
-		return asMap(result)
+		return asBoundaryMap(result)
 	}
 	result, err := s.store.Write(request)
-	return asMap(map[string]any{"recall": result, "recall_store": "NexusDock Recall"}, err)
+	return asBoundaryMap(map[string]any{"recall": result, "recall_store": "NexusDock Recall"}, err)
 }
 
-func (s *Server) callRecallMaintain(ctx context.Context, args map[string]any) (map[string]any, error) {
-	action := strings.ToLower(stringArgumentDefault(args, "action", "list"))
-	result, err := s.callRecallMaintainOperation(ctx, args, action)
+func (s *Server) callRecallMaintain(ctx context.Context, input recallMaintainInput) (map[string]any, error) {
+	action := strings.ToLower(strings.TrimSpace(input.Action))
+	if action == "" {
+		action = "list"
+	}
+	result, err := s.callRecallMaintainOperation(ctx, input, action)
 	if result != nil {
 		delete(result, "ok")
 		result["recall_action"] = action
@@ -620,50 +702,73 @@ func (s *Server) callRecallMaintain(ctx context.Context, args map[string]any) (m
 	return result, err
 }
 
-func (s *Server) callRecallMaintainOperation(ctx context.Context, args map[string]any, action string) (map[string]any, error) {
+func (s *Server) callRecallMaintainOperation(ctx context.Context, input recallMaintainInput, action string) (map[string]any, error) {
 	switch action {
 	case "list":
-		entries, err := s.store.List(stringArgument(args, "prefix"), intArgument(args, "max_entries", 200))
-		return asMap(map[string]any{"entries": entries, "count": len(entries)}, err)
+		entries, err := s.store.List(strings.TrimSpace(input.Prefix), normalizedPositive(input.MaxEntries, 200))
+		return asBoundaryMap(map[string]any{"entries": entries, "count": len(entries)}, err)
 	case "lint":
-		return s.lintRecall(args)
+		return s.lintRecall(input)
 	case "embedding_status":
 		if s.currentEmbedding() == nil {
-			return asMap(map[string]any{"enabled": false})
+			return map[string]any{"enabled": false}, nil
 		}
-		return asMap(s.currentEmbedding().Status(ctx))
+		return embeddingStatusMCPResult(s.currentEmbedding().Status(ctx)), nil
 	case "reindex", "reindex_cards":
 		if s.currentEmbedding() == nil {
 			return nil, errors.New("embedding service is not configured")
 		}
-		prefix := stringArgument(args, "prefix")
+		prefix := strings.TrimSpace(input.Prefix)
 		if action == "reindex_cards" && prefix == "" {
 			prefix = "recall/managed/cards"
 		}
 		result, err := s.currentEmbedding().Reindex(ctx, recall.EmbeddingReindexRequest{Prefix: prefix})
-		return asMap(result, err)
+		return asBoundaryMap(result, err)
 	default:
 		return nil, fmt.Errorf("unsupported recall maintenance action: %s", action)
 	}
 }
 
-func (s *Server) updateRecallFacts(ctx context.Context, path string, args map[string]any) (map[string]any, error) {
+func embeddingStatusMCPResult(status recall.EmbeddingStatus) map[string]any {
+	result := map[string]any{
+		"ok": status.OK, "enabled": status.Enabled, "model": status.Model, "configured": status.Configured,
+	}
+	if status.Endpoint != "" {
+		result["endpoint"] = status.Endpoint
+	}
+	if status.IndexPath != "" {
+		result["index_path"] = status.IndexPath
+	}
+	if status.Index != nil {
+		result["index"] = *status.Index
+	}
+	if status.Reachable != nil {
+		result["reachable"] = *status.Reachable
+	}
+	if status.Reason != "" {
+		result["reason"] = status.Reason
+	}
+	if status.Error != "" {
+		result["error"] = status.Error
+	}
+	return result
+}
+
+func (s *Server) updateRecallFacts(ctx context.Context, input recallWriteInput) (map[string]any, error) {
+	path := strings.TrimSpace(input.Path)
 	if path == "" {
 		return nil, errors.New("path is required")
 	}
-	facts := make(map[string]string)
-	if key := strings.TrimSpace(stringArgument(args, "key")); key != "" {
-		value, exists := args["value"]
-		if !exists || value == nil {
+	facts := make(map[string]string, len(input.Facts)+1)
+	if key := strings.TrimSpace(input.Key); key != "" {
+		if input.Value == "" {
 			return nil, errors.New("value is required when key is provided")
 		}
-		facts[key] = fmt.Sprint(value)
+		facts[key] = input.Value
 	}
-	if values, ok := args["facts"].(map[string]any); ok {
-		for key, value := range values {
-			if key = strings.TrimSpace(key); key != "" {
-				facts[key] = fmt.Sprint(value)
-			}
+	for key, value := range input.Facts {
+		if key = strings.TrimSpace(key); key != "" {
+			facts[key] = value
 		}
 	}
 	current, err := s.store.Read(path)
@@ -671,44 +776,52 @@ func (s *Server) updateRecallFacts(ctx context.Context, path string, args map[st
 		return nil, err
 	}
 	updated, updates, err := recall.UpdateMarkdownFacts(
-		current.Content, stringArgument(args, "section"), facts, boolArgument(args, "append_if_missing"),
+		current.Content, input.Section, facts, input.AppendIfMissing,
 	)
 	if err != nil {
 		return nil, err
 	}
-	maxBytes := intArgument(args, "max_bytes", 60000)
-	if maxBytes <= 0 {
-		maxBytes = 60000
-	}
+	maxBytes := normalizedPositive(input.MaxBytes, 60000)
 	diff := recall.UnifiedDiff(path, current.Content, updated, maxBytes)
 	changed := updated != current.Content
 	preview := map[string]any{
-		"path": path, "changed": changed, "confirmed": boolArgument(args, "confirmed"),
+		"path": path, "changed": changed, "confirmed": input.Confirmed,
 		"updates": updates, "diff": diff, "truncated": len(diff) >= maxBytes,
 	}
-	if boolArgument(args, "dry_run") || !boolArgument(args, "confirmed") || !changed {
+	if input.DryRun || !input.Confirmed || !changed {
 		preview["dry_run"] = true
-		return asMap(preview)
+		return asBoundaryMap(preview)
 	}
 	result, err := s.store.Write(recall.WriteRequest{Path: path, Content: updated, Confirmed: true, Overwrite: true})
-	return asMap(map[string]any{
+	return asBoundaryMap(map[string]any{
 		"path": path, "changed": true, "confirmed": true, "written": err == nil,
 		"updates": updates, "diff": diff, "truncated": len(diff) >= maxBytes, "recall": result,
 	}, err)
 }
 
-func (s *Server) lintRecall(args map[string]any) (map[string]any, error) {
-	terms := stringSliceArgument(args, "terms")
+func (s *Server) lintRecall(input recallMaintainInput) (map[string]any, error) {
+	terms := input.Terms
 	if len(terms) == 0 {
 		terms = []string{"Connector", "connector", "CONNECTOR", "connectors", "connector_"}
 	}
-	entries, err := s.store.List(stringArgument(args, "prefix"), intArgument(args, "max_entries", 200))
+	entries, err := s.store.List(strings.TrimSpace(input.Prefix), normalizedPositive(input.MaxEntries, 200))
 	if err != nil {
 		return nil, err
 	}
-	maximum := intArgument(args, "max_findings", 200)
+	maximum := normalizedPositive(input.MaxFindings, 200)
 	findings := make([]map[string]any, 0)
 	filesScanned := 0
+	var expressions []*regexp.Regexp
+	if input.Regex {
+		expressions = make([]*regexp.Regexp, len(terms))
+		for i, term := range terms {
+			expression, compileErr := regexp.Compile(term)
+			if compileErr != nil {
+				return nil, fmt.Errorf("invalid lint regular expression %q: %w", term, compileErr)
+			}
+			expressions[i] = expression
+		}
+	}
 	for _, entry := range entries {
 		if len(findings) >= maximum || !strings.HasSuffix(strings.ToLower(entry.Path), ".md") {
 			continue
@@ -719,14 +832,10 @@ func (s *Server) lintRecall(args map[string]any) (map[string]any, error) {
 		}
 		filesScanned++
 		for lineIndex, line := range strings.Split(memory.Content, "\n") {
-			for _, term := range terms {
+			for termIndex, term := range terms {
 				matched := strings.Contains(line, term)
-				if boolArgument(args, "regex") {
-					expression, compileErr := regexp.Compile(term)
-					if compileErr != nil {
-						return nil, fmt.Errorf("invalid lint regular expression %q: %w", term, compileErr)
-					}
-					matched = expression.MatchString(line)
+				if input.Regex {
+					matched = expressions[termIndex].MatchString(line)
 				}
 				if matched {
 					findings = append(findings, map[string]any{"path": entry.Path, "line": lineIndex + 1, "term": term, "text": line})
@@ -737,15 +846,18 @@ func (s *Server) lintRecall(args map[string]any) (map[string]any, error) {
 			}
 		}
 	}
-	return asMap(map[string]any{"terms": terms, "regex": boolArgument(args, "regex"), "files_scanned": filesScanned, "finding_count": len(findings), "findings": findings, "truncated": len(findings) >= maximum})
+	return asBoundaryMap(map[string]any{
+		"terms": terms, "regex": input.Regex, "files_scanned": filesScanned,
+		"finding_count": len(findings), "findings": findings, "truncated": len(findings) >= maximum,
+	})
 }
 
-func (s *Server) callPrivateNote(ctx context.Context, args map[string]any) (map[string]any, error) {
+func (s *Server) callPrivateNote(ctx context.Context, input privateNoteManageInput) (map[string]any, error) {
 	if s.privateNotes == nil {
 		return nil, errors.New("private notes are not configured")
 	}
-	action := strings.ToLower(stringArgument(args, "action"))
-	result, err := s.callPrivateNoteOperation(ctx, args, action)
+	action := strings.ToLower(strings.TrimSpace(input.Action))
+	result, err := s.callPrivateNoteOperation(ctx, input, action)
 	if result != nil {
 		delete(result, "ok")
 		result["action"] = action
@@ -755,40 +867,38 @@ func (s *Server) callPrivateNote(ctx context.Context, args map[string]any) (map[
 	return result, err
 }
 
-func (s *Server) callPrivateNoteOperation(ctx context.Context, args map[string]any, action string) (map[string]any, error) {
+func (s *Server) callPrivateNoteOperation(ctx context.Context, input privateNoteManageInput, action string) (map[string]any, error) {
 	switch action {
 	case "search":
-		query := stringArgument(args, "query")
-		results, err := s.privateNotes.Search(ctx, query, intArgument(args, "max_results", 8))
-		return asMap(map[string]any{
-			"action": action, "query": query, "root": s.privateNotes.Root(),
-			"results": results, "count": len(results), "metadata_only": true,
-		}, err)
+		result, err := s.executePrivateNoteSearch(ctx, privateNoteSearchRequest{
+			Query: input.Query, MaxResults: input.MaxResults,
+		})
+		return asBoundaryMap(result, err)
 	case "read":
-		result, err := s.privateNotes.Read(stringArgument(args, "path"), intArgument(args, "max_bytes", 256000))
-		return asMap(result, err)
+		result, err := s.privateNotes.Read(input.Path, input.MaxBytes)
+		return asBoundaryMap(result, err)
 	case "write":
-		var request privatenotes.WriteRequest
-		if err := decodeMap(args, &request); err != nil {
-			return nil, err
-		}
-		result, err := s.privateNotes.Write(request)
-		return asMap(result, err)
+		result, err := s.privateNotes.Write(privatenotes.WriteRequest{
+			Path: input.Path, Category: input.Category, Title: input.Title, Summary: input.Summary,
+			Tags: input.Tags, Content: input.Content, Confirmed: input.Confirmed, Overwrite: input.Overwrite,
+		})
+		return asBoundaryMap(result, err)
 	case "delete":
-		result, err := s.privateNotes.Delete(stringArgument(args, "path"), boolArgument(args, "confirmed"))
-		return asMap(result, err)
+		result, err := s.privateNotes.Delete(input.Path, input.Confirmed)
+		return asBoundaryMap(result, err)
 	case "status":
-		result, err := s.privateNotes.Status(ctx, stringArgumentDefault(args, "status_action", "check"))
-		return asMap(result, err)
+		result, err := s.privateNotes.Status(ctx, input.StatusAction)
+		return asBoundaryMap(result, err)
 	case "maintain":
-		result, err := s.privateNotes.Maintain(ctx, stringArgumentDefault(args, "maintenance_action", "sync-encrypted"))
-		return asMap(result, err)
+		result, err := s.privateNotes.Maintain(ctx, input.MaintenanceAction)
+		return asBoundaryMap(result, err)
 	default:
 		return nil, fmt.Errorf("unsupported private note action: %s", action)
 	}
 }
 
-func asMap(value any, optionalErr ...error) (map[string]any, error) {
+// asBoundaryMap 只用于把已完成编排的明确结果转换成 MCP JSON 输出形状。
+func asBoundaryMap(value any, optionalErr ...error) (map[string]any, error) {
 	if len(optionalErr) > 0 && optionalErr[0] != nil {
 		return nil, optionalErr[0]
 	}
@@ -803,61 +913,11 @@ func asMap(value any, optionalErr ...error) (map[string]any, error) {
 	return result, nil
 }
 
-func decodeMap(value map[string]any, destination any) error {
+// decodeBoundaryMap 只用于解码 AgentDock/Runtime 返回的开放协议对象。
+func decodeBoundaryMap(value map[string]any, destination any) error {
 	encoded, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
 	return json.Unmarshal(encoded, destination)
-}
-
-func stringArgument(args map[string]any, key string) string {
-	value, _ := args[key].(string)
-	return strings.TrimSpace(value)
-}
-
-func stringArgumentDefault(args map[string]any, key, fallback string) string {
-	if value := stringArgument(args, key); value != "" {
-		return value
-	}
-	return fallback
-}
-
-func intArgument(args map[string]any, key string, fallback int) int {
-	switch value := args[key].(type) {
-	case float64:
-		if value > 0 {
-			return int(value)
-		}
-	case int:
-		if value > 0 {
-			return value
-		}
-	}
-	return fallback
-}
-
-func boolArgument(args map[string]any, key string) bool {
-	value, _ := args[key].(bool)
-	return value
-}
-
-func stringSliceArgument(args map[string]any, key string) []string {
-	var values []any
-	switch typed := args[key].(type) {
-	case []any:
-		values = typed
-	case []string:
-		values = make([]any, len(typed))
-		for index := range typed {
-			values[index] = typed[index]
-		}
-	}
-	result := make([]string, 0, len(values))
-	for _, value := range values {
-		if text := strings.TrimSpace(fmt.Sprint(value)); text != "" {
-			result = append(result, text)
-		}
-	}
-	return result
 }

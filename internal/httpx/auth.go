@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/uvwt/nexusdock/internal/auth"
 	"github.com/uvwt/nexusdock/internal/core"
 )
@@ -171,10 +172,10 @@ func (s *Server) logoutOtherSessions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "revoked": count})
 }
 
-func (s *Server) withUIAccess(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) withUIAccess(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.auth == nil {
-			next(w, r)
+			next.ServeHTTP(w, r)
 			return
 		}
 		session, err := s.authenticateCookie(r)
@@ -186,12 +187,12 @@ func (s *Server) withUIAccess(next http.HandlerFunc) http.HandlerFunc {
 			http.Redirect(w, r, "/change-password?return_to="+url.QueryEscape(safeReturnTo(r.URL.RequestURI())), http.StatusFound)
 			return
 		}
-		next(w, r.WithContext(withWebSessionContext(r.Context(), session)))
-	}
+		next.ServeHTTP(w, r.WithContext(withWebSessionContext(r.Context(), session)))
+	})
 }
 
-func (s *Server) withWebSession(next http.HandlerFunc, allowCredentialUpdate bool) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) withWebSession(next http.Handler, allowCredentialUpdate bool) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		session, err := s.authenticateCookie(r)
 		if err != nil {
 			writeAuthError(w, http.StatusUnauthorized, "SESSION_REQUIRED", "login session is missing or expired")
@@ -211,40 +212,46 @@ func (s *Server) withWebSession(next http.HandlerFunc, allowCredentialUpdate boo
 				return
 			}
 		}
-		next(w, r.WithContext(withWebSessionContext(r.Context(), session)))
+		next.ServeHTTP(w, r.WithContext(withWebSessionContext(r.Context(), session)))
+	})
+}
+
+func (s *Server) webSessionMiddleware(allowCredentialUpdate bool) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return s.withWebSession(next, allowCredentialUpdate)
 	}
 }
 
-func (s *Server) withAPIAccess(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) withAPIAccess(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.auth != nil {
-			s.withWebSession(next, false)(w, r)
+			s.withWebSession(next, false).ServeHTTP(w, r)
 			return
 		}
 		if s.isLocalAPIRequest(r) {
-			next(w, r)
+			next.ServeHTTP(w, r)
 			return
 		}
 		writeAuthError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing or invalid API credentials")
-	}
+	})
 }
 
-func (s *Server) withDeviceOrAPIAccess(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) withDeviceOrAPIAccess(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.auth != nil {
 			principal, err := s.auth.Authenticate(r.Context(), bearerToken(r.Header.Get("Authorization")))
 			if err == nil && principal.Actor.Type == core.ActorDevice && principal.TokenKind == "device_token" {
 				if s.agentDock != nil {
 					node, lookupErr := s.agentDock.Get(r.Context(), principal.Actor.ID)
 					if lookupErr == nil && node.Enabled {
-						next(w, r)
+						next.ServeHTTP(w, r)
 						return
 					}
 				}
 			}
 		}
-		s.withAPIAccess(next)(w, r)
-	}
+		s.withAPIAccess(next).ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) authenticateCookie(r *http.Request) (auth.WebSession, error) {
@@ -503,16 +510,20 @@ func publicCodedMessage(err error, fallback string) string {
 	return fallback
 }
 
-func (s *Server) registerWebAuthRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /login", s.uiIndex)
-	mux.HandleFunc("GET /ui/assets/", s.uiApp)
-	mux.HandleFunc("GET /change-password", s.withUIAccess(s.uiIndex))
-	mux.HandleFunc("GET /v1/auth/status", s.authStatus)
-	mux.HandleFunc("POST /v1/auth/login", s.login)
-	mux.HandleFunc("GET /v1/auth/session", s.withWebSession(s.currentSession, true))
-	mux.HandleFunc("POST /v1/auth/logout", s.withWebSession(s.logout, true))
-	mux.HandleFunc("POST /v1/auth/credential", s.withWebSession(s.updateCredential, true))
-	mux.HandleFunc("GET /v1/auth/sessions", s.withWebSession(s.listSessions, false))
-	mux.HandleFunc("DELETE /v1/auth/sessions/{sessionID}", s.withWebSession(s.revokeSession, false))
-	mux.HandleFunc("POST /v1/auth/sessions/logout-others", s.withWebSession(s.logoutOtherSessions, false))
+func (s *Server) registerWebAuthRoutes(r chi.Router) {
+	r.Get("/login", s.uiIndex)
+	r.Get("/ui/assets/*", s.uiApp)
+	r.With(s.withUIAccess).Get("/change-password", s.uiIndex)
+	r.Get("/v1/auth/status", s.authStatus)
+	r.Post("/v1/auth/login", s.login)
+
+	allowCredentialUpdate := s.webSessionMiddleware(true)
+	r.With(allowCredentialUpdate).Get("/v1/auth/session", s.currentSession)
+	r.With(allowCredentialUpdate).Post("/v1/auth/logout", s.logout)
+	r.With(allowCredentialUpdate).Post("/v1/auth/credential", s.updateCredential)
+
+	requireReadySession := s.webSessionMiddleware(false)
+	r.With(requireReadySession).Get("/v1/auth/sessions", s.listSessions)
+	r.With(requireReadySession).Delete("/v1/auth/sessions/{sessionID}", s.revokeSession)
+	r.With(requireReadySession).Post("/v1/auth/sessions/logout-others", s.logoutOtherSessions)
 }

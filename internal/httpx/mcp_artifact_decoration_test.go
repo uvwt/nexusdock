@@ -105,9 +105,11 @@ func TestCallNodeToolKeepsSuccessWhenArtifactDecorationFails(t *testing.T) {
 		agentDock:    store,
 		agentDockHub: hub,
 		artifacts:    agentdock.NewArtifactService(badDataDir),
-		mcpServer:    mcpsdk.NewServer(&mcpsdk.Implementation{Name: "test", Version: "1"}, nil),
-		mcpResources: make(map[string]struct{}),
-		logger:       slog.Default(),
+		mcp: &mcpGateway{
+			server:    mcpsdk.NewServer(&mcpsdk.Implementation{Name: "test", Version: "1"}, nil),
+			resources: make(map[string]struct{}),
+		},
+		logger: slog.Default(),
 	}
 	server.publishedToolBridge = agentdock.NewPublishedToolBridge(store, slog.Default())
 	server.bindPublishedToolBridge()

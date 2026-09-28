@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/uvwt/nexusdock/internal/auth"
 )
 
@@ -146,16 +147,16 @@ func (l *fixedWindowLimiter) Allow(key string, now time.Time) bool {
 	return true
 }
 
-func (s *Server) registerOAuthRoutes(mux *http.ServeMux) {
+func (s *Server) registerOAuthRoutes(r chi.Router) {
 	if s.oauth == nil || s.auth == nil {
 		return
 	}
-	mux.HandleFunc("GET /.well-known/oauth-authorization-server", s.oauthAuthorizationServerMetadata)
-	mux.HandleFunc("GET /.well-known/oauth-protected-resource/mcp", s.oauthProtectedResourceMetadata)
-	mux.HandleFunc("POST /register", s.oauthRegisterClient)
-	mux.HandleFunc("GET /oauth/authorize", s.oauthAuthorize)
-	mux.HandleFunc("POST /oauth/authorize", s.oauthAuthorize)
-	mux.HandleFunc("POST /oauth/token", s.oauthToken)
+	r.Get("/.well-known/oauth-authorization-server", s.oauthAuthorizationServerMetadata)
+	r.Get("/.well-known/oauth-protected-resource/mcp", s.oauthProtectedResourceMetadata)
+	r.Post("/register", s.oauthRegisterClient)
+	r.Get("/oauth/authorize", s.oauthAuthorize)
+	r.Post("/oauth/authorize", s.oauthAuthorize)
+	r.Post("/oauth/token", s.oauthToken)
 }
 
 func (s *Server) oauthAuthorizationServerMetadata(w http.ResponseWriter, r *http.Request) {
@@ -396,16 +397,16 @@ func (s *Server) oauthToken(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) withMCPAccess(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) withMCPAccess(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		header := strings.TrimSpace(r.Header.Get("Authorization"))
 		if s.mcpToken != nil && mcpTokenMatches(header, s.mcpToken.Token()) {
-			next(w, r)
+			next.ServeHTTP(w, r)
 			return
 		}
 		if strings.HasPrefix(strings.ToLower(header), "bearer ") && s.oauth != nil {
 			if _, err := s.oauth.AuthenticateAccess(r.Context(), bearerToken(header), s.oauthResource(r)); err == nil {
-				next(w, r)
+				next.ServeHTTP(w, r)
 				return
 			}
 			s.writeMCPBearerChallenge(w, r, true)
@@ -413,16 +414,16 @@ func (s *Server) withMCPAccess(next http.HandlerFunc) http.HandlerFunc {
 		}
 		if header == "" && s.auth != nil {
 			if _, err := s.authenticateCookie(r); err == nil {
-				s.withWebSession(next, false)(w, r)
+				s.withWebSession(next, false).ServeHTTP(w, r)
 				return
 			}
 		}
 		if s.auth == nil && s.isLocalAPIRequest(r) {
-			next(w, r)
+			next.ServeHTTP(w, r)
 			return
 		}
 		s.writeMCPBearerChallenge(w, r, false)
-	}
+	})
 }
 
 func mcpTokenMatches(header, expected string) bool {

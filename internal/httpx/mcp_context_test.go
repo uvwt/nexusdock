@@ -165,7 +165,7 @@ func TestCallFleetAgentDockContextAggregatesOnlineAndOfflineNodes(t *testing.T) 
 	}
 	assertCentralToolResultMatchesOutputSchema(t, "agentdock_context", result)
 	var fleet fleetAgentDockContext
-	if err := decodeMap(result, &fleet); err != nil {
+	if err := decodeBoundaryMap(result, &fleet); err != nil {
 		t.Fatal(err)
 	}
 	if len(fleet.Nodes) != 2 {
@@ -234,7 +234,7 @@ func TestFleetContextKeepsNexusSharedContextWhenAllNodesAreOffline(t *testing.T)
 		t.Fatal(err)
 	}
 	var fleet fleetAgentDockContext
-	if err := decodeMap(result, &fleet); err != nil {
+	if err := decodeBoundaryMap(result, &fleet); err != nil {
 		t.Fatal(err)
 	}
 	if len(fleet.Nodes) != 1 || fleet.Nodes[0].Online || fleet.Nodes[0].Error != agentdock.ErrNodeOffline.Error() {
@@ -399,7 +399,7 @@ func TestFleetContextReturnsPartialResultWhenNodeContextTimesOut(t *testing.T) {
 		t.Fatalf("fleet context timeout took %v", elapsed)
 	}
 	var fleet fleetAgentDockContext
-	if err := decodeMap(result, &fleet); err != nil {
+	if err := decodeBoundaryMap(result, &fleet); err != nil {
 		t.Fatal(err)
 	}
 	if len(fleet.Nodes) != 1 || !fleet.Nodes[0].Online || fleet.Nodes[0].Error != "context timeout" || fleet.Nodes[0].Context != nil {

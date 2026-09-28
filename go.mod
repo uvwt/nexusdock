@@ -4,6 +4,7 @@ go 1.26.3
 
 require (
 	filippo.io/age v1.2.1
+	github.com/go-chi/chi/v5 v5.3.2
 	github.com/google/jsonschema-go v0.4.3
 	github.com/gorilla/websocket v1.5.3
 	github.com/modelcontextprotocol/go-sdk v1.7.0

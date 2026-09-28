@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/uvwt/nexusdock/internal/agentdock"
 )
 
@@ -121,17 +122,17 @@ type runtimeSkillFileContent struct {
 	Truncated bool   `json:"truncated"`
 }
 
-func (s *Server) registerRuntimeRoutes(mux *http.ServeMux, protected func(http.HandlerFunc) http.HandlerFunc) {
-	s.registerAgentDockNodeRoutes(mux, protected)
-	mux.HandleFunc("GET /v1/runtime/nodes/{nodeID}/overview", protected(s.runtimeOverview))
-	mux.HandleFunc("GET /v1/runtime/nodes/{nodeID}/tasks", protected(s.runtimeTasks))
-	mux.HandleFunc("GET /v1/runtime/nodes/{nodeID}/tasks/{fileName}", protected(s.runtimeTaskDetail))
-	mux.HandleFunc("DELETE /v1/runtime/nodes/{nodeID}/tasks/{fileName}", protected(s.runtimeDeleteTask))
-	mux.HandleFunc("GET /v1/runtime/nodes/{nodeID}/skills", protected(s.runtimeSkills))
-	mux.HandleFunc("GET /v1/runtime/nodes/{nodeID}/skills/{source}/{skillID}/files/{filePath...}", protected(s.runtimeSkillFile))
-	mux.HandleFunc("GET /v1/runtime/nodes/{nodeID}/skills/{source}/{skillID}", protected(s.runtimeSkillDetail))
-	s.registerRuntimePluginRoutes(mux, protected)
-	s.registerRuntimeMCPRoutes(mux, protected)
+func (s *Server) registerRuntimeRoutes(r chi.Router) {
+	s.registerAgentDockAdminRoutes(r)
+	r.Get("/v1/runtime/nodes/{nodeID}/overview", s.runtimeOverview)
+	r.Get("/v1/runtime/nodes/{nodeID}/tasks", s.runtimeTasks)
+	r.Get("/v1/runtime/nodes/{nodeID}/tasks/{fileName}", s.runtimeTaskDetail)
+	r.Delete("/v1/runtime/nodes/{nodeID}/tasks/{fileName}", s.runtimeDeleteTask)
+	r.Get("/v1/runtime/nodes/{nodeID}/skills", s.runtimeSkills)
+	r.Get("/v1/runtime/nodes/{nodeID}/skills/{source}/{skillID}/files/*", withWildcardPathValue("filePath", s.runtimeSkillFile))
+	r.Get("/v1/runtime/nodes/{nodeID}/skills/{source}/{skillID}", s.runtimeSkillDetail)
+	s.registerRuntimePluginRoutes(r)
+	s.registerRuntimeMCPRoutes(r)
 }
 
 func (s *Server) runtimeOverview(w http.ResponseWriter, r *http.Request) {

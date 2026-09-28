@@ -27,7 +27,7 @@ func TestRecallWriteMatchesCanonicalBehaviorCases(t *testing.T) {
 			args := recallWriteBehaviorArgs(behavior)
 			before, existedBefore := prepareRecallWriteBehaviorFixture(t, store, behavior)
 
-			result, err := server.callRecallWrite(t.Context(), args)
+			result, err := callRecallWriteForTest(t, server, t.Context(), args)
 			if err == nil {
 				assertCentralToolResultMatchesOutputSchema(t, mcpcontract.ToolRecallWrite, result)
 			}
@@ -159,7 +159,7 @@ func TestRecallWriteMarkdownDryRunAndPlanNeverPersist(t *testing.T) {
 		{"target": "markdown", "action": "create", "path": path, "content": "# Dry run", "confirmed": true, "dry_run": true},
 		{"target": "markdown", "action": "plan", "path": path, "content": "# Plan", "confirmed": true},
 	} {
-		result, err := server.callRecallWrite(t.Context(), args)
+		result, err := callRecallWriteForTest(t, server, t.Context(), args)
 		if err != nil {
 			t.Fatalf("args=%#v err=%v", args, err)
 		}
@@ -179,7 +179,7 @@ func TestRecallWriteDryRunProtectsExistingMarkdownAndCard(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	patched, err := server.callRecallWrite(t.Context(), map[string]any{
+	patched, err := callRecallWriteForTest(t, server, t.Context(), map[string]any{
 		"target": "markdown", "action": "patch", "path": markdownPath,
 		"old": "value: old", "new": "value: new", "confirmed": true, "dry_run": true,
 	})
@@ -194,7 +194,7 @@ func TestRecallWriteDryRunProtectsExistingMarkdownAndCard(t *testing.T) {
 		t.Fatalf("patch dry-run mutated markdown: %q", current.Content)
 	}
 
-	deleted, err := server.callRecallWrite(t.Context(), map[string]any{
+	deleted, err := callRecallWriteForTest(t, server, t.Context(), map[string]any{
 		"target": "markdown", "action": "delete", "path": markdownPath, "confirmed": true, "dry_run": true,
 	})
 	if err != nil || deleted["dry_run"] != true || deleted["would_delete"] != true {
@@ -204,7 +204,7 @@ func TestRecallWriteDryRunProtectsExistingMarkdownAndCard(t *testing.T) {
 		t.Fatalf("delete dry-run removed markdown: %v", err)
 	}
 
-	cardResult, err := server.callRecallWrite(t.Context(), map[string]any{
+	cardResult, err := callRecallWriteForTest(t, server, t.Context(), map[string]any{
 		"target": "card", "action": "create", "title": "Dry Run Card",
 		"content": "A reusable self-test statement with enough detail to pass card validation.",
 		"type":    "runbook", "scope": "project", "project": "agentdock",
@@ -224,7 +224,7 @@ func TestRecallWriteDryRunProtectsExistingMarkdownAndCard(t *testing.T) {
 
 func TestRecallMaintainRejectsRemovedSyncStatus(t *testing.T) {
 	server, _ := newRecallToolTestServer(t)
-	if _, err := server.callRecallMaintain(t.Context(), map[string]any{"action": "sync_status"}); err == nil || !strings.Contains(err.Error(), "unsupported recall maintenance action") {
+	if _, err := callRecallMaintainForTest(t, server, t.Context(), map[string]any{"action": "sync_status"}); err == nil || !strings.Contains(err.Error(), "unsupported recall maintenance action") {
 		t.Fatalf("sync_status must be removed, got err=%v", err)
 	}
 }
@@ -274,7 +274,7 @@ func TestRecallWriteSectionPatchReturnsRenderableMetadataAndDiff(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	preview, err := server.callRecallWrite(t.Context(), map[string]any{
+	preview, err := callRecallWriteForTest(t, server, t.Context(), map[string]any{
 		"target": "markdown", "action": "patch", "path": path,
 		"section": "Target", "section_content": "new body",
 	})
@@ -296,7 +296,7 @@ func TestRecallWriteSectionPatchReturnsRenderableMetadataAndDiff(t *testing.T) {
 		t.Fatalf("preview mutated content=%q", unchanged.Content)
 	}
 
-	written, err := server.callRecallWrite(t.Context(), map[string]any{
+	written, err := callRecallWriteForTest(t, server, t.Context(), map[string]any{
 		"target": "markdown", "action": "patch", "path": path,
 		"section": "Target", "section_content": "new body", "confirmed": true,
 	})
@@ -322,7 +322,7 @@ func TestRecallWriteSectionPatchUsesContentFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	preview, err := server.callRecallWrite(t.Context(), map[string]any{
+	preview, err := callRecallWriteForTest(t, server, t.Context(), map[string]any{
 		"target": "markdown", "action": "patch", "path": path,
 		"section": "Target", "content": "fallback body",
 	})
@@ -341,7 +341,7 @@ func TestRecallWriteDiffUsesProposedContent(t *testing.T) {
 	if _, err := store.Write(recall.WriteRequest{Path: path, Content: "# Old\n", Confirmed: true}); err != nil {
 		t.Fatal(err)
 	}
-	result, err := server.callRecallWrite(t.Context(), map[string]any{
+	result, err := callRecallWriteForTest(t, server, t.Context(), map[string]any{
 		"target": "markdown", "action": "diff", "path": path, "content": "# New\n",
 	})
 	if err != nil {
@@ -380,7 +380,7 @@ func TestDecorateRecallSearchResultsAddsStableCitationFields(t *testing.T) {
 func TestCentralRecallResultsDoNotExposeGenericOK(t *testing.T) {
 	server, _ := newRecallToolTestServer(t)
 
-	maintain, err := server.callRecallMaintain(t.Context(), map[string]any{"action": "embedding_status"})
+	maintain, err := callRecallMaintainForTest(t, server, t.Context(), map[string]any{"action": "embedding_status"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -417,7 +417,7 @@ func TestCentralRecallSearchKindFiltersCardsFromMarkdown(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.kind, func(t *testing.T) {
-			result, err := server.callNexusTool(t.Context(), "recall_search", map[string]any{
+			result, err := callNexusToolForTest(t, server, t.Context(), "recall_search", map[string]any{
 				"query": "shared recall term", "kind": test.kind, "max_results": 10,
 			})
 			if err != nil {

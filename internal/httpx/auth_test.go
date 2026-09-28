@@ -156,13 +156,13 @@ func TestLoginTransportAllowsHTTPSOrDirectLoopbackOnly(t *testing.T) {
 
 func TestAPIAccessDoesNotTrustClientControlledHost(t *testing.T) {
 	server := &Server{cfg: config.Config{}, logger: slog.Default()}
-	next := server.withAPIAccess(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	next := server.withAPIAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/test", nil)
 	req.RemoteAddr = "203.0.113.8:4567"
 	req.Host = "localhost"
 	res := httptest.NewRecorder()
-	next(res, req)
+	next.ServeHTTP(res, req)
 	if res.Code != http.StatusUnauthorized {
 		t.Fatalf("external request with localhost Host bypassed API access: status=%d", res.Code)
 	}
@@ -178,12 +178,12 @@ func TestConfiguredWebAuthenticationDisablesLoopbackBypass(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := &Server{cfg: config.Config{}, logger: slog.Default(), auth: auth.NewService(db)}
-	next := server.withAPIAccess(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	next := server.withAPIAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/test", nil)
 	req.RemoteAddr = "127.0.0.1:4567"
 	res := httptest.NewRecorder()
-	next(res, req)
+	next.ServeHTTP(res, req)
 	if res.Code != http.StatusUnauthorized {
 		t.Fatalf("loopback request bypassed configured web authentication: status=%d", res.Code)
 	}
@@ -191,13 +191,13 @@ func TestConfiguredWebAuthenticationDisablesLoopbackBypass(t *testing.T) {
 
 func TestUnconfiguredLocalAPIStillRequiresLoopbackRemoteAddress(t *testing.T) {
 	server := &Server{cfg: config.Config{}, logger: slog.Default()}
-	next := server.withAPIAccess(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	next := server.withAPIAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/test", nil)
 	req.RemoteAddr = "127.0.0.1:4567"
 	req.Host = "nexus.example"
 	res := httptest.NewRecorder()
-	next(res, req)
+	next.ServeHTTP(res, req)
 	if res.Code != http.StatusNoContent {
 		t.Fatalf("direct loopback API request was rejected: status=%d body=%s", res.Code, res.Body.String())
 	}

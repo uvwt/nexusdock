@@ -21,7 +21,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/uvwt/nexusdock/internal/agentdock"
 	"github.com/uvwt/nexusdock/internal/auth"
 	"github.com/uvwt/nexusdock/internal/config"
@@ -98,10 +97,7 @@ type Server struct {
 	workflowRegistry     *workflow.Registry
 	evolutionWorker      *stage3.Worker
 	publishedToolBridge  *agentdock.PublishedToolBridge
-	mcpServer            *mcpsdk.Server
-	mcpHandler           http.Handler
-	mcpResourcesMu       sync.RWMutex
-	mcpResources         map[string]struct{}
+	mcp                  *mcpGateway
 	artifacts            *agentdock.ArtifactService
 }
 
@@ -180,7 +176,6 @@ func NewServer(cfg config.Config, store *recall.Store, logger *slog.Logger, opti
 	server := &Server{
 		cfg: cfg, aiCfg: settings.DefaultRuntimeAIConfig(), mcpAppsEnabledState: settings.DefaultMCPAppsEnabled,
 		store: store, logger: logger,
-		mcpResources: make(map[string]struct{}),
 	}
 	for _, option := range options {
 		option(server)
@@ -191,62 +186,6 @@ func NewServer(cfg config.Config, store *recall.Store, logger *slog.Logger, opti
 	}
 	server.initializeMCPGateway()
 	return server
-}
-
-func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
-	protected := func(next http.HandlerFunc) http.HandlerFunc { return s.withAPIAccess(next) }
-	deviceProtected := func(next http.HandlerFunc) http.HandlerFunc { return s.withDeviceOrAPIAccess(next) }
-	uiProtected := func(next http.HandlerFunc) http.HandlerFunc { return s.withUIAccess(next) }
-	mux.HandleFunc("GET /", uiProtected(s.uiIndex))
-	mux.HandleFunc("GET /ui/", uiProtected(s.uiIndex))
-	mux.HandleFunc("GET /health", s.health)
-	mux.HandleFunc("GET /ready", s.ready)
-	mux.HandleFunc("GET /artifacts/public/{nodeID}/{artifactID}/{filename}", s.servePublicArtifact)
-	mux.HandleFunc("HEAD /artifacts/public/{nodeID}/{artifactID}/{filename}", s.servePublicArtifact)
-	mux.HandleFunc("GET /oauth/mcp/nodes/{nodeID}/callback", s.mcpOAuthCallback)
-	if s.mcpHandler != nil {
-		gateway := s.withMCPAccess(s.mcpHandler.ServeHTTP)
-		mux.HandleFunc("GET /mcp", gateway)
-		mux.HandleFunc("POST /mcp", gateway)
-		mux.HandleFunc("DELETE /mcp", gateway)
-	}
-	s.registerOAuthRoutes(mux)
-	mux.HandleFunc("GET /v1/system/status", protected(s.systemStatus))
-	mux.HandleFunc("GET /v1/settings/ai", protected(s.getRuntimeAISettings))
-	mux.HandleFunc("GET /v1/settings/mcp", protected(s.getMCPSettings))
-	mux.HandleFunc("PUT /v1/settings/mcp", protected(s.updateMCPSettings))
-	mux.HandleFunc("GET /v1/settings/mcp-token", protected(s.getMCPAccessToken))
-	mux.HandleFunc("POST /v1/settings/mcp-token/reset", protected(s.resetMCPAccessToken))
-	mux.HandleFunc("PUT /v1/settings/ai", protected(s.updateRuntimeAISettings))
-	mux.HandleFunc("POST /v1/settings/ai/test/stage3", protected(s.testStage3Connection))
-	mux.HandleFunc("POST /v1/settings/ai/test/embedding", protected(s.testEmbeddingConnection))
-	s.registerRuntimeRoutes(mux, protected)
-	s.registerEvolutionLifecycleRoutes(mux, protected)
-	s.registerWorkflowTemplateRoutes(mux, deviceProtected)
-	if s.privateNotes != nil {
-		s.registerPrivateNoteRoutes(mux, deviceProtected)
-	}
-	s.registerWebAuthRoutes(mux)
-	mux.HandleFunc("GET /v1/recall", deviceProtected(s.listMemories))
-	mux.HandleFunc("POST /v1/recall", deviceProtected(s.writeRecall))
-	mux.HandleFunc("POST /v1/recall/preview", deviceProtected(s.previewRecall))
-	mux.HandleFunc("POST /v1/recall/move", deviceProtected(s.moveRecall))
-	mux.HandleFunc("POST /v1/recall/search", deviceProtected(s.searchMemories))
-	mux.HandleFunc("POST /v1/recall/context-index", deviceProtected(s.contextIndexMemories))
-	mux.HandleFunc("GET /v1/recall/cards", deviceProtected(s.listCards))
-	mux.HandleFunc("POST /v1/recall/cards", deviceProtected(s.writeCard))
-	mux.HandleFunc("POST /v1/recall/cards/capture", deviceProtected(s.captureCard))
-	mux.HandleFunc("POST /v1/recall/cards/search", deviceProtected(s.searchCards))
-	mux.HandleFunc("GET /v1/embeddings/status", deviceProtected(s.embeddingStatus))
-	mux.HandleFunc("POST /v1/embeddings/reindex", deviceProtected(s.reindexEmbeddings))
-	mux.HandleFunc("POST /v1/embeddings/search", deviceProtected(s.searchEmbeddings))
-	mux.HandleFunc("GET /v1/recall/{path...}", deviceProtected(s.readRecall))
-	mux.HandleFunc("PATCH /v1/recall/{path...}", deviceProtected(s.patchRecall))
-	mux.HandleFunc("DELETE /v1/recall/{path...}", deviceProtected(s.deleteRecall))
-	mux.HandleFunc("GET /v1/", http.NotFound)
-	mux.HandleFunc("GET /api/", http.NotFound)
-	return s.requestBoundary(s.securityHeaders(mux))
 }
 
 func (s *Server) requestBoundary(next http.Handler) http.Handler {
@@ -484,14 +423,6 @@ func (s *Server) deleteRecall(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "path": path})
 }
 
-func (s *Server) searchRecall(ctx context.Context, options recall.SearchOptions) ([]recall.SearchResult, error) {
-	embedding := s.currentEmbedding()
-	if embedding == nil {
-		return s.store.SearchWithOptions(options)
-	}
-	return embedding.HybridSearch(ctx, options)
-}
-
 func (s *Server) searchMemories(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Query         string `json:"query"`
@@ -502,7 +433,7 @@ func (s *Server) searchMemories(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	results, err := s.searchRecall(r.Context(), recall.SearchOptions{
+	results, err := s.executeRecallSearch(r.Context(), recall.SearchOptions{
 		Query: req.Query, Prefix: req.Prefix, ExcludePrefix: req.ExcludePrefix, MaxResults: req.MaxResults,
 	})
 	if err != nil {
@@ -578,7 +509,7 @@ func (s *Server) searchCards(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	results, err := s.searchRecall(r.Context(), recall.SearchOptions{
+	results, err := s.executeRecallSearch(r.Context(), recall.SearchOptions{
 		Query: req.Query, Prefix: "recall/managed/cards", MaxResults: req.MaxResults,
 	})
 	if err != nil {
@@ -591,7 +522,10 @@ func (s *Server) searchCards(w http.ResponseWriter, r *http.Request) {
 func (s *Server) embeddingStatus(w http.ResponseWriter, r *http.Request) {
 	embedding := s.currentEmbedding()
 	if embedding == nil {
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "enabled": false, "configured": false, "reason": "embedding service is not configured"})
+		writeJSON(w, http.StatusOK, recall.EmbeddingStatus{
+			OK: true, Model: recall.DefaultEmbeddingModel,
+			Reason: "embedding service is not configured",
+		})
 		return
 	}
 	writeJSON(w, http.StatusOK, embedding.Status(r.Context()))

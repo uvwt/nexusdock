@@ -1,14 +1,15 @@
 package httpx
 
 import (
+	"github.com/go-chi/chi/v5"
 	"net/http"
 	"sort"
 	"strings"
 )
 
-func (s *Server) registerRuntimePluginRoutes(mux *http.ServeMux, protected func(http.HandlerFunc) http.HandlerFunc) {
-	mux.HandleFunc("GET /v1/runtime/nodes/{nodeID}/plugins", protected(s.runtimePlugins))
-	mux.HandleFunc("GET /v1/runtime/nodes/{nodeID}/plugins/{name}", protected(s.runtimePlugin))
+func (s *Server) registerRuntimePluginRoutes(r chi.Router) {
+	r.Get("/v1/runtime/nodes/{nodeID}/plugins", s.runtimePlugins)
+	r.Get("/v1/runtime/nodes/{nodeID}/plugins/{name}", s.runtimePlugin)
 }
 
 func (s *Server) runtimePlugins(w http.ResponseWriter, r *http.Request) {

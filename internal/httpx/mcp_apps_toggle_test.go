@@ -15,7 +15,7 @@ func TestNexusMCPAppsDisabledRemovesCentralAndNodePresentationOnly(t *testing.T)
 			t.Fatalf("central tool %s still exposes Apps UI metadata: %#v", tool.Name, tool.Meta)
 		}
 	}
-	if meta := centralToolResultMetaWithApps("workflow_template_manage", map[string]any{"action": "match"}, false); meta != nil {
+	if meta := centralToolResultMetaWithAppsForTest(t, "workflow_template_manage", map[string]any{"action": "match"}, false); meta != nil {
 		t.Fatalf("workflow match still exposes Apps UI result metadata: %#v", meta)
 	}
 
@@ -64,12 +64,11 @@ func TestNexusMCPAppsDisabledStripsProxiedResultUIOnly(t *testing.T) {
 func TestNexusMCPAppsToggleUpdatesActiveSessionToolPresentation(t *testing.T) {
 	server := &Server{
 		mcpAppsEnabledState: true,
-		mcpResources:        make(map[string]struct{}),
 	}
 	server.initializeMCPGateway()
 
 	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
-	serverSession, err := server.mcpServer.Connect(t.Context(), serverTransport, nil)
+	serverSession, err := server.mcp.server.Connect(t.Context(), serverTransport, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

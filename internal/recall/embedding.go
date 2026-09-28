@@ -94,6 +94,19 @@ type EmbeddingIndexSummarize struct {
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+type EmbeddingStatus struct {
+	OK         bool                     `json:"ok"`
+	Enabled    bool                     `json:"enabled"`
+	Model      string                   `json:"model"`
+	Configured bool                     `json:"configured"`
+	Endpoint   string                   `json:"endpoint,omitempty"`
+	IndexPath  string                   `json:"index_path,omitempty"`
+	Index      *EmbeddingIndexSummarize `json:"index,omitempty"`
+	Reachable  *bool                    `json:"reachable,omitempty"`
+	Reason     string                   `json:"reason,omitempty"`
+	Error      string                   `json:"error,omitempty"`
+}
+
 type embeddingIndex struct {
 	Model     string                       `json:"model"`
 	Dimension int                          `json:"dimension,omitempty"`
@@ -128,38 +141,34 @@ func (s *EmbeddingService) Enabled() bool {
 	return s != nil && s.cfg.Enabled && strings.TrimSpace(s.cfg.Endpoint) != "" && s.store != nil
 }
 
-func (s *EmbeddingService) Status(ctx context.Context) map[string]any {
-	status := map[string]any{
-		"ok":         true,
-		"enabled":    false,
-		"model":      DefaultEmbeddingModel,
-		"configured": false,
-	}
+func (s *EmbeddingService) Status(ctx context.Context) EmbeddingStatus {
+	status := EmbeddingStatus{OK: true, Model: DefaultEmbeddingModel}
 	if s == nil {
-		status["reason"] = "embedding service is not configured"
+		status.Reason = "embedding service is not configured"
 		return status
 	}
-	status["enabled"] = s.Enabled()
-	status["configured"] = strings.TrimSpace(s.cfg.Endpoint) != ""
-	status["model"] = s.cfg.Model
-	status["endpoint"] = s.cfg.Endpoint
-	status["index_path"] = s.indexPath
-	idx, err := s.loadIndex()
-	if err == nil {
-		status["index"] = EmbeddingIndexSummarize{Model: idx.Model, Dimension: idx.Dimension, Count: len(idx.Documents), UpdatedAt: idx.UpdatedAt}
+	status.Enabled = s.Enabled()
+	status.Configured = strings.TrimSpace(s.cfg.Endpoint) != ""
+	status.Model = s.cfg.Model
+	status.Endpoint = s.cfg.Endpoint
+	status.IndexPath = s.indexPath
+	if idx, err := s.loadIndex(); err == nil {
+		summary := EmbeddingIndexSummarize{Model: idx.Model, Dimension: idx.Dimension, Count: len(idx.Documents), UpdatedAt: idx.UpdatedAt}
+		status.Index = &summary
 	}
-	if s.Enabled() {
-		ctx, cancel := context.WithTimeout(ctx, s.cfg.Timeout)
-		defer cancel()
-		if _, err := s.embed(ctx, []string{"health check"}); err != nil {
-			status["reachable"] = false
-			status["error"] = err.Error()
-		} else {
-			status["reachable"] = true
-		}
-	} else {
-		status["reason"] = "enable vector search and configure an endpoint in NexusDock settings"
+	if !status.Enabled {
+		status.Reason = "enable vector search and configure an endpoint in NexusDock settings"
+		return status
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, s.cfg.Timeout)
+	defer cancel()
+	reachable := true
+	if _, err := s.embed(ctx, []string{"health check"}); err != nil {
+		reachable = false
+		status.Error = err.Error()
+	}
+	status.Reachable = &reachable
 	return status
 }
 

@@ -36,8 +36,8 @@ func TestSyncMCPAppResourcesPublishesAdvertisedUIResources(t *testing.T) {
 
 	sdk := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "test", Version: "1"}, nil)
 	server := &Server{
-		cfg: config.Config{PublicURL: domain}, agentDock: store, mcpServer: sdk,
-		mcpAppsEnabledState: true, mcpResources: make(map[string]struct{}),
+		cfg: config.Config{PublicURL: domain}, agentDock: store, mcp: &mcpGateway{server: sdk, resources: make(map[string]struct{})},
+		mcpAppsEnabledState: true,
 	}
 	server.syncMCPAppResources()
 
@@ -90,8 +90,8 @@ func TestNexusOwnedMCPAppResourcesDoNotRequireAgentDockProvider(t *testing.T) {
 	const domain = "https://nexus.example.test"
 	sdk := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "local-app-test", Version: "1"}, nil)
 	server := &Server{
-		cfg: config.Config{PublicURL: domain}, mcpServer: sdk,
-		mcpAppsEnabledState: true, mcpResources: make(map[string]struct{}),
+		cfg: config.Config{PublicURL: domain}, mcp: &mcpGateway{server: sdk, resources: make(map[string]struct{})},
+		mcpAppsEnabledState: true,
 	}
 	server.syncMCPAppResources()
 
@@ -157,17 +157,16 @@ func TestMCPAppsToggleRemovesRelayButKeepsPersistedCapabilities(t *testing.T) {
 
 	sdk := mcpsdk.NewServer(&mcpsdk.Implementation{Name: "toggle-test", Version: "1"}, nil)
 	server := &Server{
-		mcpAppsEnabledState: true, agentDock: store, mcpServer: sdk,
-		mcpResources: make(map[string]struct{}),
+		mcpAppsEnabledState: true, agentDock: store, mcp: &mcpGateway{server: sdk, resources: make(map[string]struct{})},
 	}
 	server.syncMCPAppResources()
-	if _, ok := server.mcpResources[capability.URI]; !ok {
+	if _, ok := server.mcp.resources[capability.URI]; !ok {
 		t.Fatalf("resource %s was not published before toggle", capability.URI)
 	}
 
 	server.setMCPAppsEnabled(false)
-	if len(server.mcpResources) != 0 {
-		t.Fatalf("resources were not removed after disabling MCP Apps UI: %#v", server.mcpResources)
+	if len(server.mcp.resources) != 0 {
+		t.Fatalf("resources were not removed after disabling MCP Apps UI: %#v", server.mcp.resources)
 	}
 	persisted, err := store.UIResources(t.Context(), node.ID)
 	if err != nil {
@@ -178,7 +177,7 @@ func TestMCPAppsToggleRemovesRelayButKeepsPersistedCapabilities(t *testing.T) {
 	}
 
 	server.setMCPAppsEnabled(true)
-	if _, ok := server.mcpResources[capability.URI]; !ok {
+	if _, ok := server.mcp.resources[capability.URI]; !ok {
 		t.Fatalf("resource %s was not restored after enabling MCP Apps UI", capability.URI)
 	}
 }
@@ -220,10 +219,10 @@ func TestPublishedMCPAppResourcesRecoverFromPersistedCapabilities(t *testing.T) 
 }
 
 func TestCentralWorkflowResultMetaIsActionScoped(t *testing.T) {
-	if meta := centralToolResultMeta("workflow_template_manage", map[string]any{"action": "list"}); meta != nil {
+	if meta := centralToolResultMetaForTest(t, "workflow_template_manage", map[string]any{"action": "list"}); meta != nil {
 		t.Fatalf("list unexpectedly has Workflow UI meta: %#v", meta)
 	}
-	meta := centralToolResultMeta("workflow_template_manage", map[string]any{"action": "match"})
+	meta := centralToolResultMetaForTest(t, "workflow_template_manage", map[string]any{"action": "match"})
 	ui, ok := meta["ui"].(map[string]any)
 	if !ok || ui["resourceUri"] != protocol.WorkflowUIResourceURI {
 		t.Fatalf("match Workflow UI meta = %#v", meta)

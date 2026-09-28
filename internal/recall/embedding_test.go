@@ -17,7 +17,7 @@ func TestEmbeddingServiceDisabledStatus(t *testing.T) {
 	store := newTestStore(t)
 	svc := NewEmbeddingService(store, EmbeddingConfig{})
 	status := svc.Status(context.Background())
-	if status["enabled"] != false || status["model"] != DefaultEmbeddingModel {
+	if status.Enabled || status.Model != DefaultEmbeddingModel || status.Configured {
 		t.Fatalf("unexpected disabled status: %#v", status)
 	}
 }

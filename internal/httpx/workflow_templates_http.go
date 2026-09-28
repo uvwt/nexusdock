@@ -5,20 +5,21 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/uvwt/nexusdock/internal/workflow"
 )
 
 // registerWorkflowTemplateRoutes 挂载 Workflow 模板 REST 端点。
 // 注册表业务（模型、published 文件、生命周期、向量索引、match）都在
 // internal/workflow.Registry，这里只做 JSON/HTTP 映射。
-func (s *Server) registerWorkflowTemplateRoutes(mux *http.ServeMux, protected func(http.HandlerFunc) http.HandlerFunc) {
-	mux.HandleFunc("GET /v1/workflow-templates", protected(s.workflowTemplatesList))
-	mux.HandleFunc("POST /v1/workflow-templates/publish", protected(s.workflowTemplatePublish))
-	mux.HandleFunc("POST /v1/workflow-templates/match", protected(s.workflowTemplatesMatch))
-	mux.HandleFunc("POST /v1/workflow-templates/reindex", protected(s.workflowTemplatesReindex))
-	mux.HandleFunc("GET /v1/workflow-templates/vector-index", protected(s.workflowTemplateVectorIndexRead))
-	mux.HandleFunc("GET /v1/workflow-templates/{templateID}/{version}", protected(s.workflowTemplateRead))
-	mux.HandleFunc("POST /v1/workflow-templates/{templateID}/{version}/retire", protected(s.workflowTemplateRetire))
+func (s *Server) registerWorkflowTemplateRoutes(r chi.Router) {
+	r.Get("/v1/workflow-templates", s.workflowTemplatesList)
+	r.Post("/v1/workflow-templates/publish", s.workflowTemplatePublish)
+	r.Post("/v1/workflow-templates/match", s.workflowTemplatesMatch)
+	r.Post("/v1/workflow-templates/reindex", s.workflowTemplatesReindex)
+	r.Get("/v1/workflow-templates/vector-index", s.workflowTemplateVectorIndexRead)
+	r.Get("/v1/workflow-templates/{templateID}/{version}", s.workflowTemplateRead)
+	r.Post("/v1/workflow-templates/{templateID}/{version}/retire", s.workflowTemplateRetire)
 }
 
 // writeWorkflowOperationError 把注册表业务错误映射为 HTTP 响应；
@@ -46,23 +47,25 @@ func (s *Server) workflowTemplatePublish(w http.ResponseWriter, r *http.Request)
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	t, err := s.workflowRegistry.Publish(req.Template)
+	result, err := s.executeWorkflowTemplatePublish(req.Template)
 	if err != nil {
 		writeWorkflowOperationError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "template": t, "template_summary": s.workflowTemplateSummary(t), "source": "nexus-registry"})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "template": result.Template, "template_summary": result.Summary, "source": "nexus-registry",
+	})
 }
 
 func (s *Server) workflowTemplateRetire(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("templateID")
-	version := r.PathValue("version")
-	t, err := s.workflowRegistry.Retire(id, version)
+	result, err := s.executeWorkflowTemplateRetire(r.PathValue("templateID"), r.PathValue("version"))
 	if err != nil {
 		writeWorkflowOperationError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "template": t, "template_summary": s.workflowTemplateSummary(t), "source": "nexus-registry"})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "template": result.Template, "template_summary": result.Summary, "source": "nexus-registry",
+	})
 }
 
 func (s *Server) workflowTemplateRead(w http.ResponseWriter, r *http.Request) {
@@ -72,26 +75,28 @@ func (s *Server) workflowTemplateRead(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_WORKFLOW_TEMPLATE", "template id or version is invalid")
 		return
 	}
-	t, err := s.workflowRegistry.Get(id, version)
+	result, err := s.executeWorkflowTemplateGet(id, version)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "WORKFLOW_TEMPLATE_NOT_FOUND", err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "template": t, "template_summary": s.workflowTemplateSummary(t), "source": "nexus-registry"})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "template": result.Template, "template_summary": result.Summary, "source": "nexus-registry",
+	})
 }
 
 func (s *Server) workflowTemplatesList(w http.ResponseWriter, r *http.Request) {
 	status := workflow.Status(strings.TrimSpace(r.URL.Query().Get("status")))
 	query := strings.ToLower(strings.TrimSpace(r.URL.Query().Get("q")))
 	includeHistory := r.URL.Query().Get("include_history") == "true" || r.URL.Query().Get("view") == "history"
-	templates, err := s.workflowRegistry.List(status)
+
+	result, err := s.executeWorkflowTemplateList(status)
 	if err != nil {
 		writeError(w, http.StatusConflict, "WORKFLOW_LIST_FAILED", err.Error())
 		return
 	}
-	summaries := make([]workflowTemplateSummary, 0, len(templates))
-	for _, t := range templates {
-		item := s.workflowTemplateSummary(t)
+	summaries := make([]workflowTemplateSummary, 0, len(result.Summaries))
+	for _, item := range result.Summaries {
 		if query != "" && !templateSummaryMatches(item, query) {
 			continue
 		}
@@ -110,7 +115,11 @@ func (s *Server) workflowTemplatesList(w http.ResponseWriter, r *http.Request) {
 			conflicts++
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "items": items, "templates": workflowTemplateCompactList(templates), "count": len(items), "total_count": len(summaries), "root": s.workflowRegistry.Root(), "source": "nexus-registry", "mode": mode, "conflict_count": conflicts, "version_summary": counters})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "items": items, "templates": workflowTemplateCompactList(result.Templates),
+		"count": len(items), "total_count": len(summaries), "root": s.workflowRegistry.Root(),
+		"source": "nexus-registry", "mode": mode, "conflict_count": conflicts, "version_summary": counters,
+	})
 }
 
 func (s *Server) workflowTemplatesMatch(w http.ResponseWriter, r *http.Request) {
@@ -122,7 +131,7 @@ func (s *Server) workflowTemplatesMatch(w http.ResponseWriter, r *http.Request) 
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	result, err := s.workflowTemplateMatchResult(r.Context(), req.Goal, req.Device, req.Type)
+	result, err := s.executeWorkflowTemplateMatch(r.Context(), req.Goal, req.Device, req.Type)
 	if err != nil {
 		writeError(w, http.StatusConflict, "WORKFLOW_MATCH_FAILED", err.Error())
 		return
@@ -140,7 +149,7 @@ func (s *Server) workflowTemplatesReindex(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) workflowTemplateVectorIndexRead(w http.ResponseWriter, r *http.Request) {
-	result, err := s.workflowTemplateVectorIndexResult()
+	result, err := s.executeWorkflowTemplateVectorIndex()
 	if err != nil {
 		writeError(w, http.StatusConflict, "WORKFLOW_VECTOR_INDEX_INVALID", err.Error())
 		return

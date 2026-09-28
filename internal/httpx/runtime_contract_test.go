@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/gorilla/websocket"
 	protocol "github.com/uvwt/agentdock-protocol"
 	"github.com/uvwt/nexusdock/internal/agentdock"
@@ -18,7 +19,7 @@ import (
 // runtimeContractTestServer 启动一台假的 AgentDock 节点并接入真实 Hub，
 // 让 Runtime 视图走完整的“HTTP handler → Bridge 调用 → DTO 解析 → UI JSON”链路。
 // canned 按上游 path 提供响应 JSON，用来模拟真实节点、旧节点与契约漂移。
-func runtimeContractTestServer(t *testing.T, canned map[string]string) (*Server, *http.ServeMux, string) {
+func runtimeContractTestServer(t *testing.T, canned map[string]string) (*Server, http.Handler, string) {
 	t.Helper()
 	db, err := core.OpenSQLite(t.Context(), ":memory:", 1)
 	if err != nil {
@@ -90,16 +91,15 @@ func runtimeContractTestServer(t *testing.T, canned map[string]string) (*Server,
 	}()
 
 	server := &Server{agentDock: store, agentDockHub: hub, logger: slog.Default()}
-	mux := http.NewServeMux()
-	// Runtime 视图是受保护路由；这里用直通中间件聚焦契约行为本身。
-	server.registerRuntimeRoutes(mux, func(next http.HandlerFunc) http.HandlerFunc { return next })
-	return server, mux, node.ID
+	router := chi.NewRouter()
+	server.registerRuntimeRoutes(router)
+	return server, router, node.ID
 }
 
-func runtimeContractRequest(t *testing.T, mux *http.ServeMux, method, target string) map[string]any {
+func runtimeContractRequest(t *testing.T, handler http.Handler, method, target string) map[string]any {
 	t.Helper()
 	response := httptest.NewRecorder()
-	mux.ServeHTTP(response, httptest.NewRequest(method, target, nil))
+	handler.ServeHTTP(response, httptest.NewRequest(method, target, nil))
 	var payload map[string]any
 	if err := json.Unmarshal(response.Body.Bytes(), &payload); err != nil {
 		t.Fatalf("响应不是 JSON（status=%d）: %s", response.Code, response.Body.String())
@@ -315,11 +315,11 @@ func TestRuntimeMCPAuthorizeAlwaysUsesNexusCallback(t *testing.T) {
 	server, _, nodeID := runtimeContractTestServer(t, map[string]string{
 		"/internal/runtime/mcp": `{"action":"authorize","name":"cloudflare","authorization_url":"https://auth.example.test/authorize","callback_id":"nexus"}`,
 	})
-	mux := http.NewServeMux()
-	server.registerRuntimeMCPRoutes(mux, func(next http.HandlerFunc) http.HandlerFunc { return next })
+	router := chi.NewRouter()
+	server.registerRuntimeMCPRoutes(router)
 	response := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/v1/runtime/nodes/"+nodeID+"/mcp/cloudflare/authorize", nil)
-	mux.ServeHTTP(response, request)
+	router.ServeHTTP(response, request)
 
 	if response.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", response.Code, response.Body.String())

@@ -5,20 +5,23 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/uvwt/nexusdock/internal/agentdock"
 	"github.com/uvwt/nexusdock/internal/core"
 )
 
-func (s *Server) registerAgentDockNodeRoutes(mux *http.ServeMux, protected func(http.HandlerFunc) http.HandlerFunc) {
-	mux.HandleFunc("GET /v1/runtime/nodes", protected(s.agentDockNodeList))
-	mux.HandleFunc("POST /v1/runtime/nodes/pairing-codes", protected(s.agentDockPairingCodeCreate))
-	mux.HandleFunc("GET /v1/runtime/nodes/{nodeID}", protected(s.agentDockNodeGet))
-	mux.HandleFunc("PATCH /v1/runtime/nodes/{nodeID}", protected(s.agentDockNodeUpdate))
-	mux.HandleFunc("DELETE /v1/runtime/nodes/{nodeID}", protected(s.agentDockNodeDelete))
+func (s *Server) registerAgentDockAdminRoutes(r chi.Router) {
+	r.Get("/v1/runtime/nodes", s.agentDockNodeList)
+	r.Post("/v1/runtime/nodes/pairing-codes", s.agentDockPairingCodeCreate)
+	r.Get("/v1/runtime/nodes/{nodeID}", s.agentDockNodeGet)
+	r.Patch("/v1/runtime/nodes/{nodeID}", s.agentDockNodeUpdate)
+	r.Delete("/v1/runtime/nodes/{nodeID}", s.agentDockNodeDelete)
+}
 
+func (s *Server) registerAgentDockConnectionRoutes(r chi.Router) {
 	// 配对码和 Device Token 是这两个入口各自的身份边界，不能套用浏览器会话认证。
-	mux.HandleFunc("POST /v1/nodes/pair", s.agentDockNodePair)
-	mux.HandleFunc("GET /v1/nodes/connect", s.agentDockNodeConnect)
+	r.Post("/v1/nodes/pair", s.agentDockNodePair)
+	r.Get("/v1/nodes/connect", s.agentDockNodeConnect)
 }
 
 func (s *Server) agentDockNodeList(w http.ResponseWriter, r *http.Request) {

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/uvwt/nexusdock/internal/core"
 	"github.com/uvwt/nexusdock/internal/recall"
 )
@@ -53,12 +54,15 @@ func evolutionDetail(record recall.LifecycleRecord) evolutionLifecycleDetail {
 	}
 }
 
-func (s *Server) registerEvolutionLifecycleRoutes(mux *http.ServeMux, protected func(http.HandlerFunc) http.HandlerFunc) {
-	// 浏览器只获得只读视图；生命周期读写的 internal 接口只允许已配对且启用的 AgentDock 设备访问。
-	mux.HandleFunc("GET /v1/evolution/lifecycle", protected(s.evolutionLifecycleList))
-	mux.HandleFunc("GET /v1/evolution/lifecycle/{evolutionID}", protected(s.evolutionLifecycleRead))
-	mux.HandleFunc("POST /internal/recall/lifecycle/query", s.withEvolutionAccess(s.lifecycleQuery))
-	mux.HandleFunc("POST /internal/recall/lifecycle/transition", s.withEvolutionAccess(s.lifecycleTransition))
+func (s *Server) registerEvolutionAdminRoutes(r chi.Router) {
+	r.Get("/v1/evolution/lifecycle", s.evolutionLifecycleList)
+	r.Get("/v1/evolution/lifecycle/{evolutionID}", s.evolutionLifecycleRead)
+}
+
+func (s *Server) registerEvolutionInternalRoutes(r chi.Router) {
+	// 生命周期读写属于 AgentDock 设备域，认证由路由分支统一继承。
+	r.Post("/internal/recall/lifecycle/query", s.lifecycleQuery)
+	r.Post("/internal/recall/lifecycle/transition", s.lifecycleTransition)
 }
 
 func (s *Server) evolutionLifecycleList(w http.ResponseWriter, _ *http.Request) {
@@ -89,8 +93,8 @@ func (s *Server) evolutionLifecycleRead(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]any{"record": evolutionDetail(records[0])})
 }
 
-func (s *Server) withEvolutionAccess(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
+func (s *Server) withEvolutionAccess(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.auth == nil || s.agentDock == nil {
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing or invalid evolution credentials")
 			return
@@ -105,8 +109,8 @@ func (s *Server) withEvolutionAccess(next http.HandlerFunc) http.HandlerFunc {
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing or invalid evolution credentials")
 			return
 		}
-		next(w, r)
-	}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) lifecycleQuery(w http.ResponseWriter, r *http.Request) {

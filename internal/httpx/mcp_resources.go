@@ -38,15 +38,15 @@ func nexusOwnedMCPAppByURI(uri string) (nexusOwnedMCPApp, bool) {
 }
 
 func (s *Server) syncMCPAppResources() {
-	if s == nil || s.mcpServer == nil {
+	if s == nil || s.mcp == nil || s.mcp.server == nil {
 		return
 	}
 
 	desired, err := s.publishedMCPAppResourceURIs(context.Background())
-	s.mcpResourcesMu.Lock()
-	defer s.mcpResourcesMu.Unlock()
-	if s.mcpResources == nil {
-		s.mcpResources = make(map[string]struct{})
+	s.mcp.resourcesMu.Lock()
+	defer s.mcp.resourcesMu.Unlock()
+	if s.mcp.resources == nil {
+		s.mcp.resources = make(map[string]struct{})
 	}
 	if err != nil {
 		if s.logger != nil {
@@ -59,22 +59,22 @@ func (s *Server) syncMCPAppResources() {
 		for _, app := range nexusOwnedMCPApps {
 			desired[app.URI] = struct{}{}
 		}
-		for uri := range s.mcpResources {
+		for uri := range s.mcp.resources {
 			if _, local := nexusOwnedMCPAppByURI(uri); !local {
 				desired[uri] = struct{}{}
 			}
 		}
 	}
 
-	for uri := range s.mcpResources {
+	for uri := range s.mcp.resources {
 		if _, ok := desired[uri]; ok {
 			continue
 		}
-		s.mcpServer.RemoveResources(uri)
-		delete(s.mcpResources, uri)
+		s.mcp.server.RemoveResources(uri)
+		delete(s.mcp.resources, uri)
 	}
 	for _, uri := range sortedMCPAppResourceURIs(desired) {
-		if _, ok := s.mcpResources[uri]; ok {
+		if _, ok := s.mcp.resources[uri]; ok {
 			continue
 		}
 		uri := uri
@@ -85,7 +85,7 @@ func (s *Server) syncMCPAppResources() {
 			title = localApp.Title
 			description = localApp.Description
 		}
-		s.mcpServer.AddResource(&mcpsdk.Resource{
+		s.mcp.server.AddResource(&mcpsdk.Resource{
 			URI:         uri,
 			Name:        mcpAppResourceName(uri),
 			Title:       title,
@@ -101,7 +101,7 @@ func (s *Server) syncMCPAppResources() {
 			}
 			return s.readPublishedMCPAppResource(ctx, uri)
 		})
-		s.mcpResources[uri] = struct{}{}
+		s.mcp.resources[uri] = struct{}{}
 	}
 }
 

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import pathlib
 import re
 import sys
@@ -297,8 +298,157 @@ def validate_openapi_references(errors: list[str]) -> None:
 
 def normalized_route(path: str) -> str:
     """Ignore wildcard names while preserving the HTTP resource shape."""
-    return re.sub(r"\{[^}]+\}", "{}", path)
+    path = re.sub(r"\{[^}]+\}", "{}", path)
+    return re.sub(r"/\*$", "/{}", path)
 
+
+CHI_METHODS = {
+    "Get": "GET",
+    "Head": "HEAD",
+    "Post": "POST",
+    "Put": "PUT",
+    "Patch": "PATCH",
+    "Delete": "DELETE",
+}
+
+CHI_ROUTE_START = re.compile(r"\.(Get|Head|Post|Put|Patch|Delete)\s*\(")
+GO_QUOTED_ROUTE = re.compile(r'\s*("(?:\\.|[^"\\])*")\s*,', re.DOTALL)
+
+
+def go_code_mask(text: str) -> list[bool]:
+    """Mark source positions that are actual Go code, excluding strings and comments."""
+    code = [False] * len(text)
+    index = 0
+    state = "code"
+    while index < len(text):
+        char = text[index]
+        nxt = text[index + 1] if index + 1 < len(text) else ""
+        if state == "code":
+            if char == "/" and nxt == "/":
+                state = "line_comment"
+                index += 2
+                continue
+            if char == "/" and nxt == "*":
+                state = "block_comment"
+                index += 2
+                continue
+            code[index] = True
+            if char == '"':
+                state = "string"
+            elif char == "'":
+                state = "rune"
+            elif char == chr(96):
+                state = "raw"
+        elif state in {"string", "rune"}:
+            if char == "\\":
+                index += 2
+                continue
+            if state == "string" and char == '"':
+                state = "code"
+            elif state == "rune" and char == "'":
+                state = "code"
+        elif state == "raw":
+            if char == chr(96):
+                state = "code"
+        elif state == "line_comment":
+            if char == "\n":
+                state = "code"
+                code[index] = True
+        elif state == "block_comment":
+            if char == "*" and nxt == "/":
+                state = "code"
+                index += 2
+                continue
+        index += 1
+    return code
+
+
+def go_call_end(text: str, open_paren: int) -> int | None:
+    """Return the matching close paren while respecting Go strings and comments."""
+    depth = 1
+    index = open_paren + 1
+    state = "code"
+    while index < len(text):
+        char = text[index]
+        nxt = text[index + 1] if index + 1 < len(text) else ""
+        if state == "code":
+            if char == "/" and nxt == "/":
+                state = "line_comment"
+                index += 2
+                continue
+            if char == "/" and nxt == "*":
+                state = "block_comment"
+                index += 2
+                continue
+            if char == '"':
+                state = "string"
+            elif char == "'":
+                state = "rune"
+            elif char == chr(96):
+                state = "raw"
+            elif char == "(":
+                depth += 1
+            elif char == ")":
+                depth -= 1
+                if depth == 0:
+                    return index
+        elif state in {"string", "rune"}:
+            if char == "\\":
+                index += 2
+                continue
+            if state == "string" and char == '"':
+                state = "code"
+            elif state == "rune" and char == "'":
+                state = "code"
+        elif state == "raw":
+            if char == chr(96):
+                state = "code"
+        elif state == "line_comment":
+            if char == "\n":
+                state = "code"
+        elif state == "block_comment":
+            if char == "*" and nxt == "/":
+                state = "code"
+                index += 2
+                continue
+        index += 1
+    return None
+
+
+def chi_route_calls(text: str) -> list[tuple[str, str, str]]:
+    """Return Chi method/path/handler-expression triples across normal Go formatting."""
+    calls: list[tuple[str, str, str]] = []
+    code_mask = go_code_mask(text)
+    for match in CHI_ROUTE_START.finditer(text):
+        if not code_mask[match.start()]:
+            continue
+        open_paren = match.end() - 1
+        close_paren = go_call_end(text, open_paren)
+        if close_paren is None:
+            continue
+        body = text[open_paren + 1:close_paren]
+        route_match = GO_QUOTED_ROUTE.match(body)
+        if route_match is None:
+            continue
+        try:
+            route = json.loads(route_match.group(1))
+        except json.JSONDecodeError:
+            continue
+        calls.append((CHI_METHODS[match.group(1)], route, body[route_match.end():]))
+    return calls
+
+
+def source_route_operations(text: str) -> list[tuple[str, str]]:
+    return [(method, route) for method, route, _ in chi_route_calls(text)]
+
+
+def source_route_registrations(text: str) -> list[tuple[str, str, str]]:
+    registrations: list[tuple[str, str, str]] = []
+    for method, route, handler_expression in chi_route_calls(text):
+        handlers = re.findall(r"\bs\.([A-Za-z0-9_]+)", handler_expression)
+        if handlers:
+            registrations.append((method, route, handlers[-1]))
+    return registrations
 
 def go_function_body(text: str, function_name: str) -> str:
     match = re.search(rf"func \(s \*Server\) {re.escape(function_name)}\([^)]*\) \{{", text)
@@ -318,19 +468,31 @@ def go_function_body(text: str, function_name: str) -> str:
 
 def source_query_parameters() -> set[tuple[str, str, str]]:
     result: set[tuple[str, str, str]] = set()
-    registration = re.compile(r'HandleFunc\("([A-Z]+) ([^"]+)",[^\n]*?s\.([A-Za-z0-9_]+)')
     query_patterns = (
         re.compile(r'r\.URL\.Query\(\)\.Get\("([^"]+)"\)'),
         re.compile(r'queryInt\(r,\s*"([^"]+)"'),
     )
-    for path in sorted(HTTP_SOURCE.glob("*.go")):
-        if path.name.endswith("_test.go"):
-            continue
-        text = path.read_text(encoding="utf-8")
-        for method, route, handler in registration.findall(text):
+    source_texts = [
+        path.read_text(encoding="utf-8")
+        for path in sorted(HTTP_SOURCE.glob("*.go"))
+        if not path.name.endswith("_test.go")
+    ]
+    function_bodies: dict[str, str] = {}
+
+    for text in source_texts:
+        for method, route, handler in source_route_registrations(text):
             if not route.startswith("/v1/"):
                 continue
-            body = go_function_body(text, handler)
+            if handler not in function_bodies:
+                function_bodies[handler] = next(
+                    (
+                        body
+                        for source in source_texts
+                        if (body := go_function_body(source, handler))
+                    ),
+                    "",
+                )
+            body = function_bodies[handler]
             for pattern in query_patterns:
                 for name in pattern.findall(body):
                     result.add((method, normalized_route(route), name))
@@ -362,11 +524,13 @@ def validate_source_route_coverage(errors: list[str]) -> None:
     }
 
     source_operations: set[tuple[str, str]] = set()
-    route_pattern = re.compile(r'HandleFunc\("([A-Z]+) ([^"]+)"')
     for path in sorted(HTTP_SOURCE.glob("*.go")):
         if path.name.endswith("_test.go"):
             continue
-        for method, route in route_pattern.findall(path.read_text(encoding="utf-8")):
+        text = path.read_text(encoding="utf-8")
+        for method, route in source_route_operations(text):
+            if route in {"/v1/*", "/api/*"}:
+                continue
             if route == "/health" or route.startswith("/v1/"):
                 if route != "/v1/":
                     source_operations.add((method, normalized_route(route)))

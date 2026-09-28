@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"encoding/json"
+	"github.com/go-chi/chi/v5"
 	"net/http"
 	"strings"
 )
@@ -30,12 +31,12 @@ type runtimeMCPRequest struct {
 	CallbackID  string            `json:"callback_id,omitempty"`
 }
 
-func (s *Server) registerRuntimeMCPRoutes(mux *http.ServeMux, protected func(http.HandlerFunc) http.HandlerFunc) {
-	mux.HandleFunc("GET /v1/runtime/nodes/{nodeID}/mcp", protected(s.runtimeMCPServers))
-	mux.HandleFunc("GET /v1/runtime/nodes/{nodeID}/mcp/{name}/environment", protected(s.runtimeMCPEnvironment))
-	mux.HandleFunc("GET /v1/runtime/nodes/{nodeID}/mcp/{name}", protected(s.runtimeMCPServer))
-	mux.HandleFunc("POST /v1/runtime/nodes/{nodeID}/mcp/{name}/authorize", protected(s.runtimeMCPAuthorize))
-	mux.HandleFunc("POST /v1/runtime/nodes/{nodeID}/mcp", protected(s.runtimeMCPManage))
+func (s *Server) registerRuntimeMCPRoutes(r chi.Router) {
+	r.Get("/v1/runtime/nodes/{nodeID}/mcp", s.runtimeMCPServers)
+	r.Get("/v1/runtime/nodes/{nodeID}/mcp/{name}/environment", s.runtimeMCPEnvironment)
+	r.Get("/v1/runtime/nodes/{nodeID}/mcp/{name}", s.runtimeMCPServer)
+	r.Post("/v1/runtime/nodes/{nodeID}/mcp/{name}/authorize", s.runtimeMCPAuthorize)
+	r.Post("/v1/runtime/nodes/{nodeID}/mcp", s.runtimeMCPManage)
 }
 
 func (s *Server) runtimeMCPServers(w http.ResponseWriter, r *http.Request) {

@@ -4,16 +4,17 @@ import (
 	"errors"
 	"net/http"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/uvwt/nexusdock/internal/privatenotes"
 )
 
-func (s *Server) registerPrivateNoteRoutes(mux *http.ServeMux, protected func(http.HandlerFunc) http.HandlerFunc) {
-	mux.HandleFunc("POST /v1/private-notes/search", protected(s.searchPrivateNotes))
-	mux.HandleFunc("POST /v1/private-notes/read", protected(s.readPrivateNote))
-	mux.HandleFunc("POST /v1/private-notes/write", protected(s.writePrivateNote))
-	mux.HandleFunc("POST /v1/private-notes/delete", protected(s.deletePrivateNote))
-	mux.HandleFunc("POST /v1/private-notes/status", protected(s.privateNoteStatus))
-	mux.HandleFunc("POST /v1/private-notes/maintenance", protected(s.maintainPrivateNotes))
+func (s *Server) registerPrivateNoteRoutes(r chi.Router) {
+	r.Post("/v1/private-notes/search", s.searchPrivateNotes)
+	r.Post("/v1/private-notes/read", s.readPrivateNote)
+	r.Post("/v1/private-notes/write", s.writePrivateNote)
+	r.Post("/v1/private-notes/delete", s.deletePrivateNote)
+	r.Post("/v1/private-notes/status", s.privateNoteStatus)
+	r.Post("/v1/private-notes/maintenance", s.maintainPrivateNotes)
 }
 
 func (s *Server) searchPrivateNotes(w http.ResponseWriter, r *http.Request) {
@@ -24,15 +25,21 @@ func (s *Server) searchPrivateNotes(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &req) {
 		return
 	}
-	results, err := s.privateNotes.Search(r.Context(), req.Query, req.MaxResults)
+	result, err := s.executePrivateNoteSearch(r.Context(), privateNoteSearchRequest{
+		Query: req.Query, MaxResults: req.MaxResults,
+	})
 	if err != nil {
 		writePrivateNoteError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"ok": true, "action": "search", "query": req.Query, "root": s.privateNotes.Root(),
-		"results": results, "count": len(results), "metadata_only": true,
-		"policy": "search only reads title, summary, tags, category, path, and updated_at; plaintext body is never searched or returned",
+	writeJSON(w, http.StatusOK, struct {
+		privateNoteSearchResult
+		OK     bool   `json:"ok"`
+		Policy string `json:"policy"`
+	}{
+		privateNoteSearchResult: result,
+		OK:                      true,
+		Policy:                  "search only reads title, summary, tags, category, path, and updated_at; plaintext body is never searched or returned",
 	})
 }
 

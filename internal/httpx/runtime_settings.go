@@ -89,13 +89,10 @@ func (s *Server) testEmbeddingConnection(w http.ResponseWriter, r *http.Request)
 	}
 	status := embedding.Status(r.Context())
 	result.LatencyMS = time.Since(started).Milliseconds()
-	if model, ok := status["model"].(string); ok {
-		result.Model = model
-	}
-	reachable, _ := status["reachable"].(bool)
-	if !reachable {
-		if message, ok := status["error"].(string); ok && message != "" {
-			result.Message = "向量连接测试失败：" + stage3.RedactText(message)
+	result.Model = status.Model
+	if status.Reachable == nil || !*status.Reachable {
+		if status.Error != "" {
+			result.Message = "向量连接测试失败：" + stage3.RedactText(status.Error)
 		} else {
 			result.Message = "向量服务未启用或当前不可达。"
 		}

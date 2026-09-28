@@ -208,7 +208,7 @@ func (s *Server) callFleetAgentDockContextWithTimeout(ctx context.Context, leafT
 		}()
 	}
 	wait.Wait()
-	return asMap(fleet)
+	return asBoundaryMap(fleet)
 }
 
 func decodeAgentDockContextResult(result map[string]any) (agentDockContext, error) {
@@ -223,7 +223,7 @@ func decodeAgentDockContextResult(result map[string]any) (agentDockContext, erro
 		return agentDockContext{}, errors.New("agentdock_context 缺少 structuredContent")
 	}
 	var decoded agentDockContext
-	if err := decodeMap(structured, &decoded); err != nil {
+	if err := decodeBoundaryMap(structured, &decoded); err != nil {
 		return agentDockContext{}, fmt.Errorf("解析 agentdock_context: %w", err)
 	}
 	if decoded.Skills == nil || decoded.DynamicMCP == nil || decoded.WorkflowTemplates == nil || decoded.Rules == nil {

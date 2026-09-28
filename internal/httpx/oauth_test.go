@@ -155,14 +155,14 @@ func TestOAuthHTTPAuthorizationCodeFlowAndMCPIsolation(t *testing.T) {
 	}
 
 	mcpAuthorized := false
-	wrapped := server.withMCPAccess(func(w http.ResponseWriter, _ *http.Request) {
+	wrapped := server.withMCPAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		mcpAuthorized = true
 		w.WriteHeader(http.StatusNoContent)
-	})
+	}))
 	mcpReq := httptest.NewRequest(http.MethodPost, "https://nexus.example/mcp", nil)
 	mcpReq.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
 	mcpRes := httptest.NewRecorder()
-	wrapped(mcpRes, mcpReq)
+	wrapped.ServeHTTP(mcpRes, mcpReq)
 	if !mcpAuthorized || mcpRes.Code != http.StatusNoContent {
 		t.Fatalf("OAuth MCP bearer rejected status=%d", mcpRes.Code)
 	}
@@ -233,15 +233,15 @@ func TestOAuthDesktopCustomRedirectRegistrationAndAuthorize(t *testing.T) {
 func TestDedicatedMCPTokenAuthorizesOnlyMCP(t *testing.T) {
 	server, _ := newOAuthHTTPTestServer(t)
 	called := false
-	wrapped := server.withMCPAccess(func(w http.ResponseWriter, _ *http.Request) {
+	wrapped := server.withMCPAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
-	})
+	}))
 
 	mcpReq := httptest.NewRequest(http.MethodPost, "https://nexus.example/mcp", nil)
 	mcpReq.Header.Set("Authorization", "Bearer "+server.mcpToken.Token())
 	mcpRes := httptest.NewRecorder()
-	wrapped(mcpRes, mcpReq)
+	wrapped.ServeHTTP(mcpRes, mcpReq)
 	if !called || mcpRes.Code != http.StatusNoContent {
 		t.Fatalf("dedicated MCP token rejected: status=%d", mcpRes.Code)
 	}
@@ -258,7 +258,7 @@ func TestDedicatedMCPTokenAuthorizesOnlyMCP(t *testing.T) {
 	unrelatedReq := httptest.NewRequest(http.MethodPost, "https://nexus.example/mcp", nil)
 	unrelatedReq.Header.Set("Authorization", "Bearer unrelated-secret")
 	unrelatedRes := httptest.NewRecorder()
-	wrapped(unrelatedRes, unrelatedReq)
+	wrapped.ServeHTTP(unrelatedRes, unrelatedReq)
 	if called || unrelatedRes.Code != http.StatusUnauthorized {
 		t.Fatalf("unrelated bearer should not authorize MCP: called=%v status=%d", called, unrelatedRes.Code)
 	}

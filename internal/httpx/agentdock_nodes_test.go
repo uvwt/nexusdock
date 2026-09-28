@@ -125,16 +125,16 @@ func TestDeviceTokenAccessesOnlyExplicitDeviceRoutes(t *testing.T) {
 	request := httptest.NewRequest(http.MethodGet, "/v1/recall", nil)
 	request.Header.Set("Authorization", "Bearer "+issued.Token)
 	response := httptest.NewRecorder()
-	server.withDeviceOrAPIAccess(func(w http.ResponseWriter, _ *http.Request) {
+	server.withDeviceOrAPIAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-	})(response, request)
+	})).ServeHTTP(response, request)
 	if response.Code != http.StatusOK {
 		t.Fatalf("device route status=%d body=%s", response.Code, response.Body.String())
 	}
 
 	// 管理 API 仍使用普通 API/管理员认证，Device Token 不会被 withAPIAccess 接受。
 	adminResponse := httptest.NewRecorder()
-	server.withAPIAccess(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })(adminResponse, request)
+	server.withAPIAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })).ServeHTTP(adminResponse, request)
 	if adminResponse.Code != http.StatusUnauthorized {
 		t.Fatalf("admin route status=%d, want 401", adminResponse.Code)
 	}
@@ -246,7 +246,7 @@ func TestNodeEnableReconcileKeepsCanonicalToolsCentral(t *testing.T) {
 	}
 
 	clientTransport, serverTransport := mcpsdk.NewInMemoryTransports()
-	serverSession, err := server.mcpServer.Connect(t.Context(), serverTransport, nil)
+	serverSession, err := server.mcp.server.Connect(t.Context(), serverTransport, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
