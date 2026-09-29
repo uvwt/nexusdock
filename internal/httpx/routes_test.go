@@ -1,12 +1,14 @@
 package httpx
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	protocol "github.com/uvwt/agentdock-protocol"
 
 	"github.com/uvwt/nexusdock/internal/agentdock"
 	"github.com/uvwt/nexusdock/internal/core"
@@ -44,6 +46,45 @@ func newRouteSecurityTestServer(t *testing.T) (*Server, string) {
 		t.Fatal(err)
 	}
 	return server, issued.Token
+}
+
+// 路由以字面量注册以便 contracts 检查静态识别；这里经由真实 Router 按 protocol 常量请求，
+// 确认 AgentDock 使用的路径都落到对应处理器，而不是未知路由的登录跳转。
+func TestRouterServesAgentDockProtocolPathsWithoutWebSession(t *testing.T) {
+	server, _ := newRouteSecurityTestServer(t)
+	handler := server.Handler()
+	cases := []struct {
+		request  *http.Request
+		wantCode string
+	}{
+		{
+			request: httptest.NewRequest(http.MethodPost, protocol.NodePairPath,
+				strings.NewReader(`{"code":"unknown","device_id":"device_route_protocol","name":"Route"}`)),
+			wantCode: "AGENTDOCK_PAIRING_CODE_INVALID",
+		},
+		{
+			request:  httptest.NewRequest(http.MethodGet, protocol.NodeConnectPath, nil),
+			wantCode: "INVALID_DEVICE_TOKEN",
+		},
+		{
+			request:  httptest.NewRequest(http.MethodGet, protocol.NodeOAuthCallbackPath("node_missing")+"?state=s&code=c", nil),
+			wantCode: "AGENTDOCK_NODE_NOT_FOUND",
+		},
+	}
+	for _, tc := range cases {
+		tc.request.Header.Set("Content-Type", "application/json")
+		response := httptest.NewRecorder()
+		handler.ServeHTTP(response, tc.request)
+		var body struct {
+			Error struct {
+				Code string `json:"code"`
+			} `json:"error"`
+		}
+		if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil || body.Error.Code != tc.wantCode {
+			t.Fatalf("%s %s: status=%d body=%s; want error code %s",
+				tc.request.Method, tc.request.URL.Path, response.Code, response.Body.String(), tc.wantCode)
+		}
+	}
 }
 
 func TestRouterSecurityDomainsKeepDeviceOutOfAdminRoutes(t *testing.T) {

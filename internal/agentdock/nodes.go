@@ -12,10 +12,10 @@ import (
 	"fmt"
 	"mime"
 	"net/url"
-	"regexp"
 	"strings"
 	"time"
 
+	protocol "github.com/uvwt/agentdock-protocol"
 	"github.com/uvwt/nexusdock/internal/core"
 )
 
@@ -26,8 +26,6 @@ var (
 	ErrNodeExists         = errors.New("AgentDock 设备已经配对")
 	ErrNodeDisabled       = errors.New("AgentDock 节点已停用")
 	ErrPairingCodeInvalid = errors.New("AgentDock 配对码无效或已过期")
-
-	deviceIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$`)
 )
 
 type ValidationError struct{ Message string }
@@ -58,6 +56,8 @@ type PairingCode struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
+// PairInput 与 protocol.PairRequest 字段一致；HTTP 边界按协议类型解码后直接转换，
+// 协议字段变化时这里会编译失败，避免两份形状静默漂移。
 type PairInput struct {
 	Code     string `json:"code"`
 	DeviceID string `json:"device_id"`
@@ -146,10 +146,10 @@ func (s *Store) Pair(ctx context.Context, input PairInput) (Node, error) {
 	if code == "" {
 		return Node{}, invalid("配对码不能为空")
 	}
-	if !deviceIDPattern.MatchString(deviceID) {
+	if !protocol.ValidDeviceID(deviceID) {
 		return Node{}, invalid("设备 ID 格式无效")
 	}
-	if name == "" || len([]rune(name)) > 100 {
+	if !protocol.ValidNodeName(name) {
 		return Node{}, invalid("节点名称必须为 1 到 100 个字符")
 	}
 
@@ -199,7 +199,7 @@ func (s *Store) Update(ctx context.Context, id string, input UpdateInput) (Node,
 	}
 	if input.Name != nil {
 		name := strings.TrimSpace(*input.Name)
-		if name == "" || len([]rune(name)) > 100 {
+		if !protocol.ValidNodeName(name) {
 			return Node{}, invalid("节点名称必须为 1 到 100 个字符")
 		}
 		node.Name = name
