@@ -13,28 +13,43 @@ import (
 	"time"
 )
 
-func TestParseEmbeddingResponseRespectsOpenAIIndexes(t *testing.T) {
-	vectors, err := parseEmbeddingResponse([]byte(`{"data":[{"index":1,"embedding":[0,1]},{"index":0,"embedding":[1,0]}]}`))
+func TestEmbedTextsPreservesWorkflowEndpointRule(t *testing.T) {
+	var path string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"index": 0, "embedding": []float64{1, 0}}}})
+	}))
+	defer server.Close()
+
+	vectors, err := embedTexts(t.Context(), AIConfig{
+		Endpoint: server.URL + "/custom",
+		Model:    "test-model",
+		Timeout:  time.Second,
+	}, []string{"workflow"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(vectors) != 2 || vectors[0][0] != 1 || vectors[1][1] != 1 {
-		t.Fatalf("indexed vectors were not restored to request order: %#v", vectors)
+	if path != "/custom/v1/embeddings" {
+		t.Fatalf("workflow embedding path=%q", path)
+	}
+	if len(vectors) != 1 {
+		t.Fatalf("unexpected vectors: %#v", vectors)
 	}
 }
 
-func TestParseEmbeddingResponseRejectsInvalidIndexes(t *testing.T) {
-	tests := map[string]string{
-		"mixed":     `{"data":[{"index":0,"embedding":[1,0]},{"embedding":[0,1]}]}`,
-		"duplicate": `{"data":[{"index":0,"embedding":[1,0]},{"index":0,"embedding":[0,1]}]}`,
-		"fraction":  `{"data":[{"index":0.5,"embedding":[1,0]}]}`,
-	}
-	for name, body := range tests {
-		t.Run(name, func(t *testing.T) {
-			if _, err := parseEmbeddingResponse([]byte(body)); err == nil {
-				t.Fatal("invalid indexed embedding response was accepted")
-			}
-		})
+func TestEmbedTextsPreservesWorkflowStatusErrorText(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "upstream detail should stay hidden", http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	_, err := embedTexts(t.Context(), AIConfig{
+		Endpoint: server.URL,
+		Model:    "test-model",
+		Timeout:  time.Second,
+	}, []string{"workflow"})
+	if err == nil || err.Error() != "embedding endpoint returned 429 Too Many Requests" {
+		t.Fatalf("workflow embedding error=%v", err)
 	}
 }
 

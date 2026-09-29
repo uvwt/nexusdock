@@ -80,6 +80,50 @@ func TestParseSimpleEmbeddingResponse(t *testing.T) {
 	}
 }
 
+func TestParseSingleEmbeddingResponseRemainsRecallOnlyCompatibility(t *testing.T) {
+	vectors, err := parseEmbeddingResponse([]byte(`{"embedding":[1,0]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(vectors) != 1 || len(vectors[0]) != 2 || vectors[0][0] != 1 {
+		t.Fatalf("unexpected vectors: %#v", vectors)
+	}
+}
+
+func TestEmbeddingEndpointPreservesExplicitRecallPath(t *testing.T) {
+	path := ""
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		path = r.URL.Path
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"index": 0, "embedding": []float64{1, 0}}}})
+	}))
+	defer server.Close()
+
+	svc := NewEmbeddingService(newTestStore(t), EmbeddingConfig{Enabled: true, Endpoint: server.URL + "/custom/embed"})
+	vectors, err := svc.embed(t.Context(), []string{"recall"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path != "/custom/embed" {
+		t.Fatalf("recall embedding path=%q", path)
+	}
+	if len(vectors) != 1 {
+		t.Fatalf("unexpected vectors: %#v", vectors)
+	}
+}
+
+func TestEmbeddingPreservesRecallStatusErrorText(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "rate limited", http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
+	svc := NewEmbeddingService(newTestStore(t), EmbeddingConfig{Enabled: true, Endpoint: server.URL})
+	_, err := svc.embed(t.Context(), []string{"recall"})
+	if err == nil || err.Error() != "embedding endpoint returned HTTP 429: rate limited" {
+		t.Fatalf("recall embedding error=%v", err)
+	}
+}
+
 func fakeEmbeddingVector(text string) []float64 {
 	lower := strings.ToLower(text)
 	if strings.Contains(lower, "deploy") || strings.Contains(lower, "endpoint") {

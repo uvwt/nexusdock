@@ -13,31 +13,6 @@ import (
 	"time"
 )
 
-func TestParseEmbeddingResponseRespectsOpenAIIndexes(t *testing.T) {
-	vectors, err := parseEmbeddingResponse([]byte(`{"data":[{"index":1,"embedding":[0,1]},{"index":0,"embedding":[1,0]}]}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(vectors) != 2 || vectors[0][0] != 1 || vectors[1][1] != 1 {
-		t.Fatalf("indexed vectors were not restored to request order: %#v", vectors)
-	}
-}
-
-func TestParseEmbeddingResponseRejectsInvalidIndexes(t *testing.T) {
-	tests := map[string]string{
-		"mixed":     `{"data":[{"index":0,"embedding":[1,0]},{"embedding":[0,1]}]}`,
-		"duplicate": `{"data":[{"index":0,"embedding":[1,0]},{"index":0,"embedding":[0,1]}]}`,
-		"fraction":  `{"data":[{"index":0.5,"embedding":[1,0]}]}`,
-	}
-	for name, body := range tests {
-		t.Run(name, func(t *testing.T) {
-			if _, err := parseEmbeddingResponse([]byte(body)); err == nil {
-				t.Fatal("invalid indexed embedding response was accepted")
-			}
-		})
-	}
-}
-
 func TestEmbeddingReindexRejectsDimensionMismatch(t *testing.T) {
 	store := newTestStore(t)
 	for _, title := range []string{"First card", "Second card"} {

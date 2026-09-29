@@ -10,17 +10,13 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/uvwt/nexusdock/internal/recall"
+	"github.com/uvwt/nexusdock/internal/embedding"
 )
-
-// maxEmbeddingResponseBytes 限制 embedding 响应体大小，防止异常上游耗尽内存。
-const maxEmbeddingResponseBytes = 32 << 20
 
 // errVectorIndexStale 表示索引文件的 embedding 模型或 Registry generation 已过期；
 // 状态报告按 stale 处理（提示重建），而不是当成索引损坏。
@@ -333,141 +329,24 @@ func embedTexts(ctx context.Context, ai AIConfig, texts []string) ([][]float64, 
 	}
 	model := strings.TrimSpace(ai.Model)
 	if model == "" {
-		model = recall.DefaultEmbeddingModel
-	}
-	payload, err := json.Marshal(map[string]any{"model": model, "input": texts})
-	if err != nil {
-		return nil, fmt.Errorf("encode embedding request: %w", err)
+		model = embedding.DefaultModel
 	}
 	timeout := ai.Timeout
 	if timeout <= 0 {
-		timeout = recall.DefaultEmbeddingTimeout
+		timeout = embedding.DefaultTimeout
 	}
-	reqCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodPost, endpoint, bytes.NewReader(payload))
+	vectors, err := embedding.NewClient(timeout).Embed(ctx, embedding.Request{
+		URL: endpoint, Model: model, APIKey: ai.APIKey, Inputs: texts,
+	})
 	if err != nil {
+		var statusErr *embedding.StatusError
+		if errors.As(err, &statusErr) {
+			// Workflow 历史错误只暴露 HTTP status，不把上游响应体带到 match/reindex 边界。
+			return nil, fmt.Errorf("embedding endpoint returned %s", statusErr.Status)
+		}
 		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if token := strings.TrimSpace(ai.APIKey); token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-	resp, err := (&http.Client{Timeout: timeout}).Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxEmbeddingResponseBytes+1))
-	if err != nil {
-		return nil, fmt.Errorf("read embedding response: %w", err)
-	}
-	if len(data) > maxEmbeddingResponseBytes {
-		return nil, fmt.Errorf("embedding response exceeds %d bytes", maxEmbeddingResponseBytes)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("embedding endpoint returned %s", resp.Status)
-	}
-	return parseEmbeddingResponse(data)
-}
-
-// parseEmbeddingResponse 同时兼容两种常见响应形态：
-// {"embeddings": [[...]]} 与 OpenAI 的 {"data": [{"index": n, "embedding": [...]}]}；
-// data 形态必须尊重 index 字段还原请求顺序，且不允许混用有无 index 的条目。
-func parseEmbeddingResponse(data []byte) ([][]float64, error) {
-	var raw map[string]any
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil, err
-	}
-	if value, exists := raw["embeddings"]; exists {
-		values, ok := value.([]any)
-		if !ok {
-			return nil, errors.New("embedding response embeddings is not an array")
-		}
-		return vectorsFromArray(values)
-	}
-	if value, exists := raw["data"]; exists {
-		dataValues, ok := value.([]any)
-		if !ok {
-			return nil, errors.New("embedding response data is not an array")
-		}
-		vectors := make([][]float64, len(dataValues))
-		indexMode := -1
-		for position, item := range dataValues {
-			entry, ok := item.(map[string]any)
-			if !ok {
-				return nil, errors.New("embedding data item is not an object")
-			}
-			array, ok := entry["embedding"].([]any)
-			if !ok {
-				return nil, errors.New("embedding data item missing embedding")
-			}
-			vector, err := vectorFromArray(array)
-			if err != nil {
-				return nil, err
-			}
-			rawIndex, hasIndex := entry["index"]
-			mode := 0
-			if hasIndex {
-				mode = 1
-			}
-			if indexMode == -1 {
-				indexMode = mode
-			} else if indexMode != mode {
-				return nil, errors.New("embedding response mixes indexed and unindexed items")
-			}
-			target := position
-			if hasIndex {
-				index, ok := rawIndex.(float64)
-				if !ok || index != math.Trunc(index) || index < 0 || int(index) >= len(dataValues) {
-					return nil, fmt.Errorf("embedding response index is invalid: %v", rawIndex)
-				}
-				target = int(index)
-			}
-			if vectors[target] != nil {
-				return nil, fmt.Errorf("embedding response index %d is duplicated", target)
-			}
-			vectors[target] = vector
-		}
-		for index, vector := range vectors {
-			if vector == nil {
-				return nil, fmt.Errorf("embedding response index %d is missing", index)
-			}
-		}
-		return vectors, nil
-	}
-	return nil, errors.New("embedding response missing data or embeddings")
-}
-
-func vectorsFromArray(values []any) ([][]float64, error) {
-	vectors := make([][]float64, 0, len(values))
-	for _, item := range values {
-		arr, ok := item.([]any)
-		if !ok {
-			return nil, errors.New("embedding item is not an array")
-		}
-		vector, err := vectorFromArray(arr)
-		if err != nil {
-			return nil, err
-		}
-		vectors = append(vectors, vector)
 	}
 	return vectors, nil
-}
-
-func vectorFromArray(values []any) ([]float64, error) {
-	vector := make([]float64, 0, len(values))
-	for _, value := range values {
-		n, ok := value.(float64)
-		if !ok {
-			return nil, errors.New("embedding value is not a number")
-		}
-		vector = append(vector, n)
-	}
-	if len(vector) == 0 {
-		return nil, errors.New("embedding vector is empty")
-	}
-	return vector, nil
 }
 
 // vectorText 拼接用于 embedding 的模板全文，顺序固定以保证同一模板文本稳定。

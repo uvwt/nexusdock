@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -16,17 +15,19 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/uvwt/nexusdock/internal/embedding"
 )
 
 const (
-	DefaultEmbeddingModel        = "BAAI/bge-m3"
-	DefaultEmbeddingTimeout      = 30 * time.Second
+	// 保留旧导出名，避免把共享默认值迁移扩大成无关调用方改动。
+	DefaultEmbeddingModel        = embedding.DefaultModel
+	DefaultEmbeddingTimeout      = embedding.DefaultTimeout
 	embeddingBatchSize           = 5
 	embeddingBatchConcurrency    = 2
 	embeddingTextMaxBytes        = 1536
 	embeddingFrontmatterMaxBytes = 512
 	embeddingHeadingsMaxBytes    = 640
-	maxEmbeddingResponseBytes    = 32 << 20
 )
 
 type EmbeddingConfig struct {
@@ -41,7 +42,7 @@ type EmbeddingService struct {
 	store     *Store
 	cfg       EmbeddingConfig
 	indexPath string
-	client    *http.Client
+	client    *embedding.Client
 	mu        sync.Mutex
 }
 
@@ -134,7 +135,7 @@ func NewEmbeddingService(store *Store, cfg EmbeddingConfig) *EmbeddingService {
 	if store != nil {
 		indexPath = filepath.Join(store.Root(), ".recall", "embedding-index.json")
 	}
-	return &EmbeddingService{store: store, cfg: cfg, indexPath: indexPath, client: &http.Client{Timeout: cfg.Timeout}}
+	return &EmbeddingService{store: store, cfg: cfg, indexPath: indexPath, client: embedding.NewClient(cfg.Timeout)}
 }
 
 func (s *EmbeddingService) Enabled() bool {
@@ -504,58 +505,34 @@ func (s *EmbeddingService) embed(ctx context.Context, texts []string) ([][]float
 	if len(texts) == 0 {
 		return [][]float64{}, nil
 	}
-	endpoint := strings.TrimSpace(s.cfg.Endpoint)
-	if endpoint == "" {
-		return nil, errors.New("embedding endpoint is empty")
-	}
-	endpointURL, payload, err := embeddingRequest(endpoint, s.cfg.Model, texts)
+	endpointURL, err := embeddingEndpoint(s.cfg.Endpoint)
 	if err != nil {
 		return nil, err
 	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return nil, fmt.Errorf("encode embedding request: %w", err)
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpointURL, bytes.NewReader(body))
+	vectors, err := s.client.Embed(ctx, embedding.Request{
+		URL: endpointURL, Model: s.cfg.Model, APIKey: s.cfg.APIKey, Inputs: texts,
+	})
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
-	if token := strings.TrimSpace(s.cfg.APIKey); token != "" {
-		req.Header.Set("Authorization", "Bearer "+token)
-	}
-	res, err := s.client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer res.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(res.Body, maxEmbeddingResponseBytes+1))
-	if err != nil {
-		return nil, fmt.Errorf("read embedding response: %w", err)
-	}
-	if len(data) > maxEmbeddingResponseBytes {
-		return nil, fmt.Errorf("embedding response exceeds %d bytes", maxEmbeddingResponseBytes)
-	}
-	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, fmt.Errorf("embedding endpoint returned HTTP %d: %s", res.StatusCode, truncateUTF8(strings.TrimSpace(string(data)), 4096))
-	}
-	return parseEmbeddingResponse(data)
+	return vectors, nil
 }
 
-func embeddingRequest(endpoint, model string, texts []string) (string, map[string]any, error) {
+// embeddingEndpoint 保留 Recall 的历史 endpoint 规则：仅 URL path 为空时补
+// /v1/embeddings；用户显式配置的任意非空 path 原样调用。
+func embeddingEndpoint(endpoint string) (string, error) {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return "", errors.New("embedding endpoint is empty")
+	}
 	u, err := url.Parse(endpoint)
 	if err != nil {
-		return "", nil, err
+		return "", err
 	}
-	path := strings.TrimRight(u.Path, "/")
-	if path == "" {
+	if strings.TrimRight(u.Path, "/") == "" {
 		u.Path = "/v1/embeddings"
-		return u.String(), map[string]any{"model": model, "input": texts}, nil
 	}
-	if strings.HasSuffix(path, "/embed") {
-		return u.String(), map[string]any{"model": model, "input": texts}, nil
-	}
-	return u.String(), map[string]any{"model": model, "input": texts}, nil
+	return u.String(), nil
 }
 
 func parseEmbeddingResponse(data []byte) ([][]float64, error) {
@@ -563,66 +540,11 @@ func parseEmbeddingResponse(data []byte) ([][]float64, error) {
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return nil, err
 	}
-	if dataValue, ok := raw["data"]; ok {
-		items, ok := dataValue.([]any)
-		if !ok {
-			return nil, errors.New("embedding response data is not an array")
-		}
-		vectors := make([][]float64, len(items))
-		indexMode := -1
-		for position, item := range items {
-			obj, ok := item.(map[string]any)
-			if !ok {
-				return nil, errors.New("embedding response item is not an object")
-			}
-			vector, err := vectorFromAny(obj["embedding"])
-			if err != nil {
-				return nil, err
-			}
-			rawIndex, hasIndex := obj["index"]
-			mode := 0
-			if hasIndex {
-				mode = 1
-			}
-			if indexMode == -1 {
-				indexMode = mode
-			} else if indexMode != mode {
-				return nil, errors.New("embedding response mixes indexed and unindexed items")
-			}
-			target := position
-			if hasIndex {
-				index, ok := rawIndex.(float64)
-				if !ok || index != math.Trunc(index) || index < 0 || int(index) >= len(items) {
-					return nil, fmt.Errorf("embedding response index is invalid: %v", rawIndex)
-				}
-				target = int(index)
-			}
-			if vectors[target] != nil {
-				return nil, fmt.Errorf("embedding response index %d is duplicated", target)
-			}
-			vectors[target] = vector
-		}
-		for index, vector := range vectors {
-			if vector == nil {
-				return nil, fmt.Errorf("embedding response index %d is missing", index)
-			}
-		}
-		return vectors, nil
+	if _, ok := raw["data"]; ok {
+		return embedding.ParseResponse(data)
 	}
-	if values, ok := raw["embeddings"]; ok {
-		items, ok := values.([]any)
-		if !ok {
-			return nil, errors.New("embedding response embeddings is not an array")
-		}
-		vectors := make([][]float64, 0, len(items))
-		for _, item := range items {
-			vector, err := vectorFromAny(item)
-			if err != nil {
-				return nil, err
-			}
-			vectors = append(vectors, vector)
-		}
-		return vectors, nil
+	if _, ok := raw["embeddings"]; ok {
+		return embedding.ParseResponse(data)
 	}
 	if value, ok := raw["embedding"]; ok {
 		vector, err := vectorFromAny(value)
