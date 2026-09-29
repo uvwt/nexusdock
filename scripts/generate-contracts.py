@@ -841,6 +841,44 @@ def build_schemas() -> dict[str, dict[str, Any]]:
         },
         ("code", "device_id", "name"),
     )
+    schemas["RuntimeDiagnosticStage"] = obj(
+        "单次运行调用中的稳定阶段耗时。",
+        {
+            "name": scalar("string", "稳定阶段名称；未知新阶段保持原值以支持前向兼容。", minLength=1),
+            "started_offset_ms": scalar("number", "相对调用开始时间的毫秒偏移。", minimum=0),
+            "duration_ms": scalar("number", "阶段耗时毫秒。", minimum=0),
+            "success": scalar("boolean", "阶段是否成功。"),
+        },
+        ("name", "started_offset_ms", "duration_ms", "success"),
+    )
+    schemas["RuntimeDiagnosticCall"] = obj(
+        "AgentDock 内存中最近一次运行调用的零 Payload 诊断视图。",
+        {
+            "id": scalar("string", "节点进程内单调递增的调用 ID。"),
+            "tool": scalar("string", "工具名称。"),
+            "source": enum("调用来源。", ["internal", "mcp", "nexus"]),
+            "trace_id": scalar("string", "存在上游 W3C Trace Context 时的 Trace ID。"),
+            "started_at": TIMESTAMP,
+            "duration_ms": scalar("number", "调用总耗时毫秒。", minimum=0),
+            "success": scalar("boolean", "调用是否成功。"),
+            "error_code": scalar("string", "稳定错误码。"),
+            "error_category": scalar("string", "稳定错误分类。"),
+            "stages": array("内部稳定阶段耗时。", ref("RuntimeDiagnosticStage")),
+        },
+        ("id", "tool", "source", "started_at", "duration_ms", "success"),
+    )
+    schemas["RuntimeDiagnosticsResponse"] = obj(
+        "指定在线 AgentDock 节点的最近运行调用；数据仅按需从节点内存读取。",
+        {
+            "ok": scalar("boolean", "请求是否成功。"),
+            "node_id": scalar("string", "AgentDock 节点 ID。"),
+            "items": array("最近调用，按最新优先。", ref("RuntimeDiagnosticCall")),
+            "count": scalar("integer", "返回调用数量。", minimum=0),
+            "source": scalar("string", "固定为 agentdock-runtime-api。"),
+        },
+        ("ok", "node_id", "items", "count", "source"),
+    )
+
     schemas["AgentDockNodeUpdateRequest"] = obj(
         "更新 AgentDock 节点显示信息或启用状态。",
         {
@@ -1182,6 +1220,15 @@ def build_openapi(schemas: dict[str, Any]) -> dict[str, Any]:
             "delete": operation("deleteAgentDockNode", "删除 AgentDock 节点并撤销 Device Token", params=[p("RuntimeNodeId")]),
         },
         "/v1/runtime/nodes/{nodeID}/overview": {"get": operation("getRuntimeOverview", "读取指定 AgentDock 节点的 Runtime 概览", params=[p("RuntimeNodeId")])},
+        "/v1/runtime/nodes/{nodeID}/diagnostics": {
+            "get": operation(
+                "getRuntimeDiagnostics",
+                "按需读取指定在线 AgentDock 节点的最近运行诊断",
+                params=[p("RuntimeNodeId")],
+                success=ok(ref("RuntimeDiagnosticsResponse")),
+                additional_success={"501": error},
+            )
+        },
         "/v1/runtime/nodes/{nodeID}/tasks": {
             "get": operation(
                 "listRuntimeTasks",

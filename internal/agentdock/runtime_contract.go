@@ -125,6 +125,29 @@ func (p runtimeParser) optionalBool(field string, value any) (bool, error) {
 	}
 }
 
+func (p runtimeParser) requiredBool(field string, value any) (bool, error) {
+	typed, ok := value.(bool)
+	if !ok {
+		return false, p.fail(field, fmt.Sprintf("应为布尔值，实际为 %T", value))
+	}
+	return typed, nil
+}
+
+func (p runtimeParser) requiredNumber(field string, value any) (float64, error) {
+	switch typed := value.(type) {
+	case float64:
+		return typed, nil
+	case float32:
+		return float64(typed), nil
+	case int:
+		return float64(typed), nil
+	case int64:
+		return float64(typed), nil
+	default:
+		return 0, p.fail(field, fmt.Sprintf("应为数值，实际为 %T", value))
+	}
+}
+
 // optionalStringArray 在字段缺失或为 null 时返回空切片；元素必须是字符串。
 // 返回非 nil 空切片，保持与旧实现 opsStringArray 一致的序列化行为（[] 而不是 null）。
 func (p runtimeParser) optionalStringArray(field string, value any) ([]string, error) {

@@ -2,6 +2,7 @@ package agentdock
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -512,5 +513,63 @@ func TestContractErrorAcrossNodesCarriesContext(t *testing.T) {
 	}
 	if !strings.Contains(errA.Error(), "nodeA") || !strings.Contains(errB.Error(), "nodeB") {
 		t.Fatalf("错误缺少节点上下文: %v / %v", errA, errB)
+	}
+}
+
+func TestParseRuntimeDiagnostics(t *testing.T) {
+	payload := map[string]any{"recent_calls": []any{map[string]any{
+		"id": "42", "tool": "exec_command", "source": "nexus",
+		"trace_id":   "4bf92f3577b34da6a3ce929d0e0e4736",
+		"started_at": "2026-09-29T07:00:00Z", "duration_ms": 12.5, "success": false,
+		"error_code": "COMMAND_FAILED", "error_category": "runtime",
+		"stages": []any{map[string]any{
+			"name": "command.start", "started_offset_ms": 1.0, "duration_ms": 2.5, "success": true,
+		}},
+	}}}
+	calls, err := parseRuntimeDiagnostics("node1", payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 1 || calls[0].ID != "42" || calls[0].Tool != "exec_command" || len(calls[0].Stages) != 1 {
+		t.Fatalf("diagnostics = %#v", calls)
+	}
+}
+
+func TestParseRuntimeDiagnosticsAcceptsFutureStageName(t *testing.T) {
+	payload := map[string]any{"recent_calls": []any{map[string]any{
+		"id": "43", "tool": "future_tool", "source": "internal",
+		"started_at": "2026-09-29T07:00:00Z", "duration_ms": 1.0, "success": true,
+		"stages": []any{map[string]any{
+			"name": "future.stable_stage", "started_offset_ms": 0.0, "duration_ms": 1.0, "success": true,
+		}},
+	}}}
+	calls, err := parseRuntimeDiagnostics("node1", payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 1 || len(calls[0].Stages) != 1 || calls[0].Stages[0].Name != "future.stable_stage" {
+		t.Fatalf("diagnostics = %#v", calls)
+	}
+}
+
+func TestParseRuntimeDiagnosticsRejectsContractDrift(t *testing.T) {
+	_, err := parseRuntimeDiagnostics("node1", map[string]any{
+		"recent_calls": []any{map[string]any{
+			"id": "1", "tool": "tool", "source": "unknown", "started_at": "not-time",
+			"duration_ms": -1.0, "success": true,
+		}},
+	})
+	var contractErr *ContractError
+	if !errors.As(err, &contractErr) || contractErr.Operation != "GET /internal/runtime/diagnostics" {
+		t.Fatalf("contract error = %#v", err)
+	}
+}
+
+func TestRuntimeDiagnosticsUnsupportedCodes(t *testing.T) {
+	for _, code := range []string{"NOT_FOUND", "DIAGNOSTICS_UNSUPPORTED"} {
+		err := normalizeRuntimeDiagnosticsError(&RemoteError{Code: code, Category: "not_found"})
+		if !errors.Is(err, ErrRuntimeDiagnosticsUnsupported) {
+			t.Fatalf("code %s normalized to %#v", code, err)
+		}
 	}
 }

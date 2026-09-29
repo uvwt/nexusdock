@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // 本文件定义 AgentDock Runtime API 在 Nexus 边界内的 DTO 与解析逻辑。
@@ -20,6 +21,26 @@ var (
 	runtimeReviewStatuses = []string{"not_started", "pass", "failed"}
 	runtimeStepStatuses   = []string{"pending", "in_progress", "completed"}
 )
+
+type RuntimeDiagnosticStage struct {
+	Name            string  `json:"name"`
+	StartedOffsetMS float64 `json:"started_offset_ms"`
+	DurationMS      float64 `json:"duration_ms"`
+	Success         bool    `json:"success"`
+}
+
+type RuntimeDiagnosticCall struct {
+	ID            string                   `json:"id"`
+	Tool          string                   `json:"tool"`
+	Source        string                   `json:"source"`
+	TraceID       string                   `json:"trace_id,omitempty"`
+	StartedAt     string                   `json:"started_at"`
+	DurationMS    float64                  `json:"duration_ms"`
+	Success       bool                     `json:"success"`
+	ErrorCode     string                   `json:"error_code,omitempty"`
+	ErrorCategory string                   `json:"error_category,omitempty"`
+	Stages        []RuntimeDiagnosticStage `json:"stages,omitempty"`
+}
 
 // RuntimeTaskStep 是任务的执行步骤。列表项里的 current_step 只携带 id/title/status，
 // 任务详情中的完整步骤会额外带 phase/updated_at，缺失时保持零值。
@@ -174,6 +195,107 @@ type RuntimeTaskDeleteResult struct {
 	// DeletedTask 是上游删除确认的回显，UI 只依赖成功状态；保留原始 JSON 透传，
 	// 避免为一条不再被解读的回显维护完整任务 DTO。
 	DeletedTask json.RawMessage
+}
+
+func parseRuntimeDiagnostics(node string, payload map[string]any) ([]RuntimeDiagnosticCall, error) {
+	const operation = "GET /internal/runtime/diagnostics"
+	p := runtimeParser{node: node, operation: operation}
+	raw, err := p.array("recent_calls", payload["recent_calls"], false)
+	if err != nil {
+		return nil, err
+	}
+	calls := make([]RuntimeDiagnosticCall, 0, len(raw))
+	for i, item := range raw {
+		field := fieldIndex("recent_calls", i)
+		object, err := p.object(field, item, false)
+		if err != nil {
+			return nil, err
+		}
+		id, err := p.requiredString(field+".id", object["id"])
+		if err != nil {
+			return nil, err
+		}
+		tool, err := p.requiredString(field+".tool", object["tool"])
+		if err != nil {
+			return nil, err
+		}
+		source, err := p.requiredEnum(field+".source", object["source"], []string{"internal", "mcp", "nexus"})
+		if err != nil {
+			return nil, err
+		}
+		traceID, err := p.optionalString(field+".trace_id", object["trace_id"])
+		if err != nil {
+			return nil, err
+		}
+		startedAt, err := p.requiredString(field+".started_at", object["started_at"])
+		if err != nil {
+			return nil, err
+		}
+		if _, err := time.Parse(time.RFC3339Nano, startedAt); err != nil {
+			return nil, p.fail(field+".started_at", "应为 RFC3339 时间")
+		}
+		durationMS, err := p.requiredNumber(field+".duration_ms", object["duration_ms"])
+		if err != nil {
+			return nil, err
+		}
+		if durationMS < 0 {
+			return nil, p.fail(field+".duration_ms", "不得为负数")
+		}
+		success, err := p.requiredBool(field+".success", object["success"])
+		if err != nil {
+			return nil, err
+		}
+		errorCode, err := p.optionalString(field+".error_code", object["error_code"])
+		if err != nil {
+			return nil, err
+		}
+		errorCategory, err := p.optionalString(field+".error_category", object["error_category"])
+		if err != nil {
+			return nil, err
+		}
+		stageRaw, err := p.array(field+".stages", object["stages"], true)
+		if err != nil {
+			return nil, err
+		}
+		stages := make([]RuntimeDiagnosticStage, 0, len(stageRaw))
+		for j, stageValue := range stageRaw {
+			stageField := fieldIndex(field+".stages", j)
+			stageObject, err := p.object(stageField, stageValue, false)
+			if err != nil {
+				return nil, err
+			}
+			// Stage 名称是可扩展的稳定标识。Nexus 只要求非空字符串；
+			// 未知新阶段由 UI 原样展示，避免 AgentDock 先升级时整份诊断契约失效。
+			name, err := p.requiredString(stageField+".name", stageObject["name"])
+			if err != nil {
+				return nil, err
+			}
+			startedOffsetMS, err := p.requiredNumber(stageField+".started_offset_ms", stageObject["started_offset_ms"])
+			if err != nil {
+				return nil, err
+			}
+			duration, err := p.requiredNumber(stageField+".duration_ms", stageObject["duration_ms"])
+			if err != nil {
+				return nil, err
+			}
+			if startedOffsetMS < 0 || duration < 0 {
+				return nil, p.fail(stageField, "阶段偏移与耗时不得为负数")
+			}
+			stageSuccess, err := p.requiredBool(stageField+".success", stageObject["success"])
+			if err != nil {
+				return nil, err
+			}
+			stages = append(stages, RuntimeDiagnosticStage{
+				Name: name, StartedOffsetMS: startedOffsetMS, DurationMS: duration, Success: stageSuccess,
+			})
+		}
+		calls = append(calls, RuntimeDiagnosticCall{
+			ID: id, Tool: tool, Source: source, TraceID: traceID, StartedAt: startedAt,
+			DurationMS: durationMS, Success: success, ErrorCode: errorCode,
+			ErrorCategory: errorCategory, Stages: stages,
+		})
+	}
+	return calls, nil
 }
 
 // parseRuntimeTaskList 解析 GET /internal/runtime/tasks 响应。

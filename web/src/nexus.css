@@ -534,6 +534,97 @@ summary::-webkit-details-marker { display: none; }
 .agentdock-pair-command button:focus-visible { outline: 2px solid var(--nx-text); outline-offset: 2px; }
 .agentdock-node-delete { padding: 10px 14px; border-top: 1px solid var(--nx-line); }
 
+/* Runtime：单节点运行诊断 */
+.diagnostics-page { min-width: 0; display: grid; gap: 10px; }
+.diagnostics-toolbar {
+  min-width: 0; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  border: 1px solid var(--nx-line); border-radius: 7px; background: var(--nx-surface);
+}
+.diagnostics-toolbar > div { min-width: 0; display: grid; gap: 2px; }
+.diagnostics-toolbar strong { font-size: 12px; }
+.diagnostics-toolbar span { color: var(--nx-muted); font-size: 10px; }
+.diagnostics-state-card {
+  min-height: 150px; padding: 22px; display: flex; align-items: center; justify-content: center; gap: 12px;
+  border: 1px solid var(--nx-line); border-radius: 7px; background: var(--nx-surface); color: var(--nx-muted);
+}
+.diagnostics-state-card.is-compact { min-height: 90px; font-size: 11px; }
+.diagnostics-state-card > svg { flex: none; }
+.diagnostics-state-card > div { max-width: 520px; }
+.diagnostics-state-card strong { display: block; color: var(--nx-text); font-size: 13px; }
+.diagnostics-state-card p { margin: 4px 0 0; font-size: 11px; line-height: 1.55; }
+
+.diagnostics-workspace {
+  min-width: 0; display: grid; grid-template-columns: var(--nx-master-rail-width) minmax(0, 1fr);
+  gap: var(--nx-master-detail-gap); align-items: start;
+}
+.diagnostics-rail {
+  max-height: calc(100vh - 176px); overflow: auto; padding: 6px; display: grid; gap: 3px;
+  border: 1px solid var(--nx-line); border-radius: 7px; background: var(--nx-surface);
+}
+.diagnostics-call-row {
+  width: 100%; min-width: 0; padding: 9px 10px; display: grid; gap: 5px; text-align: left;
+  border: 1px solid transparent; border-radius: 5px; background: transparent; cursor: pointer;
+}
+.diagnostics-call-row:hover { background: var(--nx-soft-2); }
+.diagnostics-call-row.is-selected { border-color: var(--nx-line-strong); background: var(--nx-soft); }
+.diagnostics-call-main,
+.diagnostics-call-meta { min-width: 0; display: flex; align-items: center; gap: 7px; }
+.diagnostics-call-main { justify-content: space-between; }
+.diagnostics-call-main strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+.diagnostics-call-meta { color: var(--nx-muted); font-size: 9px; }
+.diagnostics-call-meta span:not(:last-child)::after,
+.diagnostics-call-meta time::after { content: "·"; margin-left: 7px; color: var(--nx-subtle); }
+
+.diagnostics-result {
+  flex: none; padding: 2px 6px; border-radius: 999px; font-size: 9px; font-weight: 650;
+}
+.diagnostics-result.is-large { padding: 4px 8px; font-size: 10px; }
+.diagnostics-result.is-success { color: var(--nx-success); background: var(--nx-success-bg); }
+.diagnostics-result.is-failure { color: var(--nx-danger); background: var(--nx-danger-bg); }
+
+.diagnostics-detail {
+  min-height: 320px; padding: 15px; border: 1px solid var(--nx-line); border-radius: 7px; background: var(--nx-surface);
+}
+.diagnostics-detail > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.diagnostics-detail > header > div { min-width: 0; }
+.diagnostics-detail > header span:first-child { color: var(--nx-muted); font-size: 9px; text-transform: uppercase; letter-spacing: .08em; }
+.diagnostics-detail h3 { margin: 3px 0 0; overflow-wrap: anywhere; font-size: 17px; }
+.diagnostics-detail header p { margin: 3px 0 0; color: var(--nx-muted); font-size: 10px; }
+
+.diagnostics-summary {
+  margin: 14px 0 0; padding: 10px 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px 18px; border-top: 1px solid var(--nx-line); border-bottom: 1px solid var(--nx-line);
+}
+.diagnostics-summary > div { min-width: 0; display: grid; gap: 2px; }
+.diagnostics-summary dt { color: var(--nx-muted); font-size: 9px; }
+.diagnostics-summary dd { margin: 0; overflow-wrap: anywhere; font-size: 11px; }
+.diagnostics-summary code { font-size: 10px; }
+
+.diagnostics-stages { margin-top: 14px; display: grid; gap: 9px; }
+.diagnostics-stages > header { display: flex; align-items: center; justify-content: space-between; }
+.diagnostics-stages > header span { font-size: 11px; font-weight: 650; }
+.diagnostics-stages > header small,
+.diagnostics-stage small,
+.diagnostics-muted { color: var(--nx-muted); font-size: 9px; }
+.diagnostics-muted { margin: 0; }
+.diagnostics-stage { display: grid; gap: 4px; }
+.diagnostics-stage-line { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 10px; }
+.diagnostics-stage-line strong { font-size: 10px; }
+.diagnostics-stage-track { height: 4px; overflow: hidden; border-radius: 999px; background: var(--nx-soft); }
+.diagnostics-stage-track span { height: 100%; display: block; border-radius: inherit; background: var(--nx-subtle); }
+.diagnostics-stage-track span.is-success { background: var(--nx-success); }
+.diagnostics-stage-track span.is-failure { background: var(--nx-danger); }
+
+.diagnostics-advanced { margin-top: 15px; padding-top: 10px; border-top: 1px solid var(--nx-line); }
+.diagnostics-advanced summary { width: fit-content; color: var(--nx-muted); cursor: pointer; font-size: 10px; }
+.diagnostics-advanced > div {
+  margin-top: 8px; padding: 8px; display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px; align-items: center; border-radius: 5px; background: var(--nx-soft-2);
+}
+.diagnostics-advanced span { color: var(--nx-muted); font-size: 9px; }
+.diagnostics-advanced code { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; }
+
+
 /* Runtime：任务与 Skill */
 .runtime-standalone-page,
 .ops-page { display: grid; gap: 12px; }
@@ -1264,6 +1355,7 @@ summary::-webkit-details-marker { display: none; }
   .ops-segmented { overflow-x: auto; }
   .ops-segmented button { flex: 0 0 auto; }
   .ops-master-detail,
+  .diagnostics-workspace,
   .skills-workspace,
   .plugin-layout,
   .workflow-layout,

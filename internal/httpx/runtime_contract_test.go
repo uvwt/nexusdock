@@ -149,6 +149,38 @@ func TestRuntimeOverviewKeepsExistingMetricsWhenPluginContractDrifts(t *testing.
 	}
 }
 
+func TestRuntimeDiagnosticsThroughBridgeReturnsZeroPayloadView(t *testing.T) {
+	_, mux, nodeID := runtimeContractTestServer(t, map[string]string{
+		"/internal/runtime/diagnostics": "{\"ok\":true,\"source\":\"agentdock-runtime-api\",\"recent_calls\":[{\"id\":\"9\",\"tool\":\"exec_command\",\"source\":\"nexus\",\"trace_id\":\"4bf92f3577b34da6a3ce929d0e0e4736\",\"started_at\":\"2026-09-29T07:00:00.123456Z\",\"duration_ms\":25.5,\"success\":false,\"error_code\":\"COMMAND_FAILED\",\"error_category\":\"runtime\",\"stages\":[{\"name\":\"command.start\",\"started_offset_ms\":1.2,\"duration_ms\":3.4,\"success\":true}]}]}",
+	})
+	payload := runtimeContractRequest(t, mux, http.MethodGet, "/v1/runtime/nodes/"+nodeID+"/diagnostics")
+	if payload["ok"] != true || payload["count"] != float64(1) {
+		t.Fatalf("diagnostics response = %#v", payload)
+	}
+	items, _ := payload["items"].([]any)
+	call, _ := items[0].(map[string]any)
+	if call["id"] != "9" || call["tool"] != "exec_command" || call["source"] != "nexus" {
+		t.Fatalf("diagnostic call = %#v", call)
+	}
+	stages, _ := call["stages"].([]any)
+	if len(stages) != 1 {
+		t.Fatalf("diagnostic stages = %#v", call["stages"])
+	}
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	lower := strings.ToLower(string(body))
+	for _, forbidden := range []string{
+		"span_id", "arguments", "result", "output", "stdout", "stderr", "command", "command_line", "path",
+		"error_message", "stack", "tool_stats", "process", "p50_duration_ms", "p95_duration_ms", "p99_duration_ms",
+	} {
+		if strings.Contains(lower, "\""+forbidden+"\"") {
+			t.Fatalf("diagnostics leaked %q: %s", forbidden, lower)
+		}
+	}
+}
+
 func TestRuntimeTasksThroughBridgeReturnsTypedView(t *testing.T) {
 	_, mux, nodeID := runtimeContractTestServer(t, map[string]string{
 		"/internal/runtime/tasks": `{"ok": true, "source": "agentdock-api", "action": "list", "count": 1, "tasks": [{

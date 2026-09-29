@@ -101,11 +101,27 @@ func TestRouterLeavesLoginAssetsPublicWhileProtectingUI(t *testing.T) {
 	server := newNodeTestServer(t)
 	handler := server.Handler()
 
-	asset := httptest.NewRequest(http.MethodGet, "/ui/assets/index-BjxNsJ2Y.css", nil)
+	login := httptest.NewRequest(http.MethodGet, "/login", nil)
+	loginResponse := httptest.NewRecorder()
+	handler.ServeHTTP(loginResponse, login)
+	if loginResponse.Code != http.StatusOK {
+		t.Fatalf("login page unavailable: status=%d body=%s", loginResponse.Code, loginResponse.Body.String())
+	}
+	body := loginResponse.Body.String()
+	assetStart := strings.Index(body, "/ui/assets/")
+	if assetStart < 0 {
+		t.Fatalf("login page does not reference a built asset: %s", body)
+	}
+	assetEnd := strings.IndexByte(body[assetStart:], '"')
+	if assetEnd < 0 {
+		t.Fatalf("login asset reference is malformed: %s", body[assetStart:])
+	}
+	assetPath := body[assetStart : assetStart+assetEnd]
+	asset := httptest.NewRequest(http.MethodGet, assetPath, nil)
 	assetResponse := httptest.NewRecorder()
 	handler.ServeHTTP(assetResponse, asset)
 	if assetResponse.Code != http.StatusOK {
-		t.Fatalf("login asset unexpectedly required a session: status=%d body=%s", assetResponse.Code, assetResponse.Body.String())
+		t.Fatalf("login asset unexpectedly required a session: path=%s status=%d body=%s", assetPath, assetResponse.Code, assetResponse.Body.String())
 	}
 
 	root := httptest.NewRequest(http.MethodGet, "/", nil)

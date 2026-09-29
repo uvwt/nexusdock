@@ -16,6 +16,7 @@ import MCPAccessPanel from './components/settings/MCPAccessPanel';
 import { ApiError, api, setCSRFToken } from './api/client';
 import WorkflowTemplatesPage from './components/workflows/WorkflowTemplatesPage';
 import { SkillsPage, TaskCenterPage } from './components/runtime/RuntimePages';
+import DiagnosticsPage from './components/runtime/DiagnosticsPage';
 import MCPPage from './components/runtime/MCPPage';
 import PluginPage from './components/runtime/PluginPage';
 import {
@@ -26,7 +27,7 @@ import {
 } from './components/runtime/AgentDockNodes';
 import './nexus.css';
 
-type RuntimeSection = 'tasks' | 'skills' | 'plugins' | 'mcp';
+type RuntimeSection = 'tasks' | 'skills' | 'plugins' | 'mcp' | 'diagnostics';
 type Section = 'home' | 'recall' | 'templates' | RuntimeSection | 'settings';
 type SettingsSection = 'account' | 'mcp' | 'ai' | 'system';
 type Tone = 'ok' | 'warn' | 'danger' | 'info' | 'muted';
@@ -64,6 +65,7 @@ const RUNTIME_SECTIONS: RuntimeSectionMeta[] = [
   { id: 'plugins', label: 'Plugin', icon: Package },
   { id: 'skills', label: 'Skill', icon: Wrench },
   { id: 'mcp', label: 'MCP', icon: Cable },
+  { id: 'diagnostics', label: 'Diagnostics', icon: Activity },
 ];
 
 const NAV: SectionMeta[] = [
@@ -405,6 +407,7 @@ function RuntimeContent({ active, refreshToken, runtimeNodes }: {
     {active === 'skills' && runtimeNodes.selectedNode && <SkillsPage key={runtimeNodes.selectedNode.id} nodeID={runtimeNodes.selectedNode.id} refreshToken={refreshToken} />}
     {active === 'plugins' && runtimeNodes.selectedNode && <PluginPage key={runtimeNodes.selectedNode.id} nodeID={runtimeNodes.selectedNode.id} refreshToken={refreshToken} />}
     {active === 'mcp' && runtimeNodes.selectedNode && <MCPPage key={runtimeNodes.selectedNode.id} nodeID={runtimeNodes.selectedNode.id} refreshToken={refreshToken} addOpen={mcpAddOpen} onAddOpenChange={setMCPAddOpen} />}
+    {active === 'diagnostics' && runtimeNodes.selectedNode && <DiagnosticsPage key={runtimeNodes.selectedNode.id} nodeID={runtimeNodes.selectedNode.id} online={runtimeNodes.selectedNode.online} refreshToken={refreshToken} />}
   </section>;
 }
 

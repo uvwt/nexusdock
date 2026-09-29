@@ -2,6 +2,7 @@ package httpx
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -125,6 +126,7 @@ type runtimeSkillFileContent struct {
 func (s *Server) registerRuntimeRoutes(r chi.Router) {
 	s.registerAgentDockAdminRoutes(r)
 	r.Get("/v1/runtime/nodes/{nodeID}/overview", s.runtimeOverview)
+	r.Get("/v1/runtime/nodes/{nodeID}/diagnostics", s.runtimeDiagnostics)
 	r.Get("/v1/runtime/nodes/{nodeID}/tasks", s.runtimeTasks)
 	r.Get("/v1/runtime/nodes/{nodeID}/tasks/{fileName}", s.runtimeTaskDetail)
 	r.Delete("/v1/runtime/nodes/{nodeID}/tasks/{fileName}", s.runtimeDeleteTask)
@@ -133,6 +135,28 @@ func (s *Server) registerRuntimeRoutes(r chi.Router) {
 	r.Get("/v1/runtime/nodes/{nodeID}/skills/{source}/{skillID}", s.runtimeSkillDetail)
 	s.registerRuntimePluginRoutes(r)
 	s.registerRuntimeMCPRoutes(r)
+}
+
+func (s *Server) runtimeDiagnostics(w http.ResponseWriter, r *http.Request) {
+	nodeID := r.PathValue("nodeID")
+	calls, err := s.agentDockHub.RuntimeDiagnostics(r.Context(), nodeID)
+	if err != nil {
+		if errors.Is(err, agentdock.ErrRuntimeDiagnosticsUnsupported) {
+			writeJSON(w, http.StatusNotImplemented, map[string]any{
+				"ok": false, "available": false, "source": "agentdock-runtime-api",
+				"error": map[string]any{
+					"code":    "AGENTDOCK_DIAGNOSTICS_UNSUPPORTED",
+					"message": "当前 AgentDock 版本不支持远程运行诊断，请升级 AgentDock。",
+				},
+			})
+			return
+		}
+		writeRuntimeUnavailable(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok": true, "node_id": nodeID, "items": calls, "count": len(calls), "source": "agentdock-runtime-api",
+	})
 }
 
 func (s *Server) runtimeOverview(w http.ResponseWriter, r *http.Request) {

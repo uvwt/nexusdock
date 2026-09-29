@@ -1,5 +1,5 @@
 // Code generated from scripts/generate-contracts.py by swagger-typescript-api. DO NOT EDIT.
-// OpenAPI-SHA256: b721f799ee929c6331c5c35ad7f8533aefe78998aa4cf8b1d75519ddc3f6771f
+// OpenAPI-SHA256: 24258ed9f60e5f8485c9b8bb4ea2cf4a247c8566ab7cb1bd7244248b8e1d6090
 
 /** 与 Nexus 配对的一台 AgentDock 节点。 */
 export interface AgentDockNode {
@@ -1136,6 +1136,74 @@ export interface RuntimeAISettingsView {
    * @format date-time
    */
   updated_at?: string;
+}
+
+/** AgentDock 内存中最近一次运行调用的零 Payload 诊断视图。 */
+export interface RuntimeDiagnosticCall {
+  /**
+   * 调用总耗时毫秒。
+   * @min 0
+   */
+  duration_ms: number;
+  /** 稳定错误分类。 */
+  error_category?: string;
+  /** 稳定错误码。 */
+  error_code?: string;
+  /** 节点进程内单调递增的调用 ID。 */
+  id: string;
+  /** 调用来源。 */
+  source: "internal" | "mcp" | "nexus";
+  /** 内部稳定阶段耗时。 */
+  stages?: RuntimeDiagnosticStage[];
+  /**
+   * RFC 3339 UTC 时间。
+   * @format date-time
+   */
+  started_at: string;
+  /** 调用是否成功。 */
+  success: boolean;
+  /** 工具名称。 */
+  tool: string;
+  /** 存在上游 W3C Trace Context 时的 Trace ID。 */
+  trace_id?: string;
+}
+
+/** 单次运行调用中的稳定阶段耗时。 */
+export interface RuntimeDiagnosticStage {
+  /**
+   * 阶段耗时毫秒。
+   * @min 0
+   */
+  duration_ms: number;
+  /**
+   * 稳定阶段名称；未知新阶段保持原值以支持前向兼容。
+   * @minLength 1
+   */
+  name: string;
+  /**
+   * 相对调用开始时间的毫秒偏移。
+   * @min 0
+   */
+  started_offset_ms: number;
+  /** 阶段是否成功。 */
+  success: boolean;
+}
+
+/** 指定在线 AgentDock 节点的最近运行调用；数据仅按需从节点内存读取。 */
+export interface RuntimeDiagnosticsResponse {
+  /**
+   * 返回调用数量。
+   * @min 0
+   */
+  count: number;
+  /** 最近调用，按最新优先。 */
+  items: RuntimeDiagnosticCall[];
+  /** AgentDock 节点 ID。 */
+  node_id: string;
+  /** 请求是否成功。 */
+  ok: boolean;
+  /** 固定为 agentdock-runtime-api。 */
+  source: string;
 }
 
 /** AgentDock Runtime 不可用或拒绝请求时的错误信封。 */

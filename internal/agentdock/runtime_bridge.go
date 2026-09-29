@@ -20,6 +20,7 @@ const runtimeRequestTimeout = 8 * time.Second
 
 // ErrBridgeUnavailable 表示 Nexus 没有装配 AgentDock 连接服务（未启用节点功能），而不是某个节点离线。
 var ErrBridgeUnavailable = errors.New("AgentDock 节点连接服务不可用")
+var ErrRuntimeDiagnosticsUnsupported = errors.New("AgentDock Runtime 不支持远程运行诊断")
 
 // NodeLookupError 表示读取 Nexus 节点库失败（区别于节点不存在）。
 type NodeLookupError struct{ Err error }
@@ -53,6 +54,26 @@ func (h *Hub) invokeRuntime(ctx context.Context, nodeID, method, path string, qu
 }
 
 // RuntimeTasks 拉取节点任务列表并解析为 DTO；limit 由 Nexus 侧 UI 约束（最大 200）。
+func normalizeRuntimeDiagnosticsError(err error) error {
+	var remote *RemoteError
+	// 旧版 AgentDock 根本没有 /internal/runtime/diagnostics 路由，只会从固定的
+	// Runtime request 路径返回通用 NOT_FOUND；新版则返回 DIAGNOSTICS_UNSUPPORTED。
+	// 这里的调用 path 是常量，因此该 NOT_FOUND 可以安全解释为“版本不支持”。
+	if errors.As(err, &remote) && remote.Category == "not_found" &&
+		(remote.Code == "NOT_FOUND" || remote.Code == "DIAGNOSTICS_UNSUPPORTED") {
+		return ErrRuntimeDiagnosticsUnsupported
+	}
+	return err
+}
+
+func (h *Hub) RuntimeDiagnostics(ctx context.Context, nodeID string) ([]RuntimeDiagnosticCall, error) {
+	payload, err := h.invokeRuntime(ctx, nodeID, "GET", "/internal/runtime/diagnostics", nil, nil)
+	if err != nil {
+		return nil, normalizeRuntimeDiagnosticsError(err)
+	}
+	return parseRuntimeDiagnostics(nodeID, payload)
+}
+
 func (h *Hub) RuntimeTasks(ctx context.Context, nodeID string, limit int) ([]RuntimeTaskSummary, error) {
 	query := url.Values{}
 	if limit > 0 {
