@@ -7,15 +7,14 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-func TestTracingCreatesRootAndContinuesRemoteParent(t *testing.T) {
-	tracing := NewTracing()
-	t.Cleanup(func() { _ = tracing.Shutdown(context.Background()) })
+func TestTracingDefaultsToNoopAndPreservesRemoteParent(t *testing.T) {
+	tracing := NewTracing(nil)
 
 	rootCtx, rootSpan := tracing.StartAgentDockInvoke(context.Background(), "read_file")
-	rootTraceID, rootSpanID := TraceIdentifiers(rootCtx)
+	rootTraceID, rootSpanID := TraceIdentifiers(context.Background(), rootCtx)
 	rootSpan.End()
-	if len(rootTraceID) != 32 || len(rootSpanID) != 16 {
-		t.Fatalf("root identifiers = %q / %q", rootTraceID, rootSpanID)
+	if rootTraceID != "" || rootSpanID != "" {
+		t.Fatalf("default no-op root identifiers = %q / %q", rootTraceID, rootSpanID)
 	}
 
 	traceID, err := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
@@ -33,29 +32,35 @@ func TestTracingCreatesRootAndContinuesRemoteParent(t *testing.T) {
 	parent := trace.NewSpanContext(trace.SpanContextConfig{
 		TraceID: traceID, SpanID: spanID, TraceFlags: trace.FlagsSampled, TraceState: state, Remote: true,
 	})
-	ctx := trace.ContextWithRemoteSpanContext(context.Background(), parent)
-	childCtx, childSpan := tracing.StartAgentDockInvoke(ctx, "read_file")
-	child := trace.SpanContextFromContext(childCtx)
-	childSpan.End()
-	if child.TraceID() != parent.TraceID() || child.SpanID() == parent.SpanID() {
-		t.Fatalf("child ids = %s/%s parent=%s/%s", child.TraceID(), child.SpanID(), parent.TraceID(), parent.SpanID())
+	parentCtx := trace.ContextWithRemoteSpanContext(context.Background(), parent)
+	activeCtx, span := tracing.StartAgentDockInvoke(parentCtx, "read_file")
+	defer span.End()
+
+	active := trace.SpanContextFromContext(activeCtx)
+	if !active.Equal(parent) {
+		t.Fatalf("default no-op span context = %#v, want remote parent %#v", active, parent)
 	}
-	if !child.IsSampled() || child.TraceState().String() != parent.TraceState().String() {
-		t.Fatalf("child sampling/state = sampled:%v state:%q", child.IsSampled(), child.TraceState())
+	gotTraceID, gotSpanID := TraceIdentifiers(parentCtx, activeCtx)
+	if gotTraceID != traceID.String() || gotSpanID != "" {
+		t.Fatalf("correlation identifiers = %q / %q", gotTraceID, gotSpanID)
 	}
 }
 
 func TestTracingPreservesUnsampledRemoteParent(t *testing.T) {
-	tracing := NewTracing()
-	t.Cleanup(func() { _ = tracing.Shutdown(context.Background()) })
+	tracing := NewTracing(nil)
 	traceID, _ := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
 	spanID, _ := trace.SpanIDFromHex("00f067aa0ba902b7")
 	parent := trace.NewSpanContext(trace.SpanContextConfig{TraceID: traceID, SpanID: spanID, Remote: true})
-	ctx := trace.ContextWithRemoteSpanContext(context.Background(), parent)
-	childCtx, childSpan := tracing.StartAgentDockInvoke(ctx, "read_file")
-	defer childSpan.End()
-	child := trace.SpanContextFromContext(childCtx)
-	if child.TraceID() != parent.TraceID() || child.IsSampled() {
-		t.Fatalf("unsampled parent was not preserved: %#v", child)
+	parentCtx := trace.ContextWithRemoteSpanContext(context.Background(), parent)
+	activeCtx, span := tracing.StartAgentDockInvoke(parentCtx, "read_file")
+	defer span.End()
+
+	active := trace.SpanContextFromContext(activeCtx)
+	if !active.Equal(parent) || active.IsSampled() {
+		t.Fatalf("unsampled parent was not preserved: %#v", active)
+	}
+	gotTraceID, gotSpanID := TraceIdentifiers(parentCtx, activeCtx)
+	if gotTraceID != traceID.String() || gotSpanID != "" {
+		t.Fatalf("unsampled correlation identifiers = %q / %q", gotTraceID, gotSpanID)
 	}
 }

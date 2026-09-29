@@ -276,13 +276,17 @@ func (s *Server) callNodeTool(ctx context.Context, name string, arguments map[st
 		invokeCtx, span := s.tracing.StartAgentDockInvoke(ctx, name)
 		defer span.End()
 		result, err = s.agentDockHub.Invoke(invokeCtx, nodeID, protocol.OperationToolCall, map[string]any{"tool": name, "arguments": arguments})
-		traceID, spanID := observability.TraceIdentifiers(invokeCtx)
-		if err != nil {
+		traceID, spanID := observability.TraceIdentifiers(ctx, invokeCtx)
+		if err != nil && span.IsRecording() {
 			// 只记录稳定状态，不调用 RecordError(err)，避免把原始错误正文写入 Trace。
 			span.SetStatus(codes.Error, "agentdock invoke failed")
 		}
 		if s.logger != nil && traceID != "" {
-			s.logger.Debug("AgentDock tool call finished", "tool", name, "ok", err == nil, "trace_id", traceID, "span_id", spanID)
+			attributes := []any{"tool", name, "ok", err == nil, "trace_id", traceID}
+			if spanID != "" {
+				attributes = append(attributes, "span_id", spanID)
+			}
+			s.logger.Debug("AgentDock tool call finished", attributes...)
 		}
 	}()
 	if err == nil {

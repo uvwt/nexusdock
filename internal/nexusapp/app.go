@@ -51,14 +51,7 @@ func run(args []string) error {
 		return fmt.Errorf("invalid startup configuration: %w", err)
 	}
 
-	tracing := observability.NewTracing()
-	defer func() {
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer shutdownCancel()
-		if err := tracing.Shutdown(shutdownCtx); err != nil {
-			logger.Warn("shutdown tracing failed", "error", err)
-		}
-	}()
+	tracing := observability.NewTracing(nil)
 
 	store, err := recall.NewStore(cfg.RecallRepoDir)
 	if err != nil {
