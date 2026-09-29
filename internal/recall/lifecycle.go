@@ -249,7 +249,16 @@ func (s *Store) readLifecycleLocked(id string) (LifecycleRecord, error) {
 	if !lifecycleIDPattern.MatchString(id) {
 		return LifecycleRecord{}, errors.New("invalid evolution_id")
 	}
-	data, err := os.ReadFile(s.lifecyclePath(id))
+	root, err := os.OpenRoot(s.root)
+	if err != nil {
+		return LifecycleRecord{}, err
+	}
+	defer root.Close()
+	rel, err := filepath.Rel(s.root, s.lifecyclePath(id))
+	if err != nil {
+		return LifecycleRecord{}, err
+	}
+	data, err := root.ReadFile(rel)
 	if err != nil {
 		return LifecycleRecord{}, err
 	}
@@ -275,9 +284,6 @@ func (s *Store) readLifecycleLocked(id string) (LifecycleRecord, error) {
 }
 
 func (s *Store) writeLifecycleLocked(record LifecycleRecord) error {
-	if err := os.MkdirAll(s.lifecycleRoot(), 0o755); err != nil {
-		return err
-	}
 	data, err := json.MarshalIndent(record, "", "  ")
 	if err != nil {
 		return err

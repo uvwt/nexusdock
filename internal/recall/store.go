@@ -409,9 +409,6 @@ func (s *Store) Write(req WriteRequest) (Recall, error) {
 	if err != nil {
 		return Recall{}, err
 	}
-	if err := os.MkdirAll(filepath.Dir(prepared.abs), 0o755); err != nil {
-		return Recall{}, err
-	}
 	if err := s.atomicWriteFile(prepared.abs, []byte(prepared.content), 0o644); err != nil {
 		return Recall{}, err
 	}
@@ -451,7 +448,16 @@ func (s *Store) prepareWrite(req WriteRequest, requireConfirmation bool) (prepar
 	if err != nil {
 		return preparedWrite{}, err
 	}
-	if _, err := os.Stat(abs); err == nil && !req.Overwrite {
+	rel, err := filepath.Rel(s.root, abs)
+	if err != nil {
+		return preparedWrite{}, err
+	}
+	root, err := os.OpenRoot(s.root)
+	if err != nil {
+		return preparedWrite{}, err
+	}
+	defer root.Close()
+	if _, err := root.Stat(rel); err == nil && !req.Overwrite {
 		return preparedWrite{}, ErrFileExists
 	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return preparedWrite{}, err

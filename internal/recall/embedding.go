@@ -654,7 +654,16 @@ func vectorFromAny(value any) ([]float64, error) {
 }
 
 func (s *EmbeddingService) loadIndex() (embeddingIndex, error) {
-	data, err := os.ReadFile(s.indexPath)
+	root, err := os.OpenRoot(s.store.root)
+	if err != nil {
+		return embeddingIndex{}, err
+	}
+	defer root.Close()
+	rel, err := filepath.Rel(s.store.root, s.indexPath)
+	if err != nil {
+		return embeddingIndex{}, err
+	}
+	data, err := root.ReadFile(rel)
 	if err != nil {
 		return embeddingIndex{}, err
 	}
@@ -707,9 +716,6 @@ func (s *EmbeddingService) writeIndex(idx embeddingIndex) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := validateEmbeddingIndex(idx); err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(s.indexPath), 0o700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(idx, "", "  ")
