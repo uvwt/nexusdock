@@ -29,6 +29,7 @@ func (s *Server) Handler() http.Handler {
 	if s.mcp != nil && s.mcp.handler != nil {
 		r.Group(func(r chi.Router) {
 			r.Use(s.access.withMCPAccess)
+			r.Use(withMCPTraceContext)
 			r.Method(http.MethodGet, "/mcp", s.mcp.handler)
 			r.Method(http.MethodPost, "/mcp", s.mcp.handler)
 			r.Method(http.MethodDelete, "/mcp", s.mcp.handler)

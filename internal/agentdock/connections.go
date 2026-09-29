@@ -179,7 +179,9 @@ func (h *Hub) Invoke(ctx context.Context, nodeID, operation string, arguments an
 	}
 	defer connection.removePending(requestID)
 
-	if err := connection.write(connectionMessage{Type: protocol.MessageToolInvoke, RequestID: requestID, Operation: operation, Arguments: encoded}); err != nil {
+	message := connectionMessage{Type: protocol.MessageToolInvoke, RequestID: requestID, Operation: operation, Arguments: encoded}
+	injectBridgeTraceContext(ctx, &message)
+	if err := connection.write(message); err != nil {
 		connection.close(err)
 		return nil, ErrNodeDisconnected
 	}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/gorilla/websocket"
 	protocol "github.com/uvwt/agentdock-protocol"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func TestHubInvokesConnectedNode(t *testing.T) {
@@ -54,20 +55,35 @@ func TestHubInvokesConnectedNode(t *testing.T) {
 	<-connected
 
 	done := make(chan error, 1)
+	invokes := make(chan connectionMessage, 1)
 	go func() {
 		var invoke connectionMessage
 		if err := socket.ReadJSON(&invoke); err != nil {
 			done <- err
 			return
 		}
+		invokes <- invoke
 		done <- socket.WriteJSON(connectionMessage{Type: protocol.MessageToolResult, RequestID: invoke.RequestID, Result: []byte(`{"ok":true}`)})
 	}()
-	result, err := hub.Invoke(context.Background(), node.ID, "tool.call", map[string]any{"tool": "read_file"})
+	traceID, _ := trace.TraceIDFromHex("4bf92f3577b34da6a3ce929d0e0e4736")
+	spanID, _ := trace.SpanIDFromHex("00f067aa0ba902b7")
+	traceState, err := trace.ParseTraceState("rojo=00f067aa0ba902b7")
+	if err != nil {
+		t.Fatal(err)
+	}
+	spanContext := trace.NewSpanContext(trace.SpanContextConfig{TraceID: traceID, SpanID: spanID, TraceFlags: trace.FlagsSampled, TraceState: traceState})
+	invokeCtx := trace.ContextWithSpanContext(context.Background(), spanContext)
+	result, err := hub.Invoke(invokeCtx, node.ID, "tool.call", map[string]any{"tool": "read_file"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if result["ok"] != true {
 		t.Fatalf("result = %#v", result)
+	}
+	invoke := <-invokes
+	wantTraceparent := "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01"
+	if invoke.Traceparent != wantTraceparent || invoke.Tracestate != traceState.String() {
+		t.Fatalf("bridge trace context = %q / %q", invoke.Traceparent, invoke.Tracestate)
 	}
 	if err := <-done; err != nil {
 		t.Fatal(err)

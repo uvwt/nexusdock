@@ -18,6 +18,7 @@ import (
 	"github.com/uvwt/nexusdock/internal/config"
 	"github.com/uvwt/nexusdock/internal/core"
 	"github.com/uvwt/nexusdock/internal/httpx"
+	"github.com/uvwt/nexusdock/internal/observability"
 	"github.com/uvwt/nexusdock/internal/privatenotes"
 	"github.com/uvwt/nexusdock/internal/recall"
 	"github.com/uvwt/nexusdock/internal/settings"
@@ -49,6 +50,15 @@ func run(args []string) error {
 	if err := cfg.ValidateStartup(); err != nil {
 		return fmt.Errorf("invalid startup configuration: %w", err)
 	}
+
+	tracing := observability.NewTracing()
+	defer func() {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer shutdownCancel()
+		if err := tracing.Shutdown(shutdownCtx); err != nil {
+			logger.Warn("shutdown tracing failed", "error", err)
+		}
+	}()
 
 	store, err := recall.NewStore(cfg.RecallRepoDir)
 	if err != nil {
@@ -159,6 +169,7 @@ func run(args []string) error {
 		cfg,
 		store,
 		logger,
+		httpx.WithTracing(tracing),
 		httpx.WithSystemDatabase(controlDB),
 		httpx.WithAgentDockNodes(agentDockNodes, agentDockHub),
 		httpx.WithWebAuthentication(authService),

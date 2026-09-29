@@ -15,8 +15,10 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	protocol "github.com/uvwt/agentdock-protocol"
 	"github.com/uvwt/nexusdock/internal/agentdock"
+	"github.com/uvwt/nexusdock/internal/observability"
 	"github.com/uvwt/nexusdock/internal/privatenotes"
 	"github.com/uvwt/nexusdock/internal/recall"
+	"go.opentelemetry.io/otel/codes"
 )
 
 const nexusServerInstructions = "NexusDock 可以连接并统一操作多台 AgentDock 设备。" +
@@ -269,7 +271,20 @@ func (s *Server) callNodeTool(ctx context.Context, name string, arguments map[st
 	}
 
 	delete(arguments, "node_id")
-	result, err := s.agentDockHub.Invoke(ctx, nodeID, protocol.OperationToolCall, map[string]any{"tool": name, "arguments": arguments})
+	var result map[string]any
+	func() {
+		invokeCtx, span := s.tracing.StartAgentDockInvoke(ctx, name)
+		defer span.End()
+		result, err = s.agentDockHub.Invoke(invokeCtx, nodeID, protocol.OperationToolCall, map[string]any{"tool": name, "arguments": arguments})
+		traceID, spanID := observability.TraceIdentifiers(invokeCtx)
+		if err != nil {
+			// 只记录稳定状态，不调用 RecordError(err)，避免把原始错误正文写入 Trace。
+			span.SetStatus(codes.Error, "agentdock invoke failed")
+		}
+		if s.logger != nil && traceID != "" {
+			s.logger.Debug("AgentDock tool call finished", "tool", name, "ok", err == nil, "trace_id", traceID, "span_id", spanID)
+		}
+	}()
 	if err == nil {
 		bridgeCapabilities, capabilityErr := s.agentDock.BridgeCapabilities(ctx, nodeID)
 		if capabilityErr != nil {

@@ -24,6 +24,7 @@ import (
 	"github.com/uvwt/nexusdock/internal/agentdock"
 	"github.com/uvwt/nexusdock/internal/auth"
 	"github.com/uvwt/nexusdock/internal/config"
+	"github.com/uvwt/nexusdock/internal/observability"
 	"github.com/uvwt/nexusdock/internal/privatenotes"
 	"github.com/uvwt/nexusdock/internal/recall"
 	"github.com/uvwt/nexusdock/internal/settings"
@@ -82,6 +83,7 @@ type Server struct {
 	runtimeAI           runtimeAIState
 	access              accessControl
 	mcpAppsEnabledState bool
+	tracing             *observability.Tracing
 	db                  *sql.DB
 	store               *recall.Store
 	privateNotes        *privatenotes.Store
@@ -99,6 +101,10 @@ type ServerOption func(*Server)
 
 func WithSystemDatabase(db *sql.DB) ServerOption {
 	return func(server *Server) { server.db = db }
+}
+
+func WithTracing(tracing *observability.Tracing) ServerOption {
+	return func(server *Server) { server.tracing = tracing }
 }
 
 // WithAgentDockNodes 注入组合根创建的节点存储与连接 Hub；
