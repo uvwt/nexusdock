@@ -42,7 +42,7 @@ func TestPrivateNoteAPIRequiresDeviceToken(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	issued, err := server.auth.IssueToken(t.Context(), core.Actor{Type: core.ActorDevice, ID: node.ID}, "device_token", nil, 0)
+	issued, err := server.access.auth.IssueToken(t.Context(), core.Actor{Type: core.ActorDevice, ID: node.ID}, "device_token", nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

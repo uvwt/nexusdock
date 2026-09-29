@@ -16,7 +16,7 @@ import (
 func TestMCPAccessTokenSettingsReadAndReset(t *testing.T) {
 	server, authService := newOAuthHTTPTestServer(t)
 	handler := server.Handler()
-	oldToken := server.mcpToken.Token()
+	oldToken := server.access.mcpToken.Token()
 	login, err := authService.Login(t.Context(), "owner", "correct horse battery staple", "192.0.2.0/24", "test", false)
 	if err != nil {
 		t.Fatal(err)
@@ -62,7 +62,7 @@ func TestMCPAccessTokenSettingsReadAndReset(t *testing.T) {
 	}
 
 	called := false
-	wrapped := server.withMCPAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	wrapped := server.access.withMCPAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -101,7 +101,7 @@ func TestMCPSettingsAPIUpdatesGatewayAndPersists(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := &Server{
-		mcpAppsEnabledState: true, mcpSettings: store, mcpToken: tokenStore,
+		mcpAppsEnabledState: true, mcpSettings: store, access: accessControl{mcpToken: tokenStore},
 	}
 
 	getRecorder := httptest.NewRecorder()

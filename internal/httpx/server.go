@@ -77,25 +77,22 @@ func (w *trackedResponseWriter) Flush() {
 }
 
 type Server struct {
-	mcpAppsMu            sync.RWMutex
-	cfg                  config.Config
-	runtimeAI            runtimeAIState
-	mcpAppsEnabledState  bool
-	db                   *sql.DB
-	store                *recall.Store
-	privateNotes         *privatenotes.Store
-	agentDock            *agentdock.Store
-	agentDockHub         *agentdock.Hub
-	logger               *slog.Logger
-	auth                 *auth.Service
-	oauth                *auth.OAuthService
-	oauthRegisterLimiter *fixedWindowLimiter
-	mcpSettings          *settings.MCPStore
-	mcpToken             *auth.MCPTokenStore
-	workflowRegistry     *workflow.Registry
-	publishedToolBridge  *agentdock.PublishedToolBridge
-	mcp                  *mcpGateway
-	artifacts            *agentdock.ArtifactService
+	mcpAppsMu           sync.RWMutex
+	cfg                 config.Config
+	runtimeAI           runtimeAIState
+	access              accessControl
+	mcpAppsEnabledState bool
+	db                  *sql.DB
+	store               *recall.Store
+	privateNotes        *privatenotes.Store
+	agentDock           *agentdock.Store
+	agentDockHub        *agentdock.Hub
+	logger              *slog.Logger
+	mcpSettings         *settings.MCPStore
+	workflowRegistry    *workflow.Registry
+	publishedToolBridge *agentdock.PublishedToolBridge
+	mcp                 *mcpGateway
+	artifacts           *agentdock.ArtifactService
 }
 
 type ServerOption func(*Server)
@@ -114,7 +111,7 @@ func WithAgentDockNodes(store *agentdock.Store, hub *agentdock.Hub) ServerOption
 }
 
 func WithWebAuthentication(authService *auth.Service) ServerOption {
-	return func(server *Server) { server.auth = authService }
+	return func(server *Server) { server.access.auth = authService }
 }
 
 func WithEmbeddingService(service *recall.EmbeddingService) ServerOption {
@@ -142,7 +139,7 @@ func WithPrivateNotes(store *privatenotes.Store) ServerOption {
 }
 
 func WithMCPTokenStore(store *auth.MCPTokenStore) ServerOption {
-	return func(server *Server) { server.mcpToken = store }
+	return func(server *Server) { server.access.mcpToken = store }
 }
 
 // WithWorkflowRegistry 注入组合根创建的 Workflow 模板注册表；
@@ -171,15 +168,15 @@ func WithArtifactService(service *agentdock.ArtifactService) ServerOption {
 
 func NewServer(cfg config.Config, store *recall.Store, logger *slog.Logger, options ...ServerOption) *Server {
 	server := &Server{
-		cfg: cfg, runtimeAI: newRuntimeAIState(store), mcpAppsEnabledState: settings.DefaultMCPAppsEnabled,
+		cfg: cfg, runtimeAI: newRuntimeAIState(store), access: newAccessControl(cfg.TrustedProxies, logger), mcpAppsEnabledState: settings.DefaultMCPAppsEnabled,
 		store: store, logger: logger,
 	}
 	for _, option := range options {
 		option(server)
 	}
-	if server.db != nil && server.auth != nil {
-		server.oauth = auth.NewOAuthService(server.db)
-		server.oauthRegisterLimiter = newFixedWindowLimiter(30, time.Minute)
+	if server.db != nil && server.access.auth != nil {
+		server.access.oauth = auth.NewOAuthService(server.db)
+		server.access.oauthRegisterLimiter = newFixedWindowLimiter(30, time.Minute)
 	}
 	server.initializeMCPGateway()
 	return server
@@ -256,7 +253,7 @@ func (s *Server) securityHeaders(next http.Handler) http.Handler {
 		if strings.HasPrefix(r.URL.Path, "/v1/") || strings.HasPrefix(r.URL.Path, "/internal/") || r.URL.Path == "/login" || r.URL.Path == "/change-password" {
 			headers.Set("Cache-Control", "no-store")
 		}
-		if r.TLS != nil || s.isTrustedProxy(r) && strings.EqualFold(lastForwardedValue(r.Header.Get("X-Forwarded-Proto")), "https") {
+		if r.TLS != nil || s.access.isTrustedProxy(r) && strings.EqualFold(lastForwardedValue(r.Header.Get("X-Forwarded-Proto")), "https") {
 			headers.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
 		next.ServeHTTP(w, r)

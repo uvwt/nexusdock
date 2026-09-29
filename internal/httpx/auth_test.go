@@ -53,11 +53,11 @@ func TestSafeReturnToRejectsExternalAndControlValues(t *testing.T) {
 }
 
 func TestSameOriginHonorsTrustedProxyHeadersOnly(t *testing.T) {
-	server := &Server{cfg: config.Config{TrustedProxies: trustedPrefixes(t, "10.0.0.0/8")}}
+	access := newAccessControl(trustedPrefixes(t, "10.0.0.0/8"), nil)
 
 	directTLS := httptest.NewRequest(http.MethodPost, "https://nexus.example/v1/auth/login", nil)
 	directTLS.Header.Set("Origin", "https://nexus.example")
-	if !server.sameOrigin(directTLS) {
+	if !access.sameOrigin(directTLS) {
 		t.Fatalf("direct TLS same-origin request was rejected")
 	}
 
@@ -67,7 +67,7 @@ func TestSameOriginHonorsTrustedProxyHeadersOnly(t *testing.T) {
 	trustedProxy.Header.Set("Origin", "https://nexus.example")
 	trustedProxy.Header.Set("X-Forwarded-Proto", "https")
 	trustedProxy.Header.Set("X-Forwarded-Host", "nexus.example")
-	if !server.sameOrigin(trustedProxy) {
+	if !access.sameOrigin(trustedProxy) {
 		t.Fatalf("trusted reverse proxy same-origin request was rejected")
 	}
 
@@ -76,65 +76,65 @@ func TestSameOriginHonorsTrustedProxyHeadersOnly(t *testing.T) {
 	untrustedProxy.Header.Set("Origin", "https://nexus.example")
 	untrustedProxy.Header.Set("X-Forwarded-Proto", "https")
 	untrustedProxy.Header.Set("X-Forwarded-Host", "nexus.example")
-	if server.sameOrigin(untrustedProxy) {
+	if access.sameOrigin(untrustedProxy) {
 		t.Fatalf("untrusted reverse proxy headers were accepted as same-origin")
 	}
 }
 
 func TestSecureRequestRequiresTLSOrTrustedForwardedProto(t *testing.T) {
-	server := &Server{cfg: config.Config{TrustedProxies: trustedPrefixes(t, "10.0.0.0/8")}}
+	access := newAccessControl(trustedPrefixes(t, "10.0.0.0/8"), nil)
 
 	directTLS := httptest.NewRequest(http.MethodGet, "https://nexus.example/", nil)
 	directTLS.TLS = &tls.ConnectionState{}
-	if !server.secureRequest(directTLS) {
+	if !access.secureRequest(directTLS) {
 		t.Fatalf("TLS request was not treated as secure")
 	}
 
 	trustedProxy := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/", nil)
 	trustedProxy.RemoteAddr = "10.1.2.3:4567"
 	trustedProxy.Header.Set("X-Forwarded-Proto", "https")
-	if !server.secureRequest(trustedProxy) {
+	if !access.secureRequest(trustedProxy) {
 		t.Fatalf("trusted proxy https request was not treated as secure")
 	}
 
 	untrustedProxy := httptest.NewRequest(http.MethodGet, "http://127.0.0.1/", nil)
 	untrustedProxy.RemoteAddr = "203.0.113.8:4567"
 	untrustedProxy.Header.Set("X-Forwarded-Proto", "https")
-	if server.secureRequest(untrustedProxy) {
+	if access.secureRequest(untrustedProxy) {
 		t.Fatalf("untrusted forwarded proto marked request secure")
 	}
 }
 
 func TestLoginTransportAllowsHTTPSOrDirectLoopbackOnly(t *testing.T) {
-	server := &Server{cfg: config.Config{TrustedProxies: trustedPrefixes(t, "10.0.0.0/8", "127.0.0.1", "::1")}}
+	access := newAccessControl(trustedPrefixes(t, "10.0.0.0/8", "127.0.0.1", "::1"), nil)
 
 	directTLS := httptest.NewRequest(http.MethodPost, "https://nexus.example/v1/auth/login", nil)
-	if !server.loginTransportAllowed(directTLS) {
+	if !access.loginTransportAllowed(directTLS) {
 		t.Fatal("direct HTTPS login was rejected")
 	}
 
 	trustedHTTPSProxy := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/v1/auth/login", nil)
 	trustedHTTPSProxy.RemoteAddr = "10.1.2.3:4567"
 	trustedHTTPSProxy.Header.Set("X-Forwarded-Proto", "https")
-	if !server.loginTransportAllowed(trustedHTTPSProxy) {
+	if !access.loginTransportAllowed(trustedHTTPSProxy) {
 		t.Fatal("trusted HTTPS reverse proxy login was rejected")
 	}
 
 	directLoopback := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:18777/v1/auth/login", nil)
 	directLoopback.RemoteAddr = "127.0.0.1:4567"
-	if !server.loginTransportAllowed(directLoopback) {
+	if !access.loginTransportAllowed(directLoopback) {
 		t.Fatal("direct loopback HTTP login was rejected")
 	}
 
 	directIPv6Loopback := httptest.NewRequest(http.MethodPost, "http://localhost:18777/v1/auth/login", nil)
 	directIPv6Loopback.RemoteAddr = "[::1]:4567"
-	if !server.loginTransportAllowed(directIPv6Loopback) {
+	if !access.loginTransportAllowed(directIPv6Loopback) {
 		t.Fatal("direct IPv6 loopback HTTP login was rejected")
 	}
 
 	remoteWithLoopbackHost := httptest.NewRequest(http.MethodPost, "http://127.0.0.1:18777/v1/auth/login", nil)
 	remoteWithLoopbackHost.RemoteAddr = "203.0.113.8:4567"
-	if server.loginTransportAllowed(remoteWithLoopbackHost) {
+	if access.loginTransportAllowed(remoteWithLoopbackHost) {
 		t.Fatal("remote HTTP client bypassed the HTTPS requirement with a loopback Host")
 	}
 
@@ -143,20 +143,20 @@ func TestLoginTransportAllowsHTTPSOrDirectLoopbackOnly(t *testing.T) {
 	proxiedHTTP.Header.Set("X-Forwarded-For", "203.0.113.8")
 	proxiedHTTP.Header.Set("X-Forwarded-Host", "nexus.example")
 	proxiedHTTP.Header.Set("X-Forwarded-Proto", "http")
-	if server.loginTransportAllowed(proxiedHTTP) {
+	if access.loginTransportAllowed(proxiedHTTP) {
 		t.Fatal("proxied HTTP login was mistaken for a direct loopback request")
 	}
 
 	localClientToLANHost := httptest.NewRequest(http.MethodPost, "http://192.168.1.10:18777/v1/auth/login", nil)
 	localClientToLANHost.RemoteAddr = "127.0.0.1:4567"
-	if server.loginTransportAllowed(localClientToLANHost) {
+	if access.loginTransportAllowed(localClientToLANHost) {
 		t.Fatal("HTTP login to a non-loopback Host was allowed")
 	}
 }
 
 func TestAPIAccessDoesNotTrustClientControlledHost(t *testing.T) {
-	server := &Server{cfg: config.Config{}, logger: slog.Default()}
-	next := server.withAPIAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	access := newAccessControl(nil, slog.Default())
+	next := access.withAPIAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/test", nil)
 	req.RemoteAddr = "203.0.113.8:4567"
@@ -177,8 +177,9 @@ func TestConfiguredWebAuthenticationDisablesLoopbackBypass(t *testing.T) {
 	if err := core.EnsureSchema(t.Context(), db); err != nil {
 		t.Fatal(err)
 	}
-	server := &Server{cfg: config.Config{}, logger: slog.Default(), auth: auth.NewService(db)}
-	next := server.withAPIAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	access := newAccessControl(nil, slog.Default())
+	access.auth = auth.NewService(db)
+	next := access.withAPIAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/test", nil)
 	req.RemoteAddr = "127.0.0.1:4567"
@@ -190,8 +191,8 @@ func TestConfiguredWebAuthenticationDisablesLoopbackBypass(t *testing.T) {
 }
 
 func TestUnconfiguredLocalAPIStillRequiresLoopbackRemoteAddress(t *testing.T) {
-	server := &Server{cfg: config.Config{}, logger: slog.Default()}
-	next := server.withAPIAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	access := newAccessControl(nil, slog.Default())
+	next := access.withAPIAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
 
 	req := httptest.NewRequest(http.MethodGet, "/v1/test", nil)
 	req.RemoteAddr = "127.0.0.1:4567"
@@ -204,29 +205,29 @@ func TestUnconfiguredLocalAPIStillRequiresLoopbackRemoteAddress(t *testing.T) {
 }
 
 func TestSameOriginRejectsSpoofedLeadingForwardedValues(t *testing.T) {
-	server := &Server{cfg: config.Config{TrustedProxies: trustedPrefixes(t, "10.0.0.0/8")}}
+	access := newAccessControl(trustedPrefixes(t, "10.0.0.0/8"), nil)
 	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/v1/auth/login", nil)
 	req.RemoteAddr = "10.1.2.3:4567"
 	req.Host = "127.0.0.1"
 	req.Header.Set("Origin", "http://evil.example")
 	req.Header.Set("X-Forwarded-Proto", "http, https")
 	req.Header.Set("X-Forwarded-Host", "evil.example, nexus.example")
-	if server.sameOrigin(req) {
+	if access.sameOrigin(req) {
 		t.Fatal("client-controlled leading forwarded values bypassed same-origin validation")
 	}
 
 	req.Header.Set("Origin", "https://nexus.example")
-	if !server.sameOrigin(req) {
+	if !access.sameOrigin(req) {
 		t.Fatal("nearest trusted forwarded host and proto were not honored")
 	}
 }
 
 func TestClientIPPrefixUsesNearestUntrustedForwardedHop(t *testing.T) {
-	server := &Server{cfg: config.Config{TrustedProxies: trustedPrefixes(t, "10.0.0.0/8", "192.168.0.0/16")}}
+	access := newAccessControl(trustedPrefixes(t, "10.0.0.0/8", "192.168.0.0/16"), nil)
 	req := httptest.NewRequest(http.MethodPost, "http://127.0.0.1/v1/auth/login", nil)
 	req.RemoteAddr = "10.1.2.3:4567"
 	req.Header.Set("X-Forwarded-For", "198.51.100.99, 203.0.113.72, 192.168.1.10")
-	if got := server.clientIPPrefix(req); got != "203.0.113.0/24" {
+	if got := access.clientIPPrefix(req); got != "203.0.113.0/24" {
 		t.Fatalf("client IP prefix=%q want=%q", got, "203.0.113.0/24")
 	}
 }
@@ -249,13 +250,14 @@ func TestLoginLogsInternalSessionFailureWithoutExposingIt(t *testing.T) {
 	}
 
 	var logs bytes.Buffer
-	server := &Server{cfg: config.Config{}, logger: slog.New(slog.NewTextHandler(&logs, nil)), auth: authService}
+	access := newAccessControl(nil, slog.New(slog.NewTextHandler(&logs, nil)))
+	access.auth = authService
 	req := httptest.NewRequest(http.MethodPost, "https://nexus.example/v1/auth/login", strings.NewReader(`{"username":"owner","password":"correct horse battery staple"}`))
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Origin", "https://nexus.example")
 	res := httptest.NewRecorder()
 
-	server.login(res, req)
+	access.login(res, req)
 	if res.Code != http.StatusInternalServerError {
 		t.Fatalf("login status=%d body=%s", res.Code, res.Body.String())
 	}

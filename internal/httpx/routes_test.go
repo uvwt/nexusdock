@@ -33,7 +33,7 @@ func newRouteSecurityTestServer(t *testing.T) (*Server, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	issued, err := server.auth.IssueToken(
+	issued, err := server.access.auth.IssueToken(
 		t.Context(),
 		core.Actor{Type: core.ActorDevice, ID: node.ID},
 		"device_token",

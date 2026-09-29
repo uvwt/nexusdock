@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/uvwt/nexusdock/internal/core"
 	"github.com/uvwt/nexusdock/internal/recall"
 )
 
@@ -95,16 +94,12 @@ func (s *Server) evolutionLifecycleRead(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) withEvolutionAccess(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.auth == nil || s.agentDock == nil {
+		nodeID, err := s.access.authenticateDeviceToken(r.Context(), r.Header.Get("Authorization"))
+		if err != nil || s.agentDock == nil {
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing or invalid evolution credentials")
 			return
 		}
-		principal, err := s.auth.Authenticate(r.Context(), bearerToken(r.Header.Get("Authorization")))
-		if err != nil || principal.Actor.Type != core.ActorDevice || principal.TokenKind != "device_token" {
-			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing or invalid evolution credentials")
-			return
-		}
-		node, err := s.agentDock.Get(r.Context(), principal.Actor.ID)
+		node, err := s.agentDock.Get(r.Context(), nodeID)
 		if err != nil || !node.Enabled {
 			writeError(w, http.StatusUnauthorized, "UNAUTHORIZED", "missing or invalid evolution credentials")
 			return

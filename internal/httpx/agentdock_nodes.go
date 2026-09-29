@@ -54,7 +54,7 @@ func (s *Server) agentDockPairingCodeCreate(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) agentDockNodePair(w http.ResponseWriter, r *http.Request) {
-	if s.agentDock == nil || s.auth == nil {
+	if s.agentDock == nil || !s.access.configured() {
 		writeError(w, http.StatusServiceUnavailable, "AGENTDOCK_PAIRING_UNAVAILABLE", "AgentDock 配对服务不可用")
 		return
 	}
@@ -68,25 +68,24 @@ func (s *Server) agentDockNodePair(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Device Token 只表达固定设备身份，不承载可配置权限集合。
-	issued, err := s.auth.IssueToken(r.Context(), core.Actor{Type: core.ActorDevice, ID: node.ID}, "device_token", nil, 0)
+	token, err := s.access.issueDeviceToken(r.Context(), node.ID)
 	if err != nil {
 		_ = s.agentDock.Delete(r.Context(), node.ID)
 		writeError(w, http.StatusInternalServerError, "AGENTDOCK_DEVICE_TOKEN_FAILED", "无法签发 AgentDock Device Token")
 		return
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"ok": true, "node": node, "device_token": issued.Token,
+		"ok": true, "node": node, "device_token": token,
 		"connect_path": "/v1/nodes/connect",
 	})
 }
 
 func (s *Server) agentDockNodeConnect(w http.ResponseWriter, r *http.Request) {
-	if s.auth == nil || s.agentDockHub == nil {
+	if !s.access.configured() || s.agentDockHub == nil {
 		writeError(w, http.StatusServiceUnavailable, "AGENTDOCK_CONNECTION_UNAVAILABLE", "AgentDock 节点连接服务不可用")
 		return
 	}
-	token := bearerToken(r.Header.Get("Authorization"))
-	principal, err := s.auth.Authenticate(r.Context(), token)
+	nodeID, err := s.access.authenticateDeviceToken(r.Context(), r.Header.Get("Authorization"))
 	if err != nil {
 		switch core.ErrorCodeOf(err) {
 		case core.CodeAuthRequired, core.CodeInvalidToken, core.CodeTokenRevoked:
@@ -99,11 +98,7 @@ func (s *Server) agentDockNodeConnect(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	if principal.Actor.Type != core.ActorDevice || principal.TokenKind != "device_token" {
-		writeError(w, http.StatusUnauthorized, "INVALID_DEVICE_TOKEN", "AgentDock Device Token 无效")
-		return
-	}
-	if err := s.agentDockHub.Accept(w, r, principal.Actor.ID, s.cfg.PublicURL); err != nil {
+	if err := s.agentDockHub.Accept(w, r, nodeID, s.cfg.PublicURL); err != nil {
 		// WebSocket Upgrade 成功后不能再写 HTTP 响应；连接端会收到关闭事件并重连。
 		return
 	}

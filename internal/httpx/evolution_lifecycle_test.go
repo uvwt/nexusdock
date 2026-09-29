@@ -29,15 +29,15 @@ func newEvolutionLifecycleTestServer(t *testing.T) (*Server, string, *http.Cooki
 	if err != nil {
 		t.Fatal(err)
 	}
-	issued, err := server.auth.IssueToken(t.Context(), core.Actor{Type: core.ActorDevice, ID: node.ID}, "device_token", nil, 0)
+	issued, err := server.access.auth.IssueToken(t.Context(), core.Actor{Type: core.ActorDevice, ID: node.ID}, "device_token", nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	if err := server.auth.InitializeAdmin(t.Context(), "owner", "correct horse battery staple"); err != nil {
+	if err := server.access.auth.InitializeAdmin(t.Context(), "owner", "correct horse battery staple"); err != nil {
 		t.Fatal(err)
 	}
-	login, err := server.auth.Login(t.Context(), "owner", "correct horse battery staple", "127.0.0.0/24", "test", false)
+	login, err := server.access.auth.Login(t.Context(), "owner", "correct horse battery staple", "127.0.0.0/24", "test", false)
 	if err != nil {
 		t.Fatal(err)
 	}

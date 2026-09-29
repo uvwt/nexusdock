@@ -21,7 +21,8 @@ type mcpSettingsUpdateRequest struct {
 
 func (s *Server) getMCPSettings(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	if s.mcpToken == nil || s.mcpSettings == nil {
+	token, ok := s.access.currentMCPToken()
+	if !ok || s.mcpSettings == nil {
 		writeError(w, http.StatusServiceUnavailable, "MCP_SETTINGS_UNAVAILABLE", "MCP 设置存储不可用")
 		return
 	}
@@ -31,14 +32,15 @@ func (s *Server) getMCPSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, mcpSettingsResponse{
-		OK: true, Token: s.mcpToken.Token(), MCPAppsEnabled: view.MCPAppsEnabled,
+		OK: true, Token: token, MCPAppsEnabled: view.MCPAppsEnabled,
 		Persisted: view.Persisted, UpdatedAt: view.UpdatedAt,
 	})
 }
 
 func (s *Server) updateMCPSettings(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	if s.mcpToken == nil || s.mcpSettings == nil {
+	token, ok := s.access.currentMCPToken()
+	if !ok || s.mcpSettings == nil {
 		writeError(w, http.StatusServiceUnavailable, "MCP_SETTINGS_UNAVAILABLE", "MCP 设置存储不可用")
 		return
 	}
@@ -57,12 +59,19 @@ func (s *Server) updateMCPSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	s.setMCPAppsEnabled(view.MCPAppsEnabled)
 	writeJSON(w, http.StatusOK, mcpSettingsResponse{
-		OK: true, Token: s.mcpToken.Token(), MCPAppsEnabled: view.MCPAppsEnabled,
+		OK: true, Token: token, MCPAppsEnabled: view.MCPAppsEnabled,
 		Persisted: view.Persisted, UpdatedAt: view.UpdatedAt,
 	})
 }
 
-func (s *Server) getMCPAccessToken(w http.ResponseWriter, _ *http.Request) {
+func (s *accessControl) currentMCPToken() (string, bool) {
+	if s == nil || s.mcpToken == nil {
+		return "", false
+	}
+	return s.mcpToken.Token(), true
+}
+
+func (s *accessControl) getMCPAccessToken(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if s.mcpToken == nil {
 		writeError(w, http.StatusServiceUnavailable, "MCP_TOKEN_UNAVAILABLE", "MCP Token 存储不可用")
@@ -71,7 +80,7 @@ func (s *Server) getMCPAccessToken(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, mcpAccessTokenResponse{OK: true, Token: s.mcpToken.Token()})
 }
 
-func (s *Server) resetMCPAccessToken(w http.ResponseWriter, _ *http.Request) {
+func (s *accessControl) resetMCPAccessToken(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
 	if s.mcpToken == nil {
 		writeError(w, http.StatusServiceUnavailable, "MCP_TOKEN_UNAVAILABLE", "MCP Token 存储不可用")

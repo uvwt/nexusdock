@@ -155,7 +155,7 @@ func TestOAuthHTTPAuthorizationCodeFlowAndMCPIsolation(t *testing.T) {
 	}
 
 	mcpAuthorized := false
-	wrapped := server.withMCPAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	wrapped := server.access.withMCPAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		mcpAuthorized = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -233,13 +233,13 @@ func TestOAuthDesktopCustomRedirectRegistrationAndAuthorize(t *testing.T) {
 func TestDedicatedMCPTokenAuthorizesOnlyMCP(t *testing.T) {
 	server, _ := newOAuthHTTPTestServer(t)
 	called := false
-	wrapped := server.withMCPAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+	wrapped := server.access.withMCPAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		called = true
 		w.WriteHeader(http.StatusNoContent)
 	}))
 
 	mcpReq := httptest.NewRequest(http.MethodPost, "https://nexus.example/mcp", nil)
-	mcpReq.Header.Set("Authorization", "Bearer "+server.mcpToken.Token())
+	mcpReq.Header.Set("Authorization", "Bearer "+server.access.mcpToken.Token())
 	mcpRes := httptest.NewRecorder()
 	wrapped.ServeHTTP(mcpRes, mcpReq)
 	if !called || mcpRes.Code != http.StatusNoContent {
@@ -247,7 +247,7 @@ func TestDedicatedMCPTokenAuthorizesOnlyMCP(t *testing.T) {
 	}
 
 	apiReq := httptest.NewRequest(http.MethodGet, "https://nexus.example/v1/system/status", nil)
-	apiReq.Header.Set("Authorization", "Bearer "+server.mcpToken.Token())
+	apiReq.Header.Set("Authorization", "Bearer "+server.access.mcpToken.Token())
 	apiRes := httptest.NewRecorder()
 	server.Handler().ServeHTTP(apiRes, apiReq)
 	if apiRes.Code != http.StatusUnauthorized {
@@ -266,7 +266,7 @@ func TestDedicatedMCPTokenAuthorizesOnlyMCP(t *testing.T) {
 
 func TestOAuthTokenRejectsRepeatedParameters(t *testing.T) {
 	server, _ := newOAuthHTTPTestServer(t)
-	client, err := server.oauth.RegisterClient(t.Context(), auth.OAuthClientRegistration{RedirectURIs: []string{"https://client.example/callback"}})
+	client, err := server.access.oauth.RegisterClient(t.Context(), auth.OAuthClientRegistration{RedirectURIs: []string{"https://client.example/callback"}})
 	if err != nil {
 		t.Fatal(err)
 	}

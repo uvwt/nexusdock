@@ -33,7 +33,7 @@ func newNodeTestServer(t *testing.T) *Server {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return &Server{agentDock: store, agentDockHub: agentdock.NewHub(store), auth: auth.NewService(db)}
+	return &Server{agentDock: store, agentDockHub: agentdock.NewHub(store), access: accessControl{auth: auth.NewService(db)}}
 }
 
 func TestPairingIssuesDeviceTokenWithoutAgentDockToken(t *testing.T) {
@@ -58,7 +58,7 @@ func TestPairingIssuesDeviceTokenWithoutAgentDockToken(t *testing.T) {
 	if result.Node.ID == "" || result.DeviceToken == "" || strings.Contains(response.Body.String(), "endpoint") {
 		t.Fatalf("unexpected pairing response: %s", response.Body.String())
 	}
-	principal, err := server.auth.Authenticate(t.Context(), result.DeviceToken)
+	principal, err := server.access.auth.Authenticate(t.Context(), result.DeviceToken)
 	if err != nil || principal.Actor.Type != core.ActorDevice || principal.Actor.ID != result.Node.ID {
 		t.Fatalf("device principal=%#v err=%v", principal, err)
 	}
@@ -99,7 +99,7 @@ func TestNodeConnectDistinguishesInvalidTokenFromAuthBackendFailure(t *testing.T
 		if err := db.Close(); err != nil {
 			t.Fatal(err)
 		}
-		server := &Server{auth: authService, agentDockHub: agentdock.NewHub(nil)}
+		server := &Server{access: accessControl{auth: authService}, agentDockHub: agentdock.NewHub(nil)}
 		request := httptest.NewRequest(http.MethodGet, "/v1/nodes/connect", nil)
 		request.Header.Set("Authorization", "Bearer any-device-token")
 		response := httptest.NewRecorder()
@@ -118,7 +118,7 @@ func TestDeviceTokenAccessesOnlyExplicitDeviceRoutes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	issued, err := server.auth.IssueToken(t.Context(), core.Actor{Type: core.ActorDevice, ID: node.ID}, "device_token", nil, 0)
+	issued, err := server.access.auth.IssueToken(t.Context(), core.Actor{Type: core.ActorDevice, ID: node.ID}, "device_token", nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestDeviceTokenAccessesOnlyExplicitDeviceRoutes(t *testing.T) {
 
 	// 管理 API 仍使用普通 API/管理员认证，Device Token 不会被 withAPIAccess 接受。
 	adminResponse := httptest.NewRecorder()
-	server.withAPIAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })).ServeHTTP(adminResponse, request)
+	server.access.withAPIAccess(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })).ServeHTTP(adminResponse, request)
 	if adminResponse.Code != http.StatusUnauthorized {
 		t.Fatalf("admin route status=%d, want 401", adminResponse.Code)
 	}
@@ -156,7 +156,7 @@ func TestDeviceTokenRecallPreviewUsesRealStoreWithoutPersistence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	issued, err := server.auth.IssueToken(t.Context(), core.Actor{Type: core.ActorDevice, ID: node.ID}, "device_token", nil, 0)
+	issued, err := server.access.auth.IssueToken(t.Context(), core.Actor{Type: core.ActorDevice, ID: node.ID}, "device_token", nil, 0)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -22,13 +22,13 @@ func (s *Server) Handler() http.Handler {
 	r.Get("/artifacts/public/{nodeID}/{artifactID}/{filename}", s.servePublicArtifact)
 	r.Head("/artifacts/public/{nodeID}/{artifactID}/{filename}", s.servePublicArtifact)
 	r.Get("/oauth/mcp/nodes/{nodeID}/callback", s.mcpOAuthCallback)
-	s.registerOAuthRoutes(r)
+	s.access.registerOAuthRoutes(r)
 	s.registerAgentDockConnectionRoutes(r)
 	s.registerWebAuthRoutes(r)
 
 	if s.mcp != nil && s.mcp.handler != nil {
 		r.Group(func(r chi.Router) {
-			r.Use(s.withMCPAccess)
+			r.Use(s.access.withMCPAccess)
 			r.Method(http.MethodGet, "/mcp", s.mcp.handler)
 			r.Method(http.MethodPost, "/mcp", s.mcp.handler)
 			r.Method(http.MethodDelete, "/mcp", s.mcp.handler)
@@ -38,13 +38,13 @@ func (s *Server) Handler() http.Handler {
 	// 管理员域：新路由只要注册到这个分支就默认要求 Web Session，
 	// 不再依赖每个 HandleFunc 手工套 protected，避免新增接口时静默漏鉴权。
 	r.Group(func(r chi.Router) {
-		r.Use(s.withAPIAccess)
+		r.Use(s.access.withAPIAccess)
 		r.Get("/v1/system/status", s.systemStatus)
 		r.Get("/v1/settings/ai", s.runtimeAI.getSettings)
 		r.Get("/v1/settings/mcp", s.getMCPSettings)
 		r.Put("/v1/settings/mcp", s.updateMCPSettings)
-		r.Get("/v1/settings/mcp-token", s.getMCPAccessToken)
-		r.Post("/v1/settings/mcp-token/reset", s.resetMCPAccessToken)
+		r.Get("/v1/settings/mcp-token", s.access.getMCPAccessToken)
+		r.Post("/v1/settings/mcp-token/reset", s.access.resetMCPAccessToken)
 		r.Put("/v1/settings/ai", s.runtimeAI.updateSettings)
 		r.Post("/v1/settings/ai/test/stage3", s.runtimeAI.testStage3Connection)
 		r.Post("/v1/settings/ai/test/embedding", s.runtimeAI.testEmbeddingConnection)
@@ -69,11 +69,11 @@ func (s *Server) Handler() http.Handler {
 	})
 
 	// UI 与 SPA fallback 最后注册。登录页所需 /ui/assets/* 已在公开路由中单独放行。
-	r.With(s.withUIAccess).Get("/", s.uiIndex)
-	r.With(s.withUIAccess).Get("/ui/*", s.uiIndex)
+	r.With(s.access.withUIAccess).Get("/", s.uiIndex)
+	r.With(s.access.withUIAccess).Get("/ui/*", s.uiIndex)
 	r.Get("/v1/*", http.NotFound)
 	r.Get("/api/*", http.NotFound)
-	r.With(s.withUIAccess).Get("/*", s.uiIndex)
+	r.With(s.access.withUIAccess).Get("/*", s.uiIndex)
 
 	return r
 }
