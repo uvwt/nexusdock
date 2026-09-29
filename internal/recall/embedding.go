@@ -176,6 +176,8 @@ func (s *EmbeddingService) Reindex(ctx context.Context, req EmbeddingReindexRequ
 	if !s.Enabled() {
 		return EmbeddingReindexResult{}, errors.New("embedding service is disabled or endpoint is empty")
 	}
+	s.store.embeddingMu.Lock()
+	defer s.store.embeddingMu.Unlock()
 	prefix := strings.Trim(filepath.ToSlash(strings.TrimSpace(req.Prefix)), "/")
 	maxEntries := req.MaxEntries
 	if maxEntries <= 0 || maxEntries > 2000 {
@@ -714,7 +716,7 @@ func (s *EmbeddingService) writeIndex(idx embeddingIndex) error {
 	if err != nil {
 		return err
 	}
-	return atomicWriteFile(s.indexPath, append(data, '\n'), 0o600)
+	return s.store.atomicWriteFile(s.indexPath, append(data, '\n'), 0o600)
 }
 
 func embeddingText(mem Recall) string {

@@ -1,5 +1,5 @@
 // Code generated from scripts/generate-contracts.py by swagger-typescript-api. DO NOT EDIT.
-// OpenAPI-SHA256: 46f84c597dbbffb864aba971fbce48f19496038166c315e890d4c8e82adf0192
+// OpenAPI-SHA256: b721f799ee929c6331c5c35ad7f8533aefe78998aa4cf8b1d75519ddc3f6771f
 
 /** 与 Nexus 配对的一台 AgentDock 节点。 */
 export interface AgentDockNode {
@@ -570,7 +570,7 @@ export interface PrivateNoteStatusResponse {
    * @min 0
    */
   count?: number;
-  /** 每条明文是否都有密文。 */
+  /** 明文与 age 密文是否一一对应且内容一致。 */
   encrypted_backup_ok: boolean;
   /** .keys/ 是否由仓库规则忽略。 */
   keys_git_ignored: boolean;
@@ -583,10 +583,14 @@ export interface PrivateNoteStatusResponse {
    * @min 0
    */
   notes_count?: number;
+  /** 没有对应明文的孤儿 age 密文路径。 */
+  orphaned_encrypted?: string[];
   /** notes/ 是否由仓库规则忽略。 */
   plaintext_git_ignored: boolean;
   /** Nexus 私密笔记根目录。 */
   root: string;
+  /** 与当前明文不一致或无法校验的 age 密文路径。 */
+  stale_encrypted?: string[];
 }
 
 /** 私密笔记安全元数据；不包含正文或正文片段。 */

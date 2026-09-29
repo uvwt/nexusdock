@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"io"
@@ -120,6 +121,8 @@ type StatusResult struct {
 	Count               int       `json:"count,omitempty"`
 	NotesCount          int       `json:"notes_count,omitempty"`
 	MissingEncrypted    []string  `json:"missing_encrypted,omitempty"`
+	StaleEncrypted      []string  `json:"stale_encrypted,omitempty"`
+	OrphanedEncrypted   []string  `json:"orphaned_encrypted,omitempty"`
 	EncryptedBackupOK   bool      `json:"encrypted_backup_ok"`
 	PlaintextGitIgnored bool      `json:"plaintext_git_ignored"`
 	KeysGitIgnored      bool      `json:"keys_git_ignored"`
@@ -290,15 +293,15 @@ func (s *Store) Write(req WriteRequest) (WriteResult, error) {
 		return WriteResult{}, fmt.Errorf("read existing encrypted private note: %w", encryptedReadErr)
 	}
 
-	if err := atomicWrite(abs, []byte(content), 0o600); err != nil {
-		return WriteResult{}, fmt.Errorf("write private note: %w", err)
-	}
+	// 密文是明文的派生副本。先发布密文、最后发布明文，保证进程若在两步之间退出，
+	// 明文仍是唯一事实来源；状态检查/维护可以据此确定性重建密文，而不会把半提交
+	// 的新明文误认为已经有对应备份。
 	if err := atomicWrite(encAbs, encrypted, 0o600); err != nil {
-		rollbackErr := restoreFile(abs, previous, existed, 0o600)
-		if encryptedExisted {
-			rollbackErr = errors.Join(rollbackErr, restoreFile(encAbs, previousEncrypted, true, 0o600))
-		}
-		return WriteResult{}, errors.Join(fmt.Errorf("write encrypted private note: %w", err), rollbackErr)
+		return WriteResult{}, fmt.Errorf("write encrypted private note: %w", err)
+	}
+	if err := atomicWrite(abs, []byte(content), 0o600); err != nil {
+		rollbackErr := restoreFile(encAbs, previousEncrypted, encryptedExisted, 0o600)
+		return WriteResult{}, errors.Join(fmt.Errorf("write private note: %w", err), rollbackErr)
 	}
 	return WriteResult{
 		Action: "write", Root: s.root, Path: rel, EncryptedPath: encRel,
@@ -317,7 +320,7 @@ func (s *Store) Delete(path string, confirmed bool) (DeleteResult, error) {
 	if err != nil {
 		return DeleteResult{}, err
 	}
-	plain, err := os.ReadFile(abs)
+	_, err = os.ReadFile(abs)
 	if errors.Is(err, fs.ErrNotExist) {
 		return DeleteResult{}, ErrNoteNotFound
 	}
@@ -329,16 +332,20 @@ func (s *Store) Delete(path string, confirmed bool) (DeleteResult, error) {
 	if err != nil {
 		return DeleteResult{}, err
 	}
-	if _, err := os.ReadFile(encAbs); errors.Is(err, fs.ErrNotExist) {
+	encrypted, err := os.ReadFile(encAbs)
+	if errors.Is(err, fs.ErrNotExist) {
 		return DeleteResult{}, ErrEncryptedMissing
-	} else if err != nil {
+	}
+	if err != nil {
 		return DeleteResult{}, fmt.Errorf("read encrypted private note before delete: %w", err)
 	}
-	if err := os.Remove(abs); err != nil {
-		return DeleteResult{}, fmt.Errorf("delete private note: %w", err)
+	// 删除同样让明文最后提交：若进程在两步之间退出，只会留下“明文存在、密文缺失”
+	// 的可修复状态，不会留下没有明文事实来源的孤儿密文。
+	if err := removeFile(encAbs); err != nil {
+		return DeleteResult{}, fmt.Errorf("delete encrypted private note: %w", err)
 	}
-	if err := os.Remove(encAbs); err != nil {
-		return DeleteResult{}, errors.Join(fmt.Errorf("delete encrypted private note: %w", err), restoreFile(abs, plain, true, 0o600))
+	if err := removeFile(abs); err != nil {
+		return DeleteResult{}, errors.Join(fmt.Errorf("delete private note: %w", err), restoreFile(encAbs, encrypted, true, 0o600))
 	}
 	removeEmptyParents(filepath.Dir(abs), filepath.Join(s.root, plainDir))
 	removeEmptyParents(filepath.Dir(encAbs), filepath.Join(s.root, encryptedDir))
@@ -364,16 +371,63 @@ func (s *Store) Status(ctx context.Context, action string) (StatusResult, error)
 		Action: action, Root: s.root, NotesCount: len(items), EncryptedBackupOK: true,
 		PlaintextGitIgnored: s.gitignoreContains("notes/"), KeysGitIgnored: s.gitignoreContains(".keys/"),
 	}
+	identity, identityErr := s.readIdentity()
+	seenEncrypted := make(map[string]struct{}, len(items))
 	for _, item := range items {
+		seenEncrypted[item.EncryptedPath] = struct{}{}
 		encAbs, resolveErr := s.resolveInternal(item.EncryptedPath)
 		if resolveErr != nil {
 			return StatusResult{}, resolveErr
 		}
-		if _, statErr := os.Stat(encAbs); statErr != nil {
+		if _, statErr := os.Stat(encAbs); errors.Is(statErr, fs.ErrNotExist) {
 			result.MissingEncrypted = append(result.MissingEncrypted, item.EncryptedPath)
+			continue
+		} else if statErr != nil {
+			return StatusResult{}, fmt.Errorf("stat encrypted private note: %w", statErr)
+		}
+		_, plainAbs, resolveErr := s.resolveNote(item.Path, "", "")
+		if resolveErr != nil {
+			return StatusResult{}, resolveErr
+		}
+		if identityErr != nil {
+			result.StaleEncrypted = append(result.StaleEncrypted, item.EncryptedPath)
+			continue
+		}
+		matches, compareErr := encryptedMatchesPlaintext(encAbs, plainAbs, identity)
+		if compareErr != nil || !matches {
+			result.StaleEncrypted = append(result.StaleEncrypted, item.EncryptedPath)
 		}
 	}
-	result.EncryptedBackupOK = len(result.MissingEncrypted) == 0
+	encryptedRoot := filepath.Join(s.root, encryptedDir)
+	if err := filepath.WalkDir(encryptedRoot, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if path == encryptedRoot {
+			return nil
+		}
+		if entry.Type()&os.ModeSymlink != 0 {
+			return nil
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		rel, err := filepath.Rel(s.root, path)
+		if err != nil {
+			return err
+		}
+		rel = filepath.ToSlash(rel)
+		if !strings.HasSuffix(rel, ".md.age") {
+			return nil
+		}
+		if _, ok := seenEncrypted[rel]; !ok {
+			result.OrphanedEncrypted = append(result.OrphanedEncrypted, rel)
+		}
+		return nil
+	}); err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return StatusResult{}, err
+	}
+	result.EncryptedBackupOK = len(result.MissingEncrypted) == 0 && len(result.StaleEncrypted) == 0 && len(result.OrphanedEncrypted) == 0
 	switch action {
 	case "check", "status":
 		result.Action = "check"
@@ -618,6 +672,51 @@ func normalizeNotePath(raw, category, title string) (string, error) {
 func encryptedPath(notePath string) string {
 	rel := strings.TrimPrefix(filepath.ToSlash(notePath), plainDir+"/")
 	return filepath.ToSlash(filepath.Join(encryptedDir, rel+".age"))
+}
+
+func (s *Store) readIdentity() (*age.X25519Identity, error) {
+	path := filepath.Join(s.root, keyDir, identityFile)
+	if err := ensureRegularOrMissing(path); err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	identity, err := age.ParseX25519Identity(strings.TrimSpace(string(data)))
+	if err != nil {
+		return nil, coded("PRIVATE_NOTES_AGE_IDENTITY_INVALID", "private notes age identity is invalid")
+	}
+	return identity, nil
+}
+
+func encryptedMatchesPlaintext(encryptedPath, plainPath string, identity age.Identity) (bool, error) {
+	encrypted, err := os.Open(encryptedPath)
+	if err != nil {
+		return false, err
+	}
+	defer encrypted.Close()
+	decrypted, err := age.Decrypt(encrypted, identity)
+	if err != nil {
+		return false, err
+	}
+	plain, err := os.Open(plainPath)
+	if err != nil {
+		return false, err
+	}
+	defer plain.Close()
+
+	plainHash := sha256.New()
+	plainBytes, err := io.Copy(plainHash, plain)
+	if err != nil {
+		return false, err
+	}
+	decryptedHash := sha256.New()
+	decryptedBytes, err := io.Copy(decryptedHash, decrypted)
+	if err != nil {
+		return false, err
+	}
+	return plainBytes == decryptedBytes && bytes.Equal(plainHash.Sum(nil), decryptedHash.Sum(nil)), nil
 }
 
 func (s *Store) ensureIdentity() (*age.X25519Identity, bool, error) {
@@ -1063,16 +1162,31 @@ func atomicWrite(path string, content []byte, mode fs.FileMode) error {
 	if err := os.Rename(tmp, path); err != nil {
 		return err
 	}
+	syncDirectoryBestEffort(filepath.Dir(path))
 	return nil
+}
+
+func syncDirectoryBestEffort(path string) {
+	dir, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	_ = dir.Sync()
+	_ = dir.Close()
 }
 
 func restoreFile(path string, previous []byte, existed bool, mode fs.FileMode) error {
 	if existed {
 		return atomicWrite(path, previous, mode)
 	}
+	return removeFile(path)
+}
+
+func removeFile(path string) error {
 	if err := os.Remove(path); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
+	syncDirectoryBestEffort(filepath.Dir(path))
 	return nil
 }
 

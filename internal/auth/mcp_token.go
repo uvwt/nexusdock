@@ -112,10 +112,13 @@ func generateMCPToken() (string, error) {
 }
 
 func writeInitialMCPToken(path, token string) error {
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
+	dir := filepath.Dir(path)
+	file, err := os.CreateTemp(dir, ".mcp-access-token-*")
 	if err != nil {
 		return err
 	}
+	tempPath := file.Name()
+	defer os.Remove(tempPath)
 	if _, err := file.WriteString(token + "\n"); err != nil {
 		_ = file.Close()
 		return fmt.Errorf("写入 MCP Token: %w", err)
@@ -131,6 +134,12 @@ func writeInitialMCPToken(path, token string) error {
 	if err := file.Close(); err != nil {
 		return fmt.Errorf("关闭 MCP Token 文件: %w", err)
 	}
+	// hard link 只在目标不存在时成功，既保留并发首次创建的 O_EXCL 语义，
+	// 又确保最终路径只会指向已经完整 fsync 的文件。
+	if err := os.Link(tempPath, path); err != nil {
+		return err
+	}
+	syncTokenDirectory(dir)
 	return nil
 }
 
@@ -168,10 +177,15 @@ func replaceMCPToken(path, token string) error {
 
 	// 目录同步保证 rename 元数据也持久化；部分文件系统不支持目录 Sync，
 	// 这种情况下 Token 文件已经原子替换完成，不应把成功重置回滚成失败。
-	dirFile, err := os.Open(dir)
-	if err == nil {
-		_ = dirFile.Sync()
-		_ = dirFile.Close()
-	}
+	syncTokenDirectory(dir)
 	return nil
+}
+
+func syncTokenDirectory(dir string) {
+	dirFile, err := os.Open(dir)
+	if err != nil {
+		return
+	}
+	_ = dirFile.Sync()
+	_ = dirFile.Close()
 }

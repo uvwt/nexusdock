@@ -254,3 +254,64 @@ func decryptForTest(t *testing.T, root string, encrypted []byte) []byte {
 	}
 	return plain
 }
+
+func TestStatusDetectsAndRepairsStaleEncryptedBackup(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "private-notes")
+	store, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Maintain(context.Background(), "init"); err != nil {
+		t.Fatal(err)
+	}
+	written, err := store.Write(WriteRequest{Title: "demo", Category: "audit", Content: "version one", Confirmed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	plainPath := filepath.Join(root, filepath.FromSlash(written.Path))
+	if err := atomicWrite(plainPath, []byte("version two\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	status, err := store.Status(context.Background(), "check")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.EncryptedBackupOK || len(status.StaleEncrypted) != 1 || status.StaleEncrypted[0] != written.EncryptedPath {
+		t.Fatalf("stale backup was not reported: %#v", status)
+	}
+	if _, err := store.Maintain(context.Background(), "sync-encrypted"); err != nil {
+		t.Fatal(err)
+	}
+	status, err = store.Status(context.Background(), "check")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !status.EncryptedBackupOK {
+		t.Fatalf("sync-encrypted did not repair backup: %#v", status)
+	}
+}
+
+func TestStatusDetectsOrphanedEncryptedBackup(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "private-notes")
+	store, err := New(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Maintain(context.Background(), "init"); err != nil {
+		t.Fatal(err)
+	}
+	written, err := store.Write(WriteRequest{Title: "demo", Category: "audit", Content: "version one", Confirmed: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(root, filepath.FromSlash(written.Path))); err != nil {
+		t.Fatal(err)
+	}
+	status, err := store.Status(context.Background(), "check")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if status.EncryptedBackupOK || len(status.OrphanedEncrypted) != 1 || status.OrphanedEncrypted[0] != written.EncryptedPath {
+		t.Fatalf("orphaned backup was not reported: %#v", status)
+	}
+}

@@ -286,7 +286,7 @@ func (s *Store) writeLifecycleLocked(record LifecycleRecord) error {
 	if len(data) > MaxFileBytes {
 		return errors.New("lifecycle record exceeds size limit")
 	}
-	return atomicWriteFile(s.lifecyclePath(record.EvolutionID), data, 0o644)
+	return s.atomicWriteFile(s.lifecyclePath(record.EvolutionID), data, 0o644)
 }
 
 func validateLifecycleTransition(request LifecycleTransition) error {

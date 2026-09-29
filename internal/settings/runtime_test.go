@@ -106,3 +106,18 @@ func TestRuntimeSettingsRejectsInvalidInput(t *testing.T) {
 	}
 	_ = validation
 }
+
+func TestRuntimeSettingsKeyRejectsSymlink(t *testing.T) {
+	dir := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside.key")
+	if err := os.WriteFile(outside, []byte(strings.Repeat("x", 32)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	keyPath := filepath.Join(dir, "runtime-ai-settings.key")
+	if err := os.Symlink(outside, keyPath); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loadOrCreateKey(keyPath); err == nil || !strings.Contains(err.Error(), "普通文件") {
+		t.Fatalf("symlink key error = %v", err)
+	}
+}

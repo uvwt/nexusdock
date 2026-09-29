@@ -347,7 +347,14 @@ func loadOrCreateKey(path string) ([]byte, error) {
 	if err := os.Chmod(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("设置运行时 AI 密钥目录权限: %w", err)
 	}
-	if data, err := os.ReadFile(path); err == nil {
+	if info, err := os.Lstat(path); err == nil {
+		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+			return nil, errors.New("运行时 AI 主密钥必须是普通文件")
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, fmt.Errorf("读取运行时 AI 主密钥: %w", err)
+		}
 		if len(data) != 32 {
 			return nil, errors.New("运行时 AI 主密钥长度无效")
 		}
@@ -356,7 +363,7 @@ func loadOrCreateKey(path string) ([]byte, error) {
 		}
 		return data, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
-		return nil, fmt.Errorf("读取运行时 AI 主密钥: %w", err)
+		return nil, fmt.Errorf("检查运行时 AI 主密钥: %w", err)
 	}
 	key := make([]byte, 32)
 	if _, err := io.ReadFull(rand.Reader, key); err != nil {
@@ -389,7 +396,17 @@ func loadOrCreateKey(path string) ([]byte, error) {
 		}
 		return nil, fmt.Errorf("发布运行时 AI 主密钥: %w", err)
 	}
+	syncDirectoryBestEffort(dir)
 	return key, nil
+}
+
+func syncDirectoryBestEffort(path string) {
+	dir, err := os.Open(path)
+	if err != nil {
+		return
+	}
+	_ = dir.Sync()
+	_ = dir.Close()
 }
 
 func viewOf(cfg RuntimeAIConfig, persisted bool, updatedAt string) View {

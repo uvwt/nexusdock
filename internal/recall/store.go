@@ -1,6 +1,7 @@
 package recall
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -24,8 +25,9 @@ var (
 )
 
 type Store struct {
-	root string
-	mu   sync.Mutex
+	root        string
+	mu          sync.Mutex
+	embeddingMu sync.Mutex
 }
 
 type Entry struct {
@@ -103,6 +105,11 @@ func NewStore(root string) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	if info, err := os.Lstat(abs); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return nil, ErrInvalidPath
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, err
+	}
 	if err := os.MkdirAll(abs, 0o755); err != nil {
 		return nil, err
 	}
@@ -132,6 +139,9 @@ func (s *Store) List(prefix string, maxEntries int) ([]Entry, error) {
 			return walkErr
 		}
 		if path == base {
+			return nil
+		}
+		if d.Type()&os.ModeSymlink != 0 {
 			return nil
 		}
 		if d.IsDir() {
@@ -174,7 +184,16 @@ func (s *Store) Read(path string) (Recall, error) {
 	if err != nil {
 		return Recall{}, err
 	}
-	data, err := os.ReadFile(abs)
+	rel, err := filepath.Rel(s.root, abs)
+	if err != nil {
+		return Recall{}, err
+	}
+	root, err := os.OpenRoot(s.root)
+	if err != nil {
+		return Recall{}, err
+	}
+	defer root.Close()
+	data, err := root.ReadFile(rel)
 	if err != nil {
 		return Recall{}, err
 	}
@@ -184,7 +203,6 @@ func (s *Store) Read(path string) (Recall, error) {
 	if !utf8.Valid(data) {
 		return Recall{}, errors.New("recall file must be utf-8 text")
 	}
-	rel, _ := filepath.Rel(s.root, abs)
 	content := string(data)
 	frontmatter, body := SplitFrontmatter(content)
 	return Recall{Path: filepath.ToSlash(rel), Content: content, Body: body, Frontmatter: frontmatter, SizeBytes: len(data)}, nil
@@ -224,9 +242,17 @@ func (s *Store) SearchWithOptions(options SearchOptions) ([]SearchResult, error)
 	if _, err := os.Stat(base); os.IsNotExist(err) {
 		return []SearchResult{}, nil
 	}
-	err := filepath.WalkDir(base, func(path string, d fs.DirEntry, walkErr error) error {
+	root, err := os.OpenRoot(s.root)
+	if err != nil {
+		return nil, err
+	}
+	defer root.Close()
+	err = filepath.WalkDir(base, func(path string, d fs.DirEntry, walkErr error) error {
 		if walkErr != nil {
 			return walkErr
+		}
+		if d.Type()&os.ModeSymlink != 0 {
+			return nil
 		}
 		if d.IsDir() {
 			rel, _ := filepath.Rel(s.root, path)
@@ -241,11 +267,14 @@ func (s *Store) SearchWithOptions(options SearchOptions) ([]SearchResult, error)
 		if !IsTextFile(path) {
 			return nil
 		}
-		data, err := os.ReadFile(path)
+		rel, relErr := filepath.Rel(s.root, path)
+		if relErr != nil {
+			return nil
+		}
+		data, err := root.ReadFile(rel)
 		if err != nil || len(data) > MaxFileBytes || !utf8.Valid(data) {
 			return nil
 		}
-		rel, _ := filepath.Rel(s.root, path)
 		rel = filepath.ToSlash(rel)
 		if excludePrefix != "" && (rel == excludePrefix || strings.HasPrefix(rel, excludePrefix+"/")) {
 			return nil
@@ -383,7 +412,7 @@ func (s *Store) Write(req WriteRequest) (Recall, error) {
 	if err := os.MkdirAll(filepath.Dir(prepared.abs), 0o755); err != nil {
 		return Recall{}, err
 	}
-	if err := atomicWriteFile(prepared.abs, []byte(prepared.content), 0o644); err != nil {
+	if err := s.atomicWriteFile(prepared.abs, []byte(prepared.content), 0o644); err != nil {
 		return Recall{}, err
 	}
 	return s.Read(prepared.path)
@@ -463,7 +492,20 @@ func (s *Store) Move(fromPath, toPath string, confirmed, overwrite bool) (Recall
 		rel, _ := filepath.Rel(s.root, toAbs)
 		return Recall{Path: filepath.ToSlash(rel), Frontmatter: map[string]string{}}, nil
 	}
-	info, err := os.Stat(fromAbs)
+	fromRel, err := filepath.Rel(s.root, fromAbs)
+	if err != nil {
+		return Recall{}, err
+	}
+	toRel, err := filepath.Rel(s.root, toAbs)
+	if err != nil {
+		return Recall{}, err
+	}
+	root, err := os.OpenRoot(s.root)
+	if err != nil {
+		return Recall{}, err
+	}
+	defer root.Close()
+	info, err := root.Stat(fromRel)
 	if err != nil {
 		return Recall{}, err
 	}
@@ -471,13 +513,15 @@ func (s *Store) Move(fromPath, toPath string, confirmed, overwrite bool) (Recall
 		if strings.HasPrefix(toAbs, fromAbs+string(filepath.Separator)) {
 			return Recall{}, errors.New("cannot move a directory inside itself")
 		}
-		if _, err := os.Stat(toAbs); err == nil {
+		if _, err := root.Stat(toRel); err == nil {
 			return Recall{}, ErrFileExists
-		}
-		if err := os.MkdirAll(filepath.Dir(toAbs), 0o755); err != nil {
+		} else if !errors.Is(err, os.ErrNotExist) {
 			return Recall{}, err
 		}
-		if err := os.Rename(fromAbs, toAbs); err != nil {
+		if err := root.MkdirAll(filepath.Dir(toRel), 0o755); err != nil {
+			return Recall{}, err
+		}
+		if err := root.Rename(fromRel, toRel); err != nil {
 			return Recall{}, err
 		}
 		removeEmptyParents(filepath.Dir(fromAbs), s.root)
@@ -487,13 +531,15 @@ func (s *Store) Move(fromPath, toPath string, confirmed, overwrite bool) (Recall
 	if !IsTextFile(fromPath) || !IsTextFile(toPath) {
 		return Recall{}, ErrUnsupportedFile
 	}
-	if _, err := os.Stat(toAbs); err == nil && !overwrite {
+	if _, err := root.Stat(toRel); err == nil && !overwrite {
 		return Recall{}, ErrFileExists
-	}
-	if err := os.MkdirAll(filepath.Dir(toAbs), 0o755); err != nil {
+	} else if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return Recall{}, err
 	}
-	if err := os.Rename(fromAbs, toAbs); err != nil {
+	if err := root.MkdirAll(filepath.Dir(toRel), 0o755); err != nil {
+		return Recall{}, err
+	}
+	if err := root.Rename(fromRel, toRel); err != nil {
 		return Recall{}, err
 	}
 	removeEmptyParents(filepath.Dir(fromAbs), s.root)
@@ -514,7 +560,16 @@ func (s *Store) Delete(path string, confirmed bool) error {
 	if err != nil {
 		return err
 	}
-	info, err := os.Stat(abs)
+	rel, err := filepath.Rel(s.root, abs)
+	if err != nil {
+		return err
+	}
+	root, err := os.OpenRoot(s.root)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	info, err := root.Stat(rel)
 	if err != nil {
 		return err
 	}
@@ -522,7 +577,7 @@ func (s *Store) Delete(path string, confirmed bool) error {
 		if abs == s.root {
 			return ErrInvalidPath
 		}
-		if err := os.RemoveAll(abs); err != nil {
+		if err := root.RemoveAll(rel); err != nil {
 			return err
 		}
 		removeEmptyParents(filepath.Dir(abs), s.root)
@@ -531,7 +586,7 @@ func (s *Store) Delete(path string, confirmed bool) error {
 	if !IsTextFile(abs) {
 		return ErrUnsupportedFile
 	}
-	if err := os.Remove(abs); err != nil {
+	if err := root.Remove(rel); err != nil {
 		return err
 	}
 	removeEmptyParents(filepath.Dir(abs), s.root)
@@ -588,12 +643,42 @@ func (s *Store) resolve(rel string) (string, error) {
 	if isReservedRecallPath(filepath.ToSlash(clean)) {
 		return "", ErrDisallowedPath
 	}
+	if err := ensureNoSymlink(s.root, clean); err != nil {
+		return "", err
+	}
 	abs := filepath.Clean(filepath.Join(s.root, clean))
 	rootWithSep := s.root + string(filepath.Separator)
 	if abs != s.root && !strings.HasPrefix(abs, rootWithSep) {
 		return "", ErrInvalidPath
 	}
 	return abs, nil
+}
+
+func ensureNoSymlink(root, rel string) error {
+	root = filepath.Clean(root)
+	if info, err := os.Lstat(root); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		return ErrInvalidPath
+	} else if err != nil {
+		return err
+	}
+	current := root
+	for _, segment := range strings.Split(filepath.ToSlash(rel), "/") {
+		if segment == "" {
+			continue
+		}
+		current = filepath.Join(current, segment)
+		info, err := os.Lstat(current)
+		if errors.Is(err, os.ErrNotExist) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return ErrInvalidPath
+		}
+	}
+	return nil
 }
 
 func isPrivateNotesPath(rel string) bool {
@@ -860,16 +945,33 @@ func SafeSegment(value string) string {
 
 func now() string { return time.Now().Format(time.RFC3339) }
 
-func atomicWriteFile(path string, data []byte, mode fs.FileMode) error {
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".recall-write-*")
+func (s *Store) atomicWriteFile(path string, data []byte, mode fs.FileMode) error {
+	rel, err := filepath.Rel(s.root, filepath.Clean(path))
+	if err != nil || rel == "." || rel == "" || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return ErrInvalidPath
+	}
+	root, err := os.OpenRoot(s.root)
 	if err != nil {
 		return err
 	}
-	tmpName := tmp.Name()
+	defer root.Close()
+	dir := filepath.Dir(rel)
+	if err := root.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	dirRoot, err := root.OpenRoot(dir)
+	if err != nil {
+		return err
+	}
+	defer dirRoot.Close()
+	tmpName := ".recall-write-" + rand.Text()
+	tmp, err := dirRoot.OpenFile(tmpName, os.O_WRONLY|os.O_CREATE|os.O_EXCL, mode)
+	if err != nil {
+		return err
+	}
 	cleanup := func() {
 		_ = tmp.Close()
-		_ = os.Remove(tmpName)
+		_ = dirRoot.Remove(tmpName)
 	}
 	defer cleanup()
 	if err := tmp.Chmod(mode); err != nil {
@@ -884,5 +986,12 @@ func atomicWriteFile(path string, data []byte, mode fs.FileMode) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmpName, path)
+	if err := dirRoot.Rename(tmpName, filepath.Base(rel)); err != nil {
+		return err
+	}
+	if dirFile, err := dirRoot.Open("."); err == nil {
+		_ = dirFile.Sync()
+		_ = dirFile.Close()
+	}
+	return nil
 }

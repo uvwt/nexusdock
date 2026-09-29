@@ -487,3 +487,65 @@ func TestHybridSearchUsesSemanticEnhancementAndLexicalFallback(t *testing.T) {
 		t.Fatalf("embedding failure should keep lexical results: %#v", fallback)
 	}
 }
+
+func TestEmbeddingReindexSerializesAcrossServiceInstances(t *testing.T) {
+	store := newTestStore(t)
+	for _, item := range []struct {
+		path    string
+		content string
+	}{
+		{path: "recall/docs/projects/a/project.md", content: "# A\nalpha"},
+		{path: "recall/docs/projects/b/project.md", content: "# B\nbeta"},
+	} {
+		if _, err := store.Write(WriteRequest{Path: item.path, Content: item.content, Confirmed: true}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	entered := make(chan struct{}, 2)
+	release := make(chan struct{})
+	var once sync.Once
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Input []string `json:"input"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		entered <- struct{}{}
+		once.Do(func() { <-release })
+		data := make([]map[string]any, len(req.Input))
+		for i := range req.Input {
+			data[i] = map[string]any{"index": i, "embedding": []float64{1, 0}}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
+	}))
+	defer server.Close()
+
+	services := []*EmbeddingService{
+		NewEmbeddingService(store, EmbeddingConfig{Enabled: true, Endpoint: server.URL}),
+		NewEmbeddingService(store, EmbeddingConfig{Enabled: true, Endpoint: server.URL}),
+	}
+	prefixes := []string{"recall/docs/projects/a", "recall/docs/projects/b"}
+	errs := make(chan error, 2)
+	for i := range services {
+		go func(i int) {
+			_, err := services[i].Reindex(context.Background(), EmbeddingReindexRequest{Prefix: prefixes[i]})
+			errs <- err
+		}(i)
+	}
+	<-entered
+	close(release)
+	for range services {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+	}
+	idx, err := services[0].loadIndex()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(idx.Documents) != 2 {
+		t.Fatalf("concurrent prefix reindex lost documents: %#v", idx.Documents)
+	}
+}

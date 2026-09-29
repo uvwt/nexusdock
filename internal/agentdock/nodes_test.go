@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 
 	protocol "github.com/uvwt/agentdock-protocol"
 	"github.com/uvwt/nexusdock/internal/core"
@@ -233,5 +234,52 @@ func TestHelloUpdatesCapabilitiesAndDisabledNodeIsRejected(t *testing.T) {
 	}
 	if _, err := store.UpdateHello(t.Context(), node.ID, Hello{DeviceID: node.DeviceID}); !errors.Is(err, ErrNodeDisabled) {
 		t.Fatalf("disabled hello error = %v", err)
+	}
+}
+
+func TestConcurrentPartialNodeUpdatesDoNotOverwriteOtherFields(t *testing.T) {
+	store, _ := newTestStore(t)
+	ctx := context.Background()
+	pairing, err := store.CreatePairingCode(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	node, err := store.Pair(ctx, PairInput{Code: pairing.Code, DeviceID: "device_concurrent_update", Name: "old"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	entered := make(chan struct{}, 2)
+	release := make(chan struct{})
+	store.now = func() time.Time {
+		entered <- struct{}{}
+		<-release
+		return time.Unix(1, 0)
+	}
+	newName := "new"
+	disabled := false
+	errs := make(chan error, 2)
+	go func() {
+		_, err := store.Update(ctx, node.ID, UpdateInput{Name: &newName})
+		errs <- err
+	}()
+	go func() {
+		_, err := store.Update(ctx, node.ID, UpdateInput{Enabled: &disabled})
+		errs <- err
+	}()
+	<-entered
+	<-entered
+	close(release)
+	for range 2 {
+		if err := <-errs; err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := store.Get(ctx, node.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Name != "new" || got.Enabled {
+		t.Fatalf("partial updates overwrote each other: name=%q enabled=%v", got.Name, got.Enabled)
 	}
 }

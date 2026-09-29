@@ -147,3 +147,32 @@ func TestSearchSnippetKeepsUTF8Boundaries(t *testing.T) {
 		t.Fatalf("fallback snippet is not valid UTF-8: %q", pathResults[0].Snippet)
 	}
 }
+
+func TestStoreRejectsSymlinkTraversal(t *testing.T) {
+	root := t.TempDir()
+	store, err := NewStore(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.md")
+	if err := os.WriteFile(outside, []byte("outside"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	inbox := filepath.Join(root, "recall", "docs", "inbox")
+	if err := os.MkdirAll(inbox, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(inbox, "link.md")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := store.Read("recall/docs/inbox/link.md"); !errors.Is(err, ErrInvalidPath) {
+		t.Fatalf("symlink read error = %v, want ErrInvalidPath", err)
+	}
+	results, err := store.Search("outside", "recall/docs/inbox", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(results) != 0 {
+		t.Fatalf("symlink target leaked through search: %#v", results)
+	}
+}
