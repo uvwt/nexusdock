@@ -3,18 +3,8 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { AppWindow, Cable, Copy, Eye, EyeOff, RotateCcw } from 'lucide-react';
 import { ApiError, api } from '../../api/client';
+import type { MCPAccessTokenResponse, MCPSettingsResponse, MCPSettingsUpdateRequest } from '../../api/generated';
 import Dialog from '../Dialog';
-
-type MCPTokenResponse = {
-  ok: boolean;
-  token: string;
-};
-
-type MCPSettingsResponse = MCPTokenResponse & {
-  mcp_apps_enabled: boolean;
-  persisted: boolean;
-  updated_at?: string;
-};
 
 function errorMessage(error: unknown, t: TFunction): string {
   if (error instanceof ApiError) return error.message;
@@ -80,7 +70,7 @@ export default function MCPAccessPanel({ refreshToken }: { refreshToken: number 
     setResetting(true);
     setNotice(null);
     try {
-      const result = await api<MCPTokenResponse>('/v1/settings/mcp-token/reset', { method: 'POST' });
+      const result = await api<MCPAccessTokenResponse>('/v1/settings/mcp-token/reset', { method: 'POST' });
       setToken(result.token);
       setRevealed(true);
       setResetOpen(false);
@@ -99,9 +89,10 @@ export default function MCPAccessPanel({ refreshToken }: { refreshToken: number 
     setSavingApps(true);
     setNotice(null);
     try {
+      const payload: MCPSettingsUpdateRequest = { mcp_apps_enabled: enabled };
       const result = await api<MCPSettingsResponse>('/v1/settings/mcp', {
         method: 'PUT',
-        body: JSON.stringify({ mcp_apps_enabled: enabled }),
+        body: JSON.stringify(payload),
       });
       setMCPAppsEnabled(result.mcp_apps_enabled);
       setNotice({ tone: 'success', text: result.mcp_apps_enabled ? t('Chat cards enabled.') : t('Chat cards disabled.') });

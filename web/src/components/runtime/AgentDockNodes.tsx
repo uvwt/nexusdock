@@ -2,32 +2,18 @@ import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNo
 import { useTranslation } from 'react-i18next';
 import { CirclePlus, Copy, Pencil, Server, Trash2 } from 'lucide-react';
 import { api } from '../../api/client';
+import type {
+  AgentDockNode,
+  AgentDockNodeListResponse,
+  AgentDockNodeResponse,
+  AgentDockNodeUpdateRequest,
+  AgentDockPairingCodeResponse,
+} from '../../api/generated';
 import Dialog from '../Dialog';
 
 const selectedNodeStorageKey = 'nexus:runtime-node-id';
 
 type Notice = { tone: 'success' | 'error' | 'info'; text: string };
-
-export type AgentDockNode = {
-  id: string;
-  device_id: string;
-  name: string;
-  enabled: boolean;
-  version?: string;
-  protocol_version?: string;
-  os?: string;
-  arch?: string;
-  capabilities: string[];
-  tool_contract_hash?: string;
-  online: boolean;
-  last_seen_at?: string;
-  created_at: string;
-  updated_at: string;
-};
-
-type NodeListResponse = { ok: boolean; nodes: AgentDockNode[]; count: number };
-type NodeResponse = { ok: boolean; node: AgentDockNode };
-type PairingResponse = { ok: boolean; pairing: { code: string; expires_at: string } };
 
 export function useAgentDockNodes(refreshToken: number) {
   const { t } = useTranslation();
@@ -47,7 +33,7 @@ export function useAgentDockNodes(refreshToken: number) {
     let cancelled = false;
     setLoading(true);
     setError('');
-    api<NodeListResponse>('/v1/runtime/nodes').then((result) => {
+    api<AgentDockNodeListResponse>('/v1/runtime/nodes').then((result) => {
       if (cancelled) return;
       const next = result.nodes || [];
       setNodes(next);
@@ -106,7 +92,7 @@ export function AgentDockNodesPanel({ nodes, selectedNodeID, loading, error, onR
   const [editName, setEditName] = useState('');
   const [editEnabled, setEditEnabled] = useState(true);
   const [deleting, setDeleting] = useState<AgentDockNode | null>(null);
-  const [pairing, setPairing] = useState<PairingResponse['pairing'] | null>(null);
+  const [pairing, setPairing] = useState<AgentDockPairingCodeResponse['pairing'] | null>(null);
   const [busy, setBusy] = useState('');
   const [notice, setNotice] = useState<Notice | null>(null);
 
@@ -114,7 +100,7 @@ export function AgentDockNodesPanel({ nodes, selectedNodeID, loading, error, onR
     setBusy('pair');
     setNotice(null);
     try {
-      const result = await api<PairingResponse>('/v1/runtime/nodes/pairing-codes', { method: 'POST' });
+      const result = await api<AgentDockPairingCodeResponse>('/v1/runtime/nodes/pairing-codes', { method: 'POST' });
       setPairing(result.pairing);
     } catch (cause) {
       setNotice({ tone: 'error', text: cause instanceof Error ? cause.message : t('Failed to generate pairing code') });
@@ -134,8 +120,9 @@ export function AgentDockNodesPanel({ nodes, selectedNodeID, loading, error, onR
     if (!editing || busy) return;
     setBusy('save');
     try {
-      const result = await api<NodeResponse>(`/v1/runtime/nodes/${encodeURIComponent(editing.id)}`, {
-        method: 'PATCH', body: JSON.stringify({ name: editName.trim(), enabled: editEnabled }),
+      const payload: AgentDockNodeUpdateRequest = { name: editName.trim(), enabled: editEnabled };
+      const result = await api<AgentDockNodeResponse>(`/v1/runtime/nodes/${encodeURIComponent(editing.id)}`, {
+        method: 'PATCH', body: JSON.stringify(payload),
       });
       setEditing(null);
       onReload();

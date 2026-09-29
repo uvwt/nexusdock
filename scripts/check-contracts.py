@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import pathlib
@@ -13,6 +14,7 @@ from typing import Any
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONTRACTS = ROOT / "contracts"
 HTTP_SOURCE = ROOT / "internal" / "httpx"
+GENERATED_API_TYPES = ROOT / "web" / "src" / "api" / "generated.ts"
 
 REQUIRED_PATHS = {
     "/v1/recall",
@@ -541,6 +543,30 @@ def validate_source_route_coverage(errors: list[str]) -> None:
         errors.append(f"OpenAPI operation has no HTTP route: {method} {route}")
 
 
+
+def openapi_contract_hash(document: dict[str, Any]) -> str:
+    canonical = json.dumps(
+        document, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    return hashlib.sha256(canonical).hexdigest()
+
+
+def generated_api_types_source_hash(text: str) -> str | None:
+    match = re.search(r"^// OpenAPI-SHA256: ([0-9a-f]{64})$", text, re.MULTILINE)
+    return match.group(1) if match is not None else None
+
+
+def validate_generated_api_types_source(errors: list[str]) -> None:
+    if not GENERATED_API_TYPES.exists():
+        errors.append("generated frontend API types are missing")
+        return
+    expected = openapi_contract_hash(current_openapi())
+    actual = generated_api_types_source_hash(GENERATED_API_TYPES.read_text(encoding="utf-8"))
+    if actual is None:
+        errors.append("generated frontend API types are missing OpenAPI-SHA256 marker")
+    elif actual != expected:
+        errors.append("generated frontend API types are stale; run: cd web && npm run generate:api-types")
+
 def validate_retired_contract_dirs(errors: list[str]) -> None:
     if CONTRACTS.exists():
         errors.append("retired contracts directory remains")
@@ -587,6 +613,7 @@ def main() -> int:
     validate_openapi_references(errors)
     validate_source_route_coverage(errors)
     validate_query_parameter_coverage(errors)
+    validate_generated_api_types_source(errors)
     validate_retired_contract_dirs(errors)
     validate_error_code_catalog(errors)
     if errors:

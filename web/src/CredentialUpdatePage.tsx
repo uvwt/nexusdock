@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { KeyRound } from 'lucide-react';
 import { api, clearCSRFToken, setCSRFToken } from './api/client';
-import { type WebSession } from './Auth';
+import type { AuthCredentialUpdateRequest, WebSession, WebSessionResponse } from './api/generated';
 import { errorMessage, safeReturnTo } from './authShared';
 import { useTranslation } from 'react-i18next';
 
-type SessionResponse = { ok: boolean; session: WebSession };
 
 export default function CredentialUpdatePage() {
   const { t } = useTranslation();
@@ -19,7 +18,7 @@ export default function CredentialUpdatePage() {
   const [error, setError] = useState('');
 
   useEffect(() => {
-    api<SessionResponse>('/v1/auth/session').then((result) => {
+    api<WebSessionResponse>('/v1/auth/session').then((result) => {
       setSession(result.session);
       if (result.session.csrf_token) setCSRFToken(result.session.csrf_token);
     }).catch(() => window.location.replace(`/login?return_to=${encodeURIComponent(returnTo)}`));
@@ -38,7 +37,8 @@ export default function CredentialUpdatePage() {
     setSubmitting(true);
     setError('');
     try {
-      await api('/v1/auth/credential', { method: 'POST', body: JSON.stringify({ current, next }) });
+      const payload: AuthCredentialUpdateRequest = { current, next };
+      await api('/v1/auth/credential', { method: 'POST', body: JSON.stringify(payload) });
       clearCSRFToken();
       window.location.replace(`/login?changed=1&return_to=${encodeURIComponent(returnTo)}`);
     } catch (submitError) {

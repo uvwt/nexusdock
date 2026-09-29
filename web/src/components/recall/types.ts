@@ -1,4 +1,9 @@
 import type { FormEvent, RefObject } from 'react';
+import type {
+  EmbeddingSearchHit,
+  EmbeddingSearchResponse as APIEmbeddingSearchResponse,
+  EmbeddingStatusResponse,
+} from '../../api/generated';
 
 export type EntryType = 'file' | 'directory';
 export type RecallPage = 'library' | 'cards' | 'evolution' | 'vectors';
@@ -28,19 +33,9 @@ export type PendingRecallAction =
   | { kind: 'delete'; path: string; error?: string }
   | null;
 
-export type EmbeddingStatus = {
-  enabled?: boolean;
-  configured?: boolean;
-  reachable?: boolean;
-  model?: string;
-  endpoint?: string;
-  index_path?: string;
-  index?: { model?: string; count?: number; dimension?: number; updated_at?: string };
-  error?: string;
-  reason?: string;
-};
-export type EmbeddingSearchResult = { path: string; title?: string; score: number };
-export type EmbeddingSearchResponse = { ok?: boolean; count?: number; model?: string; index?: { count?: number; dimension?: number }; results?: EmbeddingSearchResult[] };
+export type EmbeddingStatus = EmbeddingStatusResponse;
+export type EmbeddingSearchResult = EmbeddingSearchHit;
+export type EmbeddingSearchResponse = APIEmbeddingSearchResponse;
 
 export type EmbeddingPanelState = {
   status: EmbeddingStatus | null;

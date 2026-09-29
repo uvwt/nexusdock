@@ -8,7 +8,7 @@ import {
   Package, ServerCog, Settings, UserRound, Wrench, X,
 } from 'lucide-react';
 import RecallWorkspace from './RecallWorkspace';
-import { type WebSession } from './Auth';
+import type { SystemStatus, WebSession, WebSessionResponse } from './api/generated';
 import AccountSecurity from './AccountSecurity';
 import AISettingsPanel from './components/settings/AISettingsPanel';
 import LanguageSettingsPanel from './components/settings/LanguageSettingsPanel';
@@ -31,17 +31,6 @@ type Section = 'home' | 'recall' | 'templates' | RuntimeSection | 'settings';
 type SettingsSection = 'account' | 'mcp' | 'ai' | 'system';
 type Tone = 'ok' | 'warn' | 'danger' | 'info' | 'muted';
 
-
-type SystemStatus = {
-  ok: boolean;
-  service: string;
-  version?: string;
-  revision?: string;
-  database: string;
-  schema_version: number;
-  nexus_data_dir?: string;
-  recall_repo_dir?: string;
-};
 
 type RuntimeOverview = {
   ok: boolean;
@@ -155,7 +144,7 @@ export default function App() {
 
   useEffect(() => {
     let cancelled = false;
-    api<{ ok: boolean; session: WebSession }>('/v1/auth/session').then((result) => {
+    api<WebSessionResponse>('/v1/auth/session').then((result) => {
       if (cancelled) return;
       setSession(result.session);
       if (result.session.csrf_token) setCSRFToken(result.session.csrf_token);

@@ -2,12 +2,10 @@ import { useEffect, useState } from 'react';
 import { Clock3, KeyRound, Laptop, LogOut, ShieldCheck, Smartphone, Trash2 } from 'lucide-react';
 import { api, clearCSRFToken, setCSRFToken } from './api/client';
 import { formatTime } from './lib/time';
-import { type WebSession } from './Auth';
+import type { WebSession, WebSessionListResponse, WebSessionResponse } from './api/generated';
 import { errorMessage } from './authShared';
 import { useTranslation } from 'react-i18next';
 
-type SessionResponse = { ok: boolean; session: WebSession };
-type SessionsResponse = { ok: boolean; items: WebSession[] };
 
 export default function AccountSecurity({ refreshToken }: { refreshToken: number }) {
   const { t } = useTranslation();
@@ -22,8 +20,8 @@ export default function AccountSecurity({ refreshToken }: { refreshToken: number
     setError('');
     try {
       const [current, list] = await Promise.all([
-        api<SessionResponse>('/v1/auth/session'),
-        api<SessionsResponse>('/v1/auth/sessions'),
+        api<WebSessionResponse>('/v1/auth/session'),
+        api<WebSessionListResponse>('/v1/auth/sessions'),
       ]);
       setSession(current.session);
       setSessions(list.items || []);

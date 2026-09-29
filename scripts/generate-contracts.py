@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""NexusDock HTTP contract definitions used by scripts/check-contracts.py."""
+"""NexusDock HTTP contract source used by validation and frontend type generation."""
 
 from __future__ import annotations
 
@@ -1239,3 +1239,11 @@ def build_openapi(schemas: dict[str, Any]) -> dict[str, Any]:
         "paths": paths,
         "components": {"parameters": parameters, "schemas": schemas},
     }
+
+
+if __name__ == "__main__":
+    import json
+    import sys
+
+    json.dump(build_openapi(build_schemas()), sys.stdout, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    sys.stdout.write("\n")

@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "generate:api-types": "node scripts/generate-api-types.mjs",
+    "check:api-types": "node scripts/generate-api-types.mjs --check",
     "check:i18n": "node scripts/check-i18n.mjs",
-    "build": "npm run check:i18n && tsc -b && vite build",
+    "build": "npm run check:api-types && npm run check:i18n && tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
@@ -21,6 +23,7 @@
   },
   "devDependencies": {
     "@types/react": "19.2.15",
-    "@types/react-dom": "19.2.3"
+    "@types/react-dom": "19.2.3",
+    "swagger-typescript-api": "13.13.0"
   }
 }

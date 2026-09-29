@@ -14,29 +14,14 @@ import {
   Trash2,
 } from 'lucide-react';
 import { ApiError, api, setCSRFToken } from './api/client';
+import type {
+  AuthLoginRequest,
+  AuthStatusResponse,
+  WebSessionResponse,
+} from './api/generated';
 import { useTranslation } from 'react-i18next';
 import { errorMessage, safeReturnTo } from './authShared';
 import './auth.css';
-
-export type WebSession = {
-  id: string;
-  user_id: string;
-  username: string;
-  display_name: string;
-  remember_me: boolean;
-  ip_prefix: string;
-  user_agent_summary: string;
-  created_at: string;
-  last_seen_at: string;
-  idle_expires_at: string;
-  absolute_expires_at: string;
-  must_change_password: boolean;
-  csrf_token?: string;
-  current?: boolean;
-};
-
-type SessionResponse = { ok: boolean; session: WebSession };
-type SessionsResponse = { ok: boolean; items: WebSession[] };
 
 export function LoginPage() {
   const { t } = useTranslation();
@@ -53,11 +38,11 @@ export function LoginPage() {
     let cancelled = false;
     (async () => {
       try {
-        const status = await api<{ ok: boolean; initialized: boolean }>('/v1/auth/status');
+        const status = await api<AuthStatusResponse>('/v1/auth/status');
         if (!cancelled) setInitialized(status.initialized);
         if (!status.initialized) return;
         try {
-          const current = await api<SessionResponse>('/v1/auth/session');
+          const current = await api<WebSessionResponse>('/v1/auth/session');
           if (current.session.csrf_token) setCSRFToken(current.session.csrf_token);
           window.location.replace(current.session.must_change_password
             ? `/change-password?return_to=${encodeURIComponent(returnTo)}`
@@ -78,9 +63,10 @@ export function LoginPage() {
     setSubmitting(true);
     setError('');
     try {
-      const result = await api<SessionResponse>('/v1/auth/login', {
+      const payload: AuthLoginRequest = { username, password, remember_me: rememberMe };
+      const result = await api<WebSessionResponse>('/v1/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ username, password, remember_me: rememberMe }),
+        body: JSON.stringify(payload),
       });
       if (result.session.csrf_token) setCSRFToken(result.session.csrf_token);
       setPassword('');

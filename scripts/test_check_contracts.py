@@ -58,5 +58,20 @@ r.Post(
         )
 
 
+class GeneratedAPIContractTest(unittest.TestCase):
+    def test_openapi_hash_is_canonical(self) -> None:
+        left = {"b": [2, 1], "a": {"label": "中文", "enabled": True}}
+        right = {"a": {"enabled": True, "label": "中文"}, "b": [2, 1]}
+        self.assertEqual(CHECK.openapi_contract_hash(left), CHECK.openapi_contract_hash(right))
+
+    def test_generated_types_hash_marker_is_strict(self) -> None:
+        digest = "a" * 64
+        self.assertEqual(
+            CHECK.generated_api_types_source_hash(f"// header\n// OpenAPI-SHA256: {digest}\n"),
+            digest,
+        )
+        self.assertIsNone(CHECK.generated_api_types_source_hash("// OpenAPI-SHA256: not-a-hash\n"))
+
+
 if __name__ == "__main__":
     unittest.main()

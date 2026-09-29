@@ -3,60 +3,24 @@ import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
 import { Activity, BrainCircuit, DatabaseZap, Save, SearchCheck } from 'lucide-react';
 import { ApiError, api } from '../../api/client';
+import type {
+  EmbeddingStatusResponse,
+  RuntimeAIConnectionTestResponse,
+  RuntimeAISettingsResponse,
+  RuntimeAISettingsUpdateRequest,
+  RuntimeSecretUpdate,
+  RuntimeAISettingsView,
+} from '../../api/generated';
 
 type SecretForm = { value: string; clear: boolean };
-type EmbeddingSettings = {
-  enabled: boolean;
-  endpoint: string;
-  model: string;
-  timeout_seconds: number;
-  api_key_configured: boolean;
-};
-type Stage3Settings = {
-  enabled: boolean;
-  endpoint: string;
-  model: string;
-  timeout_seconds: number;
-  interval_minutes: number;
-  api_key_configured: boolean;
-  configured: boolean;
-};
-type RuntimeAISettings = {
-  embedding: EmbeddingSettings;
-  stage3: Stage3Settings;
-  persisted: boolean;
-  updated_at?: string;
-};
-type SettingsResponse = { ok: boolean; settings: RuntimeAISettings };
-type ConnectionTestResult = {
-  ok: boolean;
-  target: 'stage3' | 'embedding';
-  model?: string;
-  message: string;
-  latency_ms: number;
-};
-type EmbeddingStatus = {
-  ok: boolean;
-  enabled: boolean;
-  configured: boolean;
-  reachable?: boolean;
-  model?: string;
-  error?: string;
-  reason?: string;
-  index?: { count?: number; dimension?: number; updated_at?: string };
-};
-
-type FormState = {
-  embedding: EmbeddingSettings;
-  stage3: Stage3Settings;
-};
+type FormState = Pick<RuntimeAISettingsView, 'embedding' | 'stage3'>;
 
 function errorMessage(error: unknown, t: TFunction): string {
   if (error instanceof ApiError) return error.message;
   return error instanceof Error ? error.message : t('Request failed');
 }
 
-function secretAction(secret: SecretForm) {
+function secretAction(secret: SecretForm): RuntimeSecretUpdate {
   if (secret.clear) return { action: 'clear' };
   if (secret.value.trim()) return { action: 'replace', value: secret.value.trim() };
   return { action: 'keep' };
@@ -67,18 +31,18 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
   const [form, setForm] = useState<FormState | null>(null);
   const [embeddingSecret, setEmbeddingSecret] = useState<SecretForm>({ value: '', clear: false });
   const [stage3Secret, setStage3Secret] = useState<SecretForm>({ value: '', clear: false });
-  const [embeddingStatus, setEmbeddingStatus] = useState<EmbeddingStatus | null>(null);
+  const [embeddingStatus, setEmbeddingStatus] = useState<EmbeddingStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [reindexing, setReindexing] = useState(false);
   const [testingTarget, setTestingTarget] = useState<'stage3' | 'embedding' | null>(null);
-  const [stage3Test, setStage3Test] = useState<ConnectionTestResult | null>(null);
-  const [embeddingTest, setEmbeddingTest] = useState<ConnectionTestResult | null>(null);
+  const [stage3Test, setStage3Test] = useState<RuntimeAIConnectionTestResponse | null>(null);
+  const [embeddingTest, setEmbeddingTest] = useState<RuntimeAIConnectionTestResponse | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'error' | 'info'; text: string } | null>(null);
 
   async function refreshEmbeddingStatus(enabled = form?.embedding.enabled ?? false) {
     try {
-      setEmbeddingStatus(await api<EmbeddingStatus>('/v1/embeddings/status', { timeoutMs: 35_000 }));
+      setEmbeddingStatus(await api<EmbeddingStatusResponse>('/v1/embeddings/status', { timeoutMs: 35_000 }));
     } catch (error) {
       setEmbeddingStatus({ ok: false, enabled, configured: false, reachable: false, error: errorMessage(error, t) });
     }
@@ -87,7 +51,7 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
   async function load() {
     setLoading(true);
     try {
-      const settingsResult = await api<SettingsResponse>('/v1/settings/ai');
+      const settingsResult = await api<RuntimeAISettingsResponse>('/v1/settings/ai');
       setForm({ embedding: settingsResult.settings.embedding, stage3: settingsResult.settings.stage3 });
       setEmbeddingSecret({ value: '', clear: false });
       setStage3Secret({ value: '', clear: false });
@@ -110,25 +74,26 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
     setSaving(true);
     setNotice(null);
     try {
-      const result = await api<SettingsResponse>('/v1/settings/ai', {
+      const payload: RuntimeAISettingsUpdateRequest = {
+        embedding: {
+          enabled: form.embedding.enabled,
+          endpoint: form.embedding.endpoint.trim(),
+          model: form.embedding.model.trim(),
+          timeout_seconds: form.embedding.timeout_seconds,
+          api_key: secretAction(embeddingSecret),
+        },
+        stage3: {
+          enabled: form.stage3.enabled,
+          endpoint: form.stage3.endpoint.trim(),
+          model: form.stage3.model.trim(),
+          timeout_seconds: form.stage3.timeout_seconds,
+          interval_minutes: form.stage3.interval_minutes,
+          api_key: secretAction(stage3Secret),
+        },
+      };
+      const result = await api<RuntimeAISettingsResponse>('/v1/settings/ai', {
         method: 'PUT',
-        body: JSON.stringify({
-          embedding: {
-            enabled: form.embedding.enabled,
-            endpoint: form.embedding.endpoint.trim(),
-            model: form.embedding.model.trim(),
-            timeout_seconds: form.embedding.timeout_seconds,
-            api_key: secretAction(embeddingSecret),
-          },
-          stage3: {
-            enabled: form.stage3.enabled,
-            endpoint: form.stage3.endpoint.trim(),
-            model: form.stage3.model.trim(),
-            timeout_seconds: form.stage3.timeout_seconds,
-            interval_minutes: form.stage3.interval_minutes,
-            api_key: secretAction(stage3Secret),
-          },
-        }),
+        body: JSON.stringify(payload),
       });
       setForm({ embedding: result.settings.embedding, stage3: result.settings.stage3 });
       setEmbeddingSecret({ value: '', clear: false });
@@ -164,7 +129,7 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
     const setResult = target === 'stage3' ? setStage3Test : setEmbeddingTest;
     setResult(null);
     try {
-      const result = await api<ConnectionTestResult>(`/v1/settings/ai/test/${target}`, {
+      const result = await api<RuntimeAIConnectionTestResponse>(`/v1/settings/ai/test/${target}`, {
         method: 'POST',
         timeoutMs: 310_000,
       });

@@ -1,8 +1,11 @@
 FROM node:26-alpine AS web-builder
+# 前端契约类型由仓库内 Python OpenAPI 源生成；Python 仅存在于构建阶段，不进入最终镜像。
+RUN apk add --no-cache python3
 WORKDIR /src/web
 COPY web/package*.json ./
 RUN npm ci
 COPY web ./
+COPY scripts/generate-contracts.py /src/scripts/generate-contracts.py
 COPY internal/httpx/web_dist ../internal/httpx/web_dist
 RUN npm run build
 
