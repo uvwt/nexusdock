@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="NexusDock is the self-hosted control center for your AgentDock fleet: one web console, one MCP endpoint, shared Recall and reusable Workflows." />
+  <meta name="theme-color" content="#0c0c0e" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="NexusDock — One control plane for every AgentDock" />
+  <meta property="og:description" content="Bring your AgentDock devices into one self-hosted control center without exposing every machine to the internet." />
+  <meta name="twitter:card" content="summary" />
+  <title>NexusDock — One control plane for every AgentDock</title>
+  <link rel="icon" href="./mark.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <header class="site-header" data-header>
+    <a class="brand" href="#top" aria-label="NexusDock home">
+      <img src="./mark.svg" alt="" width="30" height="30" />
+      <span>NexusDock</span>
+    </a>
+    <nav class="desktop-nav" aria-label="Primary navigation">
+      <a href="#architecture" data-i18n="nav.architecture">Architecture</a>
+      <a href="#features" data-i18n="nav.features">Features</a>
+      <a href="#deploy" data-i18n="nav.deploy">Deploy</a>
+      <a href="https://github.com/uvwt/nexusdock" target="_blank" rel="noreferrer">GitHub</a>
+    </nav>
+    <div class="header-actions">
+      <button class="language-button" type="button" data-language aria-label="Switch language">中文</button>
+      <a class="header-cta" href="#deploy" data-i18n="nav.start">Get started</a>
+      <button class="menu-button" type="button" data-menu aria-label="Open menu" aria-expanded="false" aria-controls="mobile-navigation"><span></span><span></span></button>
+    </div>
+    <nav class="mobile-nav" id="mobile-navigation" data-mobile-nav aria-label="Mobile navigation">
+      <a href="#architecture" data-i18n="nav.architecture">Architecture</a>
+      <a href="#features" data-i18n="nav.features">Features</a>
+      <a href="#deploy" data-i18n="nav.deploy">Deploy</a>
+      <a href="https://github.com/uvwt/nexusdock" target="_blank" rel="noreferrer">GitHub</a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section class="hero" id="top">
+      <div class="hero-glow" aria-hidden="true"></div>
+      <div class="hero-copy">
+        <div class="eyebrow"><span class="status-dot"></span><span data-i18n="hero.eyebrow">Self-hosted · Open source · Built for AgentDock</span></div>
+        <h1 data-i18n-html="hero.title">One control plane.<br><span>Every AgentDock.</span></h1>
+        <p class="hero-lead" data-i18n="hero.lead">Connect your Macs, Windows PCs, servers and containers to one private control center. Share Recall and Workflows, inspect live Runtime state, and expose one MCP endpoint to your AI clients.</p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#deploy"><span data-i18n="hero.start">Start self-hosting</span><svg aria-hidden="true" viewBox="0 0 20 20"><path d="M5 10h10M11 6l4 4-4 4"/></svg></a>
+          <a class="button button-secondary" href="https://github.com/uvwt/nexusdock" target="_blank" rel="noreferrer"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 2.75a9.25 9.25 0 0 0-2.92 18.03c.46.08.63-.2.63-.45v-1.8c-2.58.56-3.12-1.1-3.12-1.1-.42-1.08-1.03-1.36-1.03-1.36-.84-.58.06-.57.06-.57.93.07 1.42.96 1.42.96.83 1.42 2.17 1.01 2.7.77.08-.6.32-1.01.59-1.24-2.06-.24-4.23-1.03-4.23-4.57 0-1.01.36-1.84.95-2.49-.1-.23-.41-1.18.09-2.45 0 0 .78-.25 2.54.95A8.84 8.84 0 0 1 12 7.12c.79 0 1.57.1 2.31.31 1.76-1.2 2.53-.95 2.53-.95.51 1.27.19 2.22.1 2.45.59.65.95 1.48.95 2.49 0 3.55-2.18 4.33-4.25 4.56.33.29.63.86.63 1.73v2.62c0 .25.17.54.64.45A9.25 9.25 0 0 0 12 2.75Z"/></svg><span data-i18n="hero.github">View on GitHub</span></a>
+        </div>
+        <div class="hero-proof">
+          <span><i></i><span data-i18n="hero.proof1">One MCP endpoint</span></span>
+          <span><i></i><span data-i18n="hero.proof2">Outbound-only nodes</span></span>
+          <span><i></i><span data-i18n="hero.proof3">Your data, your infrastructure</span></span>
+        </div>
+      </div>
+
+      <div class="network-card" aria-label="NexusDock connection architecture">
+        <div class="network-grid" aria-hidden="true"></div>
+        <div class="network-topbar">
+          <div><span class="window-dot"></span><span class="window-dot"></span><span class="window-dot"></span></div>
+          <span>nexus / topology</span>
+          <span class="live-pill"><i></i> LIVE</span>
+        </div>
+        <div class="network-canvas">
+          <div class="client-row"><div class="mini-node">ChatGPT</div><div class="mini-node">Claude</div><div class="mini-node">Codex</div></div>
+          <div class="connection connection-client"></div>
+          <div class="nexus-node">
+            <div class="nexus-mark"><span></span><span></span><span></span><span></span><b></b></div>
+            <strong>NexusDock</strong><small>Web · MCP · Recall</small>
+          </div>
+          <div class="connection connection-nodes"></div>
+          <div class="device-row">
+            <div class="device-node"><span class="device-icon">⌘</span><div><strong>Mac mini</strong><small><i></i> Online</small></div></div>
+            <div class="device-node"><span class="device-icon">▦</span><div><strong>Windows</strong><small><i></i> Online</small></div></div>
+            <div class="device-node"><span class="device-icon">&gt;_</span><div><strong>Server</strong><small><i></i> Online</small></div></div>
+          </div>
+          <div class="network-caption" data-i18n="hero.caption">AgentDock nodes connect out. No inbound port required.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="signal-strip" aria-label="NexusDock core concepts">
+      <div><strong>01</strong><span data-i18n="signals.fleet">Fleet control</span></div>
+      <div><strong>02</strong><span data-i18n="signals.recall">Shared Recall</span></div>
+      <div><strong>03</strong><span data-i18n="signals.workflow">Reusable Workflow</span></div>
+      <div><strong>04</strong><span data-i18n="signals.runtime">Live Runtime</span></div>
+      <div><strong>05</strong><span data-i18n="signals.mcp">Unified MCP</span></div>
+    </section>
+
+    <section class="section architecture" id="architecture">
+      <div class="section-heading">
+        <span class="section-index">01 / Architecture</span>
+        <h2 data-i18n-html="architecture.title">Your devices stay local.<br><span>Your control plane stays yours.</span></h2>
+        <p data-i18n="architecture.lead">NexusDock adds a shared layer above AgentDock without replacing the execution layer on each machine.</p>
+      </div>
+      <div class="architecture-grid">
+        <article class="architecture-card architecture-card-large">
+          <div class="card-label"><span>CONTROL PLANE</span><b>NEXUSDOCK</b></div>
+          <div class="architecture-stack">
+            <div class="stack-row primary"><span>Web Console</span><span>MCP Gateway</span></div>
+            <div class="stack-row"><span>Recall</span><span>Workflow</span><span>Auth</span></div>
+          </div>
+          <div class="architecture-arrow"><span></span><small data-i18n="architecture.outbound">Outbound WebSocket connections</small><span></span></div>
+          <div class="agentdock-row"><div><b>AgentDock</b><span>macOS</span></div><div><b>AgentDock</b><span>Windows</span></div><div><b>AgentDock</b><span>Linux</span></div></div>
+        </article>
+        <div class="architecture-side">
+          <article class="info-card">
+            <div class="icon-shell"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.3c0 4.6 3.2 8.9 7.5 9.7 4.3-.8 7.5-5.1 7.5-9.7V6L12 3Z"/><path d="m9 12 2 2 4-4"/></svg></div>
+            <h3 data-i18n="architecture.privateTitle">Private by design</h3>
+            <p data-i18n="architecture.privateText">Nodes initiate the connection. You do not need to expose every AgentDock machine to the public internet.</p>
+          </article>
+          <article class="info-card">
+            <div class="icon-shell"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 8h8v8H8z"/><path d="M3 12h5M16 12h5M12 3v5M12 16v5"/></svg></div>
+            <h3 data-i18n="architecture.localTitle">Execution stays local</h3>
+            <p data-i18n="architecture.localText">Files, commands, browser automation and other machine-local capabilities remain on their AgentDock node.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section features" id="features">
+      <div class="section-heading compact">
+        <span class="section-index">02 / Capabilities</span>
+        <h2 data-i18n-html="features.title">One place to connect.<br><span>Nothing extra to operate.</span></h2>
+      </div>
+      <div class="feature-grid">
+        <article class="feature-card feature-wide">
+          <div class="feature-copy">
+            <span class="feature-number">01</span>
+            <h3 data-i18n="features.fleetTitle">Fleet overview</h3>
+            <p data-i18n="features.fleetText">See every paired AgentDock node, its connection state, version and capabilities from a single console.</p>
+          </div>
+          <div class="fleet-preview" aria-hidden="true">
+            <div class="preview-head"><span>Devices</span><small>3 connected</small></div>
+            <div class="preview-device"><span class="preview-status"></span><strong>Mac mini</strong><small>macOS · arm64</small><b>Online</b></div>
+            <div class="preview-device"><span class="preview-status"></span><strong>Windows</strong><small>Windows · amd64</small><b>Online</b></div>
+            <div class="preview-device"><span class="preview-status"></span><strong>VPS</strong><small>Linux · amd64</small><b>Online</b></div>
+          </div>
+        </article>
+
+        <article class="feature-card">
+          <span class="feature-number">02</span>
+          <div class="feature-icon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M5 5.5A2.5 2.5 0 0 1 7.5 3H19v16H7.5A2.5 2.5 0 0 0 5 21.5v-16Z"/><path d="M5 5.5A2.5 2.5 0 0 1 7.5 8H19"/></svg></div>
+          <h3 data-i18n="features.recallTitle">Shared Recall</h3>
+          <p data-i18n="features.recallText">Centralize searchable Markdown memory, experience cards and private notes across your devices.</p>
+          <div class="micro-ui"><span>project.md</span><span>runbooks/</span><span>cards/</span></div>
+        </article>
+
+        <article class="feature-card">
+          <span class="feature-number">03</span>
+          <div class="feature-icon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M6 4h12v5H6zM6 15h12v5H6z"/><path d="M9 9v6M15 9v6"/></svg></div>
+          <h3 data-i18n="features.workflowTitle">Reusable Workflows</h3>
+          <p data-i18n="features.workflowText">Publish, version, match and reuse proven workflows instead of rebuilding the same operational steps.</p>
+          <div class="workflow-line"><i></i><span></span><i></i><span></span><i></i></div>
+        </article>
+
+        <article class="feature-card">
+          <span class="feature-number">04</span>
+          <div class="feature-icon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 17h3l2.5-7 3 5 2-4 2 6H20"/></svg></div>
+          <h3 data-i18n="features.runtimeTitle">Live Runtime</h3>
+          <p data-i18n="features.runtimeText">Inspect node-local Tasks, Skills, Plugins, MCP servers and diagnostics without duplicating runtime state.</p>
+          <div class="runtime-bars" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        </article>
+
+        <article class="feature-card">
+          <span class="feature-number">05</span>
+          <div class="feature-icon"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M8 12h8M5 8l-3 4 3 4M19 8l3 4-3 4"/></svg></div>
+          <h3 data-i18n="features.mcpTitle">One MCP endpoint</h3>
+          <p data-i18n="features.mcpText">Give AI clients one MCP address for NexusDock tools and capabilities routed to the right AgentDock node.</p>
+          <code class="endpoint">https://nexus.example.com/mcp</code>
+        </article>
+      </div>
+    </section>
+
+    <section class="section deploy" id="deploy">
+      <div class="section-heading compact">
+        <span class="section-index">03 / Deploy</span>
+        <h2 data-i18n-html="deploy.title">From zero to your own Nexus.<br><span>Three steps.</span></h2>
+        <p data-i18n="deploy.lead">NexusDock ships as a multi-architecture container for Linux AMD64 and ARM64.</p>
+      </div>
+      <div class="steps">
+        <article><span>01</span><h3 data-i18n="deploy.step1Title">Start NexusDock</h3><p data-i18n="deploy.step1Text">Run the official container with persistent volumes for Nexus state and Recall.</p></article>
+        <article><span>02</span><h3 data-i18n="deploy.step2Title">Pair your devices</h3><p data-i18n="deploy.step2Text">Generate a short-lived pairing code, then connect each AgentDock node.</p></article>
+        <article><span>03</span><h3 data-i18n="deploy.step3Title">Connect your AI client</h3><p data-i18n="deploy.step3Text">Point ChatGPT, Claude, Codex or another MCP client at your single NexusDock endpoint.</p></article>
+      </div>
+      <div class="code-shell">
+        <div class="code-topbar"><div><span></span><span></span><span></span></div><span>compose.yaml</span><button type="button" data-copy data-i18n="deploy.copy">Copy</button></div>
+        <pre><code data-compose>services:
+  nexusdock:
+    image: agentdockio/nexusdock:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:18777:18777"
+    volumes:
+      - nexus-data:/var/lib/nexus
+      - recall:/recall
+
+volumes:
+  nexus-data:
+  recall:</code></pre>
+        <div class="code-command"><span>$</span><code>docker compose run --rm nexusdock admin init admin</code></div>
+        <div class="code-command"><span>$</span><code>docker compose up -d</code></div>
+      </div>
+    </section>
+
+    <section class="section closing">
+      <div class="closing-panel">
+        <img src="./mark.svg" alt="" width="50" height="50" />
+        <span class="section-index">NEXUSDOCK / OPEN SOURCE</span>
+        <h2 data-i18n-html="closing.title">Your agents already work everywhere.<br><span>Give them one home.</span></h2>
+        <p data-i18n="closing.text">Self-host NexusDock, keep control of your infrastructure, and connect every AgentDock through one shared layer.</p>
+        <div class="hero-actions centered">
+          <a class="button button-primary light-button" href="https://github.com/uvwt/nexusdock" target="_blank" rel="noreferrer"><span data-i18n="closing.github">Explore on GitHub</span><svg aria-hidden="true" viewBox="0 0 20 20"><path d="M5 10h10M11 6l4 4-4 4"/></svg></a>
+          <a class="button button-ghost" href="https://hub.docker.com/r/agentdockio/nexusdock" target="_blank" rel="noreferrer" data-i18n="closing.docker">Docker Hub</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <a class="brand footer-brand" href="#top"><img src="./mark.svg" alt="" width="28" height="28" /><span>NexusDock</span></a>
+    <p data-i18n="footer.tagline">The self-hosted control center for your AgentDock fleet.</p>
+    <div class="footer-links">
+      <a href="https://github.com/uvwt/agentdock" target="_blank" rel="noreferrer">AgentDock</a>
+      <a href="https://github.com/uvwt/nexusdock/releases" target="_blank" rel="noreferrer">Releases</a>
+      <a href="https://hub.docker.com/r/agentdockio/nexusdock" target="_blank" rel="noreferrer">Docker Hub</a>
+      <a href="https://github.com/uvwt/nexusdock" target="_blank" rel="noreferrer">GitHub</a>
+    </div>
+  </footer>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
