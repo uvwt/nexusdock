@@ -21,6 +21,11 @@ import (
 // canned 按上游 path 提供响应 JSON，用来模拟真实节点、旧节点与契约漂移。
 func runtimeContractTestServer(t *testing.T, canned map[string]string) (*Server, http.Handler, string) {
 	t.Helper()
+	return runtimeContractTestServerWithErrors(t, canned, nil)
+}
+
+func runtimeContractTestServerWithErrors(t *testing.T, canned map[string]string, remoteErrors map[string]*protocol.RemoteError) (*Server, http.Handler, string) {
+	t.Helper()
 	db, err := core.OpenSQLite(t.Context(), ":memory:", 1)
 	if err != nil {
 		t.Fatal(err)
@@ -78,6 +83,14 @@ func runtimeContractTestServer(t *testing.T, canned map[string]string) (*Server,
 			}
 			arguments, _ := invoke["arguments"].(map[string]any)
 			path, _ := arguments["path"].(string)
+			if remoteErr := remoteErrors[path]; remoteErr != nil {
+				if err := socket.WriteJSON(map[string]any{
+					"type": protocol.MessageToolError, "request_id": invoke["request_id"], "error": remoteErr,
+				}); err != nil {
+					return
+				}
+				continue
+			}
 			result, ok := canned[path]
 			if !ok {
 				result = `{"ok": false}`
@@ -110,29 +123,64 @@ func runtimeContractRequest(t *testing.T, handler http.Handler, method, target s
 	return payload
 }
 
-func TestRuntimeOverviewIncludesPluginCount(t *testing.T) {
+func TestRuntimeOverviewUsesSingleLightweightProjection(t *testing.T) {
 	_, mux, nodeID := runtimeContractTestServer(t, map[string]string{
-		"/internal/runtime/tasks":  `{"ok":true,"tasks":[]}`,
-		"/internal/runtime/skills": `{"ok":true,"skills":[]}`,
-		"/internal/runtime/mcp":    `{"ok":true,"servers":[]}`,
-		"/internal/runtime/plugins": `{"ok":true,"plugins":[
-			{"name":"cloudflare","version":"0.1.2","enabled":true,"package_digest":"sha256:cloudflare","format":"portable","skill_count":9,"mcp_count":1},
-			{"name":"context7","version":"local","enabled":true,"package_digest":"sha256:context7","format":"claude","skill_count":0,"mcp_count":1}
-		]}`,
+		"/internal/runtime/overview": `{
+			"ok":true,
+			"tasks":{"active":2,"completed":4,"blocked":1,"active_recent_24h":1},
+			"skills":{"count":12},
+			"plugins":{"count":2,"available":true},
+			"mcp":{"count":3}
+		}`,
 	})
 	payload := runtimeContractRequest(t, mux, http.MethodGet, "/v1/runtime/nodes/"+nodeID+"/overview")
 	plugins, _ := payload["plugins"].(map[string]any)
 	if plugins["count"] != float64(2) || plugins["available"] != true {
 		t.Fatalf("Plugin overview = %v, want count=2 available=true; payload=%v", plugins, payload)
 	}
+	tasks, _ := payload["tasks"].(map[string]any)
+	if tasks["active"] != float64(2) || tasks["active_recent_24h"] != float64(1) {
+		t.Fatalf("Task overview = %v; payload=%v", tasks, payload)
+	}
+	skills, _ := payload["skills"].(map[string]any)
+	mcp, _ := payload["mcp"].(map[string]any)
+	if skills["count"] != float64(12) || mcp["count"] != float64(3) {
+		t.Fatalf("overview counts = %v", payload)
+	}
 }
 
-func TestRuntimeOverviewKeepsExistingMetricsWhenPluginContractDrifts(t *testing.T) {
-	_, mux, nodeID := runtimeContractTestServer(t, map[string]string{
+func TestRuntimeOverviewFallsBackForLegacyAgentDock(t *testing.T) {
+	_, mux, nodeID := runtimeContractTestServerWithErrors(t, map[string]string{
 		"/internal/runtime/tasks":   `{"ok":true,"tasks":[]}`,
 		"/internal/runtime/skills":  `{"ok":true,"skills":[]}`,
 		"/internal/runtime/mcp":     `{"ok":true,"servers":[]}`,
-		"/internal/runtime/plugins": `{"ok":true,"plugins":{"name":"broken"}}`,
+		"/internal/runtime/plugins": `{"ok":true,"plugins":[]}`,
+	}, map[string]*protocol.RemoteError{
+		"/internal/runtime/overview": {
+			Code: "NOT_FOUND", Category: "not_found", Message: "runtime API route not found",
+		},
+	})
+	payload := runtimeContractRequest(t, mux, http.MethodGet, "/v1/runtime/nodes/"+nodeID+"/overview")
+	if payload["ok"] != true {
+		t.Fatalf("旧 AgentDock fallback 应成功: %v", payload)
+	}
+	for _, field := range []string{"skills", "mcp", "plugins"} {
+		value, _ := payload[field].(map[string]any)
+		if value["count"] != float64(0) {
+			t.Fatalf("%s fallback count = %v", field, value)
+		}
+	}
+}
+
+func TestRuntimeOverviewKeepsMetricsWhenPluginsUnavailable(t *testing.T) {
+	_, mux, nodeID := runtimeContractTestServer(t, map[string]string{
+		"/internal/runtime/overview": `{
+			"ok":true,
+			"tasks":{"active":0,"completed":0,"blocked":0,"active_recent_24h":0},
+			"skills":{"count":5},
+			"plugins":{"count":0,"available":false},
+			"mcp":{"count":2}
+		}`,
 	})
 	payload := runtimeContractRequest(t, mux, http.MethodGet, "/v1/runtime/nodes/"+nodeID+"/overview")
 	if payload["ok"] != true {
@@ -144,7 +192,7 @@ func TestRuntimeOverviewKeepsExistingMetricsWhenPluginContractDrifts(t *testing.
 	}
 	skills, _ := payload["skills"].(map[string]any)
 	mcp, _ := payload["mcp"].(map[string]any)
-	if skills["count"] != float64(0) || mcp["count"] != float64(0) {
+	if skills["count"] != float64(5) || mcp["count"] != float64(2) {
 		t.Fatalf("Plugin 不可用不应影响已有指标: %v", payload)
 	}
 }

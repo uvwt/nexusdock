@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	protocol "github.com/uvwt/agentdock-protocol"
@@ -72,6 +73,81 @@ func (h *Hub) RuntimeDiagnostics(ctx context.Context, nodeID string) ([]RuntimeD
 		return nil, normalizeRuntimeDiagnosticsError(err)
 	}
 	return parseRuntimeDiagnostics(nodeID, payload)
+}
+
+func (h *Hub) RuntimeOverview(ctx context.Context, nodeID string) (RuntimeOverview, error) {
+	payload, err := h.invokeRuntime(ctx, nodeID, http.MethodGet, "/internal/runtime/overview", nil, nil)
+	if err == nil {
+		return parseRuntimeOverview(nodeID, payload)
+	}
+	var remote *RemoteError
+	if !errors.As(err, &remote) || remote.Category != "not_found" || remote.Code != "NOT_FOUND" {
+		return RuntimeOverview{}, err
+	}
+
+	// 旧版 AgentDock 没有轻量 overview。只对明确的 NOT_FOUND 回退旧契约。
+	// 四份旧明细彼此独立，必须并发读取；否则旧设备会继续叠加四次远程往返，
+	// 甚至还多出前面的能力探测延迟。
+	var (
+		tasks     []RuntimeTaskSummary
+		taskErr   error
+		skills    []RuntimeSkillSummary
+		skillErr  error
+		servers   []RuntimeMCPServerSummary
+		mcpErr    error
+		plugins   []RuntimePluginSummary
+		pluginErr error
+		wg        sync.WaitGroup
+	)
+	wg.Add(4)
+	go func() {
+		defer wg.Done()
+		tasks, taskErr = h.RuntimeTasks(ctx, nodeID, 200)
+	}()
+	go func() {
+		defer wg.Done()
+		skills, skillErr = h.RuntimeSkills(ctx, nodeID)
+	}()
+	go func() {
+		defer wg.Done()
+		servers, mcpErr = h.RuntimeMCPServers(ctx, nodeID)
+	}()
+	go func() {
+		defer wg.Done()
+		plugins, pluginErr = h.RuntimePlugins(ctx, nodeID)
+	}()
+	wg.Wait()
+
+	if taskErr != nil {
+		return RuntimeOverview{}, taskErr
+	}
+	if skillErr != nil {
+		return RuntimeOverview{}, skillErr
+	}
+	if mcpErr != nil {
+		return RuntimeOverview{}, mcpErr
+	}
+	counts := RuntimeOverviewTaskCounts{}
+	recentCutoff := time.Now().UTC().Add(-24 * time.Hour)
+	for _, task := range tasks {
+		switch task.Status {
+		case "active":
+			counts.Active++
+			if updatedAt, parseErr := time.Parse(time.RFC3339Nano, strings.TrimSpace(task.UpdatedAt)); parseErr == nil && !updatedAt.Before(recentCutoff) {
+				counts.ActiveRecent24H++
+			}
+		case "completed":
+			counts.Completed++
+		case "blocked":
+			counts.Blocked++
+		}
+	}
+	return RuntimeOverview{
+		Tasks:   counts,
+		Skills:  RuntimeOverviewCount{Count: len(skills)},
+		Plugins: RuntimeOverviewPluginCount{Count: len(plugins), Available: pluginErr == nil},
+		MCP:     RuntimeOverviewCount{Count: len(servers)},
+	}, nil
 }
 
 func (h *Hub) RuntimeTasks(ctx context.Context, nodeID string, limit int) ([]RuntimeTaskSummary, error) {

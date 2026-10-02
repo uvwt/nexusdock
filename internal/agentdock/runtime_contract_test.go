@@ -49,6 +49,34 @@ func asContractError(err error, target **ContractError) bool {
 	return false
 }
 
+func TestParseRuntimeOverview_CurrentNodeResponse(t *testing.T) {
+	overview, err := parseRuntimeOverview("node1", fixturePayload(t, `{
+		"ok": true,
+		"tasks": {"active": 2, "completed": 3, "blocked": 1, "active_recent_24h": 1},
+		"skills": {"count": 12},
+		"plugins": {"count": 2, "available": true},
+		"mcp": {"count": 4}
+	}`))
+	if err != nil {
+		t.Fatalf("解析 Runtime overview 失败: %v", err)
+	}
+	if overview.Tasks.Active != 2 || overview.Tasks.ActiveRecent24H != 1 ||
+		overview.Skills.Count != 12 || overview.Plugins.Count != 2 ||
+		!overview.Plugins.Available || overview.MCP.Count != 4 {
+		t.Fatalf("overview = %#v", overview)
+	}
+}
+
+func TestParseRuntimeOverview_MissingCountReturnsContractError(t *testing.T) {
+	_, err := parseRuntimeOverview("node1", fixturePayload(t, `{
+		"tasks": {"active": 0, "completed": 0, "blocked": 0, "active_recent_24h": 0},
+		"skills": {},
+		"plugins": {"count": 0, "available": true},
+		"mcp": {"count": 0}
+	}`))
+	assertContractError(t, err, "GET /internal/runtime/overview", "skills.count")
+}
+
 const currentTaskListFixture = `{
   "ok": true, "source": "agentdock-api", "action": "list", "count": 2,
   "tasks": [

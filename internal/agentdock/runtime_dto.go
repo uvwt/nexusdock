@@ -42,6 +42,29 @@ type RuntimeDiagnosticCall struct {
 	Stages        []RuntimeDiagnosticStage `json:"stages,omitempty"`
 }
 
+type RuntimeOverviewTaskCounts struct {
+	Active          int `json:"active"`
+	Completed       int `json:"completed"`
+	Blocked         int `json:"blocked"`
+	ActiveRecent24H int `json:"active_recent_24h"`
+}
+
+type RuntimeOverviewCount struct {
+	Count int `json:"count"`
+}
+
+type RuntimeOverviewPluginCount struct {
+	Count     int  `json:"count"`
+	Available bool `json:"available"`
+}
+
+type RuntimeOverview struct {
+	Tasks   RuntimeOverviewTaskCounts  `json:"tasks"`
+	Skills  RuntimeOverviewCount       `json:"skills"`
+	Plugins RuntimeOverviewPluginCount `json:"plugins"`
+	MCP     RuntimeOverviewCount       `json:"mcp"`
+}
+
 // RuntimeTaskStep 是任务的执行步骤。列表项里的 current_step 只携带 id/title/status，
 // 任务详情中的完整步骤会额外带 phase/updated_at，缺失时保持零值。
 type RuntimeTaskStep struct {
@@ -195,6 +218,82 @@ type RuntimeTaskDeleteResult struct {
 	// DeletedTask 是上游删除确认的回显，UI 只依赖成功状态；保留原始 JSON 透传，
 	// 避免为一条不再被解读的回显维护完整任务 DTO。
 	DeletedTask json.RawMessage
+}
+
+func parseRuntimeOverview(node string, payload map[string]any) (RuntimeOverview, error) {
+	const operation = "GET /internal/runtime/overview"
+	p := runtimeParser{node: node, operation: operation}
+	tasks, err := p.object("tasks", payload["tasks"], false)
+	if err != nil {
+		return RuntimeOverview{}, err
+	}
+	skills, err := p.object("skills", payload["skills"], false)
+	if err != nil {
+		return RuntimeOverview{}, err
+	}
+	plugins, err := p.object("plugins", payload["plugins"], false)
+	if err != nil {
+		return RuntimeOverview{}, err
+	}
+	mcp, err := p.object("mcp", payload["mcp"], false)
+	if err != nil {
+		return RuntimeOverview{}, err
+	}
+
+	readCount := func(field string, value any) (int, error) {
+		if value == nil {
+			return 0, p.fail(field, "缺少必填字段")
+		}
+		count, err := p.optionalInt(field, value)
+		if err != nil {
+			return 0, err
+		}
+		if count < 0 {
+			return 0, p.fail(field, "不得为负数")
+		}
+		return count, nil
+	}
+
+	active, err := readCount("tasks.active", tasks["active"])
+	if err != nil {
+		return RuntimeOverview{}, err
+	}
+	completed, err := readCount("tasks.completed", tasks["completed"])
+	if err != nil {
+		return RuntimeOverview{}, err
+	}
+	blocked, err := readCount("tasks.blocked", tasks["blocked"])
+	if err != nil {
+		return RuntimeOverview{}, err
+	}
+	activeRecent24H, err := readCount("tasks.active_recent_24h", tasks["active_recent_24h"])
+	if err != nil {
+		return RuntimeOverview{}, err
+	}
+	skillCount, err := readCount("skills.count", skills["count"])
+	if err != nil {
+		return RuntimeOverview{}, err
+	}
+	pluginCount, err := readCount("plugins.count", plugins["count"])
+	if err != nil {
+		return RuntimeOverview{}, err
+	}
+	pluginAvailable, err := p.requiredBool("plugins.available", plugins["available"])
+	if err != nil {
+		return RuntimeOverview{}, err
+	}
+	mcpCount, err := readCount("mcp.count", mcp["count"])
+	if err != nil {
+		return RuntimeOverview{}, err
+	}
+	return RuntimeOverview{
+		Tasks: RuntimeOverviewTaskCounts{
+			Active: active, Completed: completed, Blocked: blocked, ActiveRecent24H: activeRecent24H,
+		},
+		Skills:  RuntimeOverviewCount{Count: skillCount},
+		Plugins: RuntimeOverviewPluginCount{Count: pluginCount, Available: pluginAvailable},
+		MCP:     RuntimeOverviewCount{Count: mcpCount},
+	}, nil
 }
 
 func parseRuntimeDiagnostics(node string, payload map[string]any) ([]RuntimeDiagnosticCall, error) {

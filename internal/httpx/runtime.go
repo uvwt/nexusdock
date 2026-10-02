@@ -19,7 +19,6 @@ import (
 
 const (
 	runtimeTaskListLimit = 200
-	recentTaskWindow     = 24 * time.Hour
 )
 
 // 以下结构体是 Runtime 视图的 UI API JSON 形状。字段值全部来自 internal/agentdock
@@ -161,48 +160,22 @@ func (s *Server) runtimeDiagnostics(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) runtimeOverview(w http.ResponseWriter, r *http.Request) {
 	nodeID := r.PathValue("nodeID")
-	tasks, taskErr := s.agentDockHub.RuntimeTasks(r.Context(), nodeID, runtimeTaskListLimit)
-	skills, skillErr := s.agentDockHub.RuntimeSkills(r.Context(), nodeID)
-	servers, mcpErr := s.agentDockHub.RuntimeMCPServers(r.Context(), nodeID)
-	plugins, pluginErr := s.agentDockHub.RuntimePlugins(r.Context(), nodeID)
-	// 概览只展示前 6 个 Skill，先按安装名排序保证结果稳定。
-	sort.SliceStable(skills, func(i, j int) bool { return skills[i].Skill < skills[j].Skill })
-	counts := map[string]int{"active": 0, "completed": 0, "blocked": 0, "active_recent_24h": 0}
-	recentCutoff := time.Now().UTC().Add(-recentTaskWindow)
-	for _, task := range tasks {
-		counts[task.Status]++
-		if task.Status == "active" && taskUpdatedSince(task.UpdatedAt, recentCutoff) {
-			counts["active_recent_24h"]++
-		}
+	overview, err := s.agentDockHub.RuntimeOverview(r.Context(), nodeID)
+	if err != nil {
+		writeRuntimeUnavailable(w, err)
+		return
 	}
-	skillItems := make([]runtimeSkillSummary, 0, len(skills))
-	for _, skill := range skills {
-		skillItems = append(skillItems, runtimeSkillSummaryView(skill))
-	}
-	payload := map[string]any{
-		"ok":     taskErr == nil && skillErr == nil && mcpErr == nil,
-		"tasks":  counts,
-		"skills": map[string]any{"count": len(skillItems), "items": firstSkills(skillItems, 6)},
-		"mcp":    map[string]any{"count": len(servers)},
-		// Plugin runtime API 在旧版 AgentDock（如 v0.8.3）中不存在。
-		// 插件数量是增量指标，读取失败时只标记不可用，不能拖垮已有的 Task/Skill/MCP 概览。
-		"plugins":    map[string]any{"count": len(plugins), "available": pluginErr == nil},
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":         true,
+		"tasks":      overview.Tasks,
+		"skills":     overview.Skills,
+		"mcp":        overview.MCP,
+		"plugins":    overview.Plugins,
 		"paths":      s.opsPaths(),
 		"node_id":    nodeID,
 		"source":     "agentdock-runtime-api",
 		"updated_at": time.Now().UTC().Format(time.RFC3339Nano),
-	}
-	if taskErr != nil || skillErr != nil || mcpErr != nil {
-		err := firstOpsError(taskErr, skillErr, mcpErr)
-		writeRuntimeUnavailable(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, payload)
-}
-
-func taskUpdatedSince(value string, cutoff time.Time) bool {
-	updatedAt, err := time.Parse(time.RFC3339Nano, strings.TrimSpace(value))
-	return err == nil && !updatedAt.Before(cutoff)
+	})
 }
 
 func (s *Server) runtimeTasks(w http.ResponseWriter, r *http.Request) {
@@ -460,15 +433,6 @@ func cleanRuntimeSkillFilePath(value string) (string, error) {
 	return clean, nil
 }
 
-func firstOpsError(values ...error) error {
-	for _, err := range values {
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func (s *Server) opsPaths() map[string]string {
 	return map[string]string{"agentdock": "agentdock-runtime-api"}
 }
@@ -479,13 +443,6 @@ func cleanOpsName(value string) (string, error) {
 		return "", fmt.Errorf("invalid name")
 	}
 	return value, nil
-}
-
-func firstSkills(items []runtimeSkillSummary, n int) []runtimeSkillSummary {
-	if len(items) <= n {
-		return items
-	}
-	return items[:n]
 }
 
 func firstNonEmptyString(values ...string) string {
