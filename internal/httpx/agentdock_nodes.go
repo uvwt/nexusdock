@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	protocol "github.com/uvwt/agentdock-protocol"
 	"github.com/uvwt/nexusdock/internal/agentdock"
 	"github.com/uvwt/nexusdock/internal/core"
 )
@@ -20,6 +21,8 @@ func (s *Server) registerAgentDockAdminRoutes(r chi.Router) {
 
 func (s *Server) registerAgentDockConnectionRoutes(r chi.Router) {
 	// 配对码和 Device Token 是这两个入口各自的身份边界，不能套用浏览器会话认证。
+	// 路径保留字面量供 contracts 静态扫描；routes_test 会使用 protocol 常量命中真实 Router，
+	// 因此协议路径一旦变化会由回归测试立即暴露，而不是让两份路径静默漂移。
 	r.Post("/v1/nodes/pair", s.agentDockNodePair)
 	r.Get("/v1/nodes/connect", s.agentDockNodeConnect)
 }
@@ -58,11 +61,11 @@ func (s *Server) agentDockNodePair(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "AGENTDOCK_PAIRING_UNAVAILABLE", "AgentDock 配对服务不可用")
 		return
 	}
-	var request agentdock.PairInput
+	var request protocol.PairRequest
 	if !decodeJSON(w, r, &request) {
 		return
 	}
-	node, err := s.agentDock.Pair(r.Context(), request)
+	node, err := s.agentDock.Pair(r.Context(), agentdock.PairInput(request))
 	if err != nil {
 		writeAgentDockNodeError(w, err)
 		return
@@ -76,7 +79,7 @@ func (s *Server) agentDockNodePair(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"ok": true, "node": node, "device_token": token,
-		"connect_path": "/v1/nodes/connect",
+		"connect_path": protocol.ConnectPath,
 	})
 }
 

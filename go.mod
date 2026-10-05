@@ -8,7 +8,7 @@ require (
 	github.com/google/jsonschema-go v0.4.3
 	github.com/gorilla/websocket v1.5.3
 	github.com/modelcontextprotocol/go-sdk v1.7.0
-	github.com/uvwt/agentdock-protocol v0.8.2-0.20260929005641-178b21b7f423
+	github.com/uvwt/agentdock-protocol v0.8.2-0.20260929123659-6131ae03b178
 	go.opentelemetry.io/otel v1.46.0
 	go.opentelemetry.io/otel/trace v1.46.0
 	golang.org/x/crypto v0.37.0

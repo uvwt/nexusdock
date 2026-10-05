@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/go-chi/chi/v5"
+	protocol "github.com/uvwt/agentdock-protocol"
 
 	"github.com/uvwt/nexusdock/internal/agentdock"
 	"github.com/uvwt/nexusdock/internal/core"
@@ -44,6 +45,25 @@ func newRouteSecurityTestServer(t *testing.T) (*Server, string) {
 		t.Fatal(err)
 	}
 	return server, issued.Token
+}
+
+func TestRouterServesAgentDockProtocolPathsWithoutWebSession(t *testing.T) {
+	server := newNodeTestServer(t)
+	handler := server.Handler()
+
+	pairRequest := httptest.NewRequest(http.MethodPost, protocol.PairPath, strings.NewReader(`{}`))
+	pairResponse := httptest.NewRecorder()
+	handler.ServeHTTP(pairResponse, pairRequest)
+	if pairResponse.Code != http.StatusBadRequest {
+		t.Fatalf("POST %s status=%d body=%s, want 400", protocol.PairPath, pairResponse.Code, pairResponse.Body.String())
+	}
+
+	connectRequest := httptest.NewRequest(http.MethodGet, protocol.ConnectPath, nil)
+	connectResponse := httptest.NewRecorder()
+	handler.ServeHTTP(connectResponse, connectRequest)
+	if connectResponse.Code != http.StatusUnauthorized {
+		t.Fatalf("GET %s status=%d body=%s, want 401", protocol.ConnectPath, connectResponse.Code, connectResponse.Body.String())
+	}
 }
 
 func TestRouterSecurityDomainsKeepDeviceOutOfAdminRoutes(t *testing.T) {

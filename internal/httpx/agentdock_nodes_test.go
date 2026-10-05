@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+	protocol "github.com/uvwt/agentdock-protocol"
 	"github.com/uvwt/agentdock-protocol/mcpcontract"
 	"github.com/uvwt/nexusdock/internal/agentdock"
 	"github.com/uvwt/nexusdock/internal/auth"
@@ -48,10 +49,7 @@ func TestPairingIssuesDeviceTokenWithoutAgentDockToken(t *testing.T) {
 	if response.Code != http.StatusCreated {
 		t.Fatalf("status=%d body=%s", response.Code, response.Body.String())
 	}
-	var result struct {
-		Node        agentdock.Node `json:"node"`
-		DeviceToken string         `json:"device_token"`
-	}
+	var result protocol.PairResponse
 	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
 		t.Fatal(err)
 	}
