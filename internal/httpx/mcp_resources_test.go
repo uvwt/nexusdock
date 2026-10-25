@@ -272,11 +272,17 @@ func TestNodeProvidesUIResourceRequiresExactCapability(t *testing.T) {
 }
 
 func TestToolBoundUIResourceURIIsPresentationOnlyAndRejectsUnknownResources(t *testing.T) {
-	known := agentdock.ToolDescriptor{Meta: map[string]any{
-		"ui": map[string]any{"resourceUri": protocol.FileChangeUIResourceURI},
-	}}
-	if got := toolBoundUIResourceURI(known); got != protocol.FileChangeUIResourceURI {
-		t.Fatalf("known resource URI = %q", got)
+	for _, uri := range []string{
+		protocol.FileChangeUIResourceURI,
+		protocol.LegacyTaskProgressUIResourceURI,
+		protocol.TaskProgressUIResourceURI,
+	} {
+		known := agentdock.ToolDescriptor{Meta: map[string]any{
+			"ui": map[string]any{"resourceUri": uri},
+		}}
+		if got := toolBoundUIResourceURI(known); got != uri {
+			t.Fatalf("known resource URI %q = %q", uri, got)
+		}
 	}
 	unknown := agentdock.ToolDescriptor{Meta: map[string]any{
 		"ui": map[string]any{"resourceUri": "https://example.test/widget"},

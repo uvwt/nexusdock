@@ -26,7 +26,7 @@ const nexusServerInstructions = "NexusDock 可以连接并统一操作多台 Age
 	"需要操作具体设备时，根据 `agentdock_context` 返回的节点信息选择目标 `node_id`。" +
 	"操作具体项目、切换工作区或工作区规则可能变化时，调用 `workspace_context` 并传入目标 `node_id` 获取该节点的工作区上下文。" +
 	"需要查找或读取长期记忆时使用 `recall_*`；需要查找或使用 Workflow 模板时使用 `workflow_template_manage`；" +
-	"处理多步骤任务时使用 `task_manage` 记录和维护任务进度。根据用户需求选择合适的设备和能力，检查、操作并验证设备状态。"
+	"处理多步骤任务时，节点提供 `task_create` 时先用它创建任务，再用 `task_manage` 记录和维护进度；旧节点没有 `task_create` 时才兼容使用 `task_manage action=create`。根据用户需求选择合适的设备和能力，检查、操作并验证设备状态。"
 
 type mcpGateway struct {
 	server      *mcpsdk.Server

@@ -1,11 +1,21 @@
 package httpx
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/uvwt/nexusdock/internal/config"
 	"github.com/uvwt/nexusdock/internal/workflow"
 )
+
+func TestWorkflowCompositionNextActionPrefersTaskCreate(t *testing.T) {
+	if !strings.Contains(workflowCompositionNextAction, "task_create") {
+		t.Fatalf("workflow composition guidance does not prefer task_create: %s", workflowCompositionNextAction)
+	}
+	if !strings.Contains(workflowCompositionNextAction, "task_manage action=create") {
+		t.Fatalf("workflow composition guidance lost legacy create fallback: %s", workflowCompositionNextAction)
+	}
+}
 
 func TestCentralWorkflowTemplateManageUsesNexusRegistry(t *testing.T) {
 	dataDir := t.TempDir()

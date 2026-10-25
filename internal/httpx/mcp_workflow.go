@@ -9,7 +9,7 @@ import (
 	"github.com/uvwt/nexusdock/internal/workflow"
 )
 
-const workflowCompositionNextAction = "Combine these templates for the current user goal: prune irrelevant steps, deduplicate, order the remaining steps, and merge completion conditions. Then call task_manage create with source_template_ids, composed steps, and completion_conditions."
+const workflowCompositionNextAction = "Combine these templates for the current user goal: prune irrelevant steps, deduplicate, order the remaining steps, and merge completion conditions. Then call task_create with source_template_ids, composed steps, and completion_conditions when that node provides it; use legacy task_manage action=create only on older nodes without task_create."
 
 // callWorkflowTemplateManage 只负责 MCP 动作分派和响应形状；
 // Publish/Retire/Get/List/Match/VectorIndex 的业务路径与 REST 共用 workflow operations。
