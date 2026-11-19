@@ -412,3 +412,48 @@ func TestRuntimeMCPAuthorizeAlwaysUsesNexusCallback(t *testing.T) {
 		t.Fatalf("authorize payload = %#v", payload)
 	}
 }
+
+// Plugin 分组 UI 依赖列表项保留 skill_ref / source_type / plugin_name；
+// 插件 Skill 详情必须带 skill_ref 透传给 AgentDock，否则同名独立 Skill 会被误读。
+func TestRuntimePluginSkillsAndMCPKeepSourceIdentityForGrouping(t *testing.T) {
+	_, mux, nodeID := runtimeContractTestServer(t, map[string]string{
+		"/internal/runtime/skills": `{"action":"list","count":2,"source":"agentdock-api","skills":[
+			{"skill":"access","name":"access","description":"Standalone","skill_ref":"skill://managed/access","source_type":"managed","content_digest":"sha256:a","file_count":1},
+			{"skill":"cf-worker","name":"cf-worker","description":"From plugin","skill_ref":"skill://plugin/cloudflare/cf-worker","source_type":"plugin","plugin_name":"cloudflare","content_digest":"sha256:b","file_count":2}]}`,
+		"/internal/runtime/mcp": `{"action":"list","servers":[
+			{"name":"dida365","description":"","transport":"streamable_http","source_type":"standalone","enabled":true,"status":"ready","tool_count":3},
+			{"name":"plugin.cloudflare.cloudflare-api","description":"","transport":"streamable_http","source_type":"plugin","plugin_name":"cloudflare","enabled":true,"status":"ready","tool_count":8}]}`,
+		"/internal/runtime/plugins": `{"plugins":[{"name":"cloudflare","version":"1.0.0","enabled":true,"package_digest":"sha256:p","format":"portable","skill_count":1,"mcp_count":1}]}`,
+	})
+
+	skills := runtimeContractRequest(t, mux, http.MethodGet, "/v1/runtime/nodes/"+nodeID+"/skills")
+	items, _ := skills["items"].([]any)
+	if len(items) != 2 {
+		t.Fatalf("Skill 列表数量错误: %v", skills)
+	}
+	var pluginSkill map[string]any
+	for _, raw := range items {
+		item, _ := raw.(map[string]any)
+		if item["source_type"] == "plugin" {
+			pluginSkill = item
+		}
+	}
+	if pluginSkill == nil || pluginSkill["plugin_name"] != "cloudflare" || pluginSkill["skill_ref"] != "skill://plugin/cloudflare/cf-worker" {
+		t.Fatalf("插件 Skill 丢失来源字段: %v", items)
+	}
+
+	mcp := runtimeContractRequest(t, mux, http.MethodGet, "/v1/runtime/nodes/"+nodeID+"/mcp")
+	servers, _ := mcp["servers"].([]any)
+	if len(servers) != 2 {
+		t.Fatalf("MCP 列表数量错误: %v", mcp)
+	}
+	owned, _ := servers[1].(map[string]any)
+	if owned["source_type"] != "plugin" || owned["plugin_name"] != "cloudflare" {
+		t.Fatalf("插件 MCP 丢失来源字段: %v", owned)
+	}
+
+	plugins := runtimeContractRequest(t, mux, http.MethodGet, "/v1/runtime/nodes/"+nodeID+"/plugins")
+	if plugins["count"] != float64(1) {
+		t.Fatalf("Plugin 只读代理响应错误: %v", plugins)
+	}
+}

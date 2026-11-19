@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { Check, Clock3, FileText, Layers, Search, ShieldAlert, Trash2 } from 'lucide-react';
+import { Check, Clock3, FileText, Layers, Package, Search, ShieldAlert, Trash2 } from 'lucide-react';
 import { ApiError, api } from '../../api/client';
 import { formatTime } from '../../lib/time';
 import Dialog from '../Dialog';
@@ -281,7 +281,16 @@ export function SkillsPage({ nodeID, refreshToken }: { nodeID: string; refreshTo
           <label className="ops-search"><Search size={15} /><input aria-label={t('Search Skill')} value={query} onChange={(event) => { setQuery(event.target.value); setMobileDetailOpen(false); }} placeholder={t('Search name or description')} /></label>
         </header>
         <div className="skills-rail">
-          {filtered.length === 0 ? <EmptyOps text={t('No matching skills.')} /> : filtered.map((skill) => <button type="button" key={skillSelectionKey(skill)} className={`skill-list-item ${selected && skillSelectionKey(selected) === skillSelectionKey(skill) ? 'is-selected' : ''}`} aria-pressed={Boolean(selected && skillSelectionKey(selected) === skillSelectionKey(skill))} onClick={() => { setSelectedKey(skillSelectionKey(skill)); setMobileDetailOpen(true); }}><span className="ops-card-icon"><Layers size={16} /></span><span><strong>{skill.title || skill.id}</strong><small>{skillSourceDisplayLabel(skill, t)} · {skill.file_count > 0 ? t('{{count}} files', { count: skill.file_count }) : t('Files loaded on demand')}</small></span></button>)}
+          {filtered.length === 0 ? <EmptyOps text={t('No matching skills.')} /> : groupSkills(filtered).map((group) => (
+            <section className="runtime-source-group" key={group.key} aria-label={group.pluginName ? t('Plugin {{name}}', { name: group.pluginName }) : t('Standalone Skills')}>
+              <header className="runtime-source-group-head">
+                <span className="runtime-source-group-title">{group.pluginName ? <Package size={13} /> : <Layers size={13} />}{group.pluginName ? group.pluginName : t('Standalone Skills')}</span>
+                <em>{group.items.length}</em>
+                {group.pluginName && <a className="runtime-source-group-link" href={`#plugins/${encodeURIComponent(group.pluginName)}`}>{t('View Plugin')}</a>}
+              </header>
+              {group.items.map((skill) => <button type="button" key={skillSelectionKey(skill)} className={`skill-list-item ${selected && skillSelectionKey(selected) === skillSelectionKey(skill) ? 'is-selected' : ''}`} aria-pressed={Boolean(selected && skillSelectionKey(selected) === skillSelectionKey(skill))} onClick={() => { setSelectedKey(skillSelectionKey(skill)); setMobileDetailOpen(true); }}><span className="ops-card-icon"><Layers size={16} /></span><span><strong>{skill.title || skill.id}</strong><small>{skillSourceDisplayLabel(skill, t)} · {skill.file_count > 0 ? t('{{count}} files', { count: skill.file_count }) : t('Files loaded on demand')}</small></span></button>)}
+            </section>
+          ))}
         </div>
       </aside>
       <div className="skills-detail mobile-drilldown-detail">
@@ -354,7 +363,7 @@ function SkillDetailContent({ nodeID, skill, detail, loading, error, refreshToke
 
     <dl className="skill-meta" aria-label={t('Skill summary')}>
       <div><dt>{t('Source type')}</dt><dd>{skillSourceLabel(full.source_type, t)}</dd></div>
-      {full.plugin_name && <div><dt>{t('Plugin')}</dt><dd>{full.plugin_name}</dd></div>}
+      {full.plugin_name && <div><dt>{t('Plugin')}</dt><dd><a className="runtime-inline-link" href={`#plugins/${encodeURIComponent(full.plugin_name)}`}>{full.plugin_name}</a></dd></div>}
       <div><dt>{t('Files')}</dt><dd>{files.length}</dd></div>
       <div><dt>{t('Content digest')}</dt><dd title={full.content_digest}>{shortDigest(full.content_digest)}</dd></div>
     </dl>
@@ -401,6 +410,28 @@ function pluginSkillTargetFromHash(): { pluginName: string; skillName: string } 
 
 function skillSelectionKey(skill: OpsSkill): string {
   return skill.skill_ref || `${skill.source}:${skill.id}`;
+}
+type SkillGroup = { key: string; pluginName?: string; items: OpsSkill[] };
+
+// 独立 Skill（managed/shared/workspace）始终排在最前，插件 Skill 按 plugin_name 字母序分组；
+// 分组只影响展示，选择与详情读取仍以 skill_ref 作为唯一身份。
+function groupSkills(skills: OpsSkill[]): SkillGroup[] {
+  const standalone: OpsSkill[] = [];
+  const byPlugin = new Map<string, OpsSkill[]>();
+  for (const skill of skills) {
+    if (skill.source_type === 'plugin' && skill.plugin_name) {
+      const bucket = byPlugin.get(skill.plugin_name);
+      if (bucket) bucket.push(skill);
+      else byPlugin.set(skill.plugin_name, [skill]);
+    } else {
+      standalone.push(skill);
+    }
+  }
+  const groups: SkillGroup[] = standalone.length > 0 ? [{ key: 'standalone', items: standalone }] : [];
+  for (const name of [...byPlugin.keys()].sort((a, b) => a.localeCompare(b))) {
+    groups.push({ key: `plugin:${name}`, pluginName: name, items: byPlugin.get(name) ?? [] });
+  }
+  return groups;
 }
 function withSkillRef(url: string, skillRef: string | undefined): string {
   if (!skillRef) return url;
