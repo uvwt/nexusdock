@@ -758,6 +758,19 @@ summary::-webkit-details-marker { display: none; }
 .plugin-list-copy strong { font-size: 12px; }
 .plugin-list-copy small { margin-top: 3px; color: var(--nx-muted); font-size: 10px; }
 .plugin-list-item .status-badge { font-size: 9px; }
+/* Runtime 来源分组：Skill / MCP 列表按独立与所属 Plugin 分组展示 */
+.runtime-source-group { display: grid; gap: 2px; }
+.runtime-source-group + .runtime-source-group { margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--nx-line); }
+.runtime-source-group-head { padding: 4px 6px 2px; display: flex; align-items: center; gap: 6px; color: var(--nx-muted); font-size: 10px; font-weight: 650; letter-spacing: .02em; }
+.runtime-source-group-title { min-width: 0; display: inline-flex; align-items: center; gap: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--nx-text-soft); }
+.runtime-source-group-head em { padding: 0 6px; border-radius: 999px; background: var(--nx-soft-2); font-style: normal; }
+.runtime-source-group-link { margin-left: auto; color: var(--nx-text-soft); font-weight: 600; text-decoration: none; }
+.runtime-source-group-link:hover, .runtime-inline-link:hover { text-decoration: underline; }
+.runtime-inline-link { color: inherit; text-decoration: none; border-bottom: 1px dotted currentColor; }
+.mcp-plugin-owned { margin: 10px 16px 0; display: flex; align-items: flex-start; gap: 8px; }
+.mcp-plugin-owned > span { min-width: 0; flex: 1; display: grid; gap: 2px; }
+.mcp-plugin-owned small { color: var(--nx-muted); font-size: 10px; line-height: 1.45; }
+
 .plugin-detail { min-width: 0; }
 .plugin-detail-card > header {
   padding: 16px;

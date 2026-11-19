@@ -56,6 +56,17 @@ function shortDigest(value: string): string {
   return value.length > 18 ? `${value.slice(0, 10)}…${value.slice(-6)}` : value;
 }
 
+// 从 Skill / MCP 页的 #plugins/<name> 链接进入时预选对应插件，形成双向联动。
+function pluginSelectionFromHash(): string {
+  const [section, encodedName] = window.location.hash.replace(/^#\/?/, '').split('/');
+  if (section !== 'plugins' || !encodedName) return '';
+  try {
+    return decodeURIComponent(encodedName);
+  } catch {
+    return '';
+  }
+}
+
 function pluginSkillHref(pluginName: string, skillName: string): string {
   return `#skills/plugin/${encodeURIComponent(pluginName)}/${encodeURIComponent(skillName)}`;
 }
@@ -68,13 +79,13 @@ export default function PluginPage({ nodeID, refreshToken }: { nodeID: string; r
   const { t } = useTranslation();
   const runtimeBase = `/v1/runtime/nodes/${encodeURIComponent(nodeID)}`;
   const [plugins, setPlugins] = useState<PluginSummary[]>([]);
-  const [selectedName, setSelectedName] = useState('');
+  const [selectedName, setSelectedName] = useState(pluginSelectionFromHash);
   const [detail, setDetail] = useState<PluginDetail | null>(null);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [listError, setListError] = useState('');
   const [detailError, setDetailError] = useState('');
-  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(() => Boolean(pluginSelectionFromHash()));
   const detailRequestRef = useRef(0);
 
   useEffect(() => {

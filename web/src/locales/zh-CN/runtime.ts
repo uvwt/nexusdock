@@ -149,6 +149,14 @@ const runtime: Record<string, string> = {
   'Executables': '可执行文件',
   'Runtime notes': '运行提示',
 
+  // Plugin 分组与联动
+  'Standalone Skills': '独立 Skill',
+  'Standalone MCP': '独立 MCP',
+  'Plugin {{name}}': '插件 {{name}}',
+  'View Plugin': '查看插件',
+  'Managed by plugin {{name}}': '由插件 {{name}} 托管',
+  'Enable, disable and removal follow the parent plugin lifecycle. You can still refresh tools, authorize and configure isolated environment variables here.': '启用、停用与移除跟随所属插件的生命周期；你仍可在这里刷新工具、授权和配置隔离环境变量。',
+
   // RuntimePages
   'In progress': '进行中',
   'Completed': '已完成',

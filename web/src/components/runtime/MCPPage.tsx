@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { Cable, KeyRound, Link, LogIn, Power, RefreshCw, Server, Terminal, Trash2 } from 'lucide-react';
+import { Cable, KeyRound, Link, LogIn, Package, Power, RefreshCw, Server, Terminal, Trash2 } from 'lucide-react';
 import { ApiError, api } from '../../api/client';
 import Dialog from '../Dialog';
 import MobileDrilldownBar from '../MobileDrilldownBar';
@@ -10,6 +10,8 @@ type MCPServer = {
   name: string;
   description: string;
   transport: string;
+  source_type?: string;
+  plugin_name?: string;
   enabled: boolean;
   status: string;
   tool_count: number;
@@ -72,6 +74,33 @@ function statusTone(server: MCPServer): string {
   if (!server.enabled) return 'muted';
   if (server.status === 'auth_required' || server.status === 'authorizing') return 'warn';
   return isServerAbnormal(server) ? 'danger' : 'ok';
+}
+
+type MCPGroup = { key: string; pluginName?: string; items: MCPServer[] };
+
+// Plugin 托管的 MCP 由 AgentDock 以 source_type=plugin 标记；按所属插件分组，独立 MCP 排在最前。
+function groupServers(servers: MCPServer[]): MCPGroup[] {
+  const standalone: MCPServer[] = [];
+  const byPlugin = new Map<string, MCPServer[]>();
+  for (const server of servers) {
+    if (isPluginOwned(server)) {
+      const name = server.plugin_name || '';
+      const bucket = byPlugin.get(name);
+      if (bucket) bucket.push(server);
+      else byPlugin.set(name, [server]);
+    } else {
+      standalone.push(server);
+    }
+  }
+  const groups: MCPGroup[] = standalone.length > 0 ? [{ key: 'standalone', items: standalone }] : [];
+  for (const name of [...byPlugin.keys()].sort((a, b) => a.localeCompare(b))) {
+    groups.push({ key: `plugin:${name}`, pluginName: name || undefined, items: byPlugin.get(name) ?? [] });
+  }
+  return groups;
+}
+
+function isPluginOwned(server: Pick<MCPServer, 'source_type'>): boolean {
+  return server.source_type === 'plugin';
 }
 
 function mcpSelectionFromHash(): string {
@@ -276,11 +305,14 @@ export default function MCPPage({ nodeID, refreshToken, addOpen, onAddOpenChange
         <div className="mcp-server-list">
           {loading && servers.length === 0 ? <p className="empty-mini">{t('Loading MCP services…')}</p> : null}
           {!loading && servers.length === 0 ? <div className="mcp-empty"><Cable size={24} /><strong>{t('No MCP registered yet')}</strong><span>{t('HTTP or stdio MCP services will appear here once added.')}</span></div> : null}
-          {servers.map((server) => <button key={server.name} type="button" className={selected?.name === server.name ? 'is-active' : ''} onClick={() => { setSelectedName(server.name); setMobileDetailOpen(true); }}>
+          {groupServers(servers).map((group) => <section className="runtime-source-group" key={group.key}>
+            <header className="runtime-source-group-head"><span className="runtime-source-group-title">{group.key === 'standalone' ? <Cable size={13} /> : <Package size={13} />}{group.key === 'standalone' ? t('Standalone MCP') : group.pluginName || t('Plugin')}</span><em>{group.items.length}</em>{group.pluginName && <a className="runtime-source-group-link" href={`#plugins/${encodeURIComponent(group.pluginName)}`}>{t('View Plugin')}</a>}</header>
+            {group.items.map((server) => <button key={server.name} type="button" className={selected?.name === server.name ? 'is-active' : ''} onClick={() => { setSelectedName(server.name); setMobileDetailOpen(true); }}>
             <span className="mcp-server-icon">{server.transport === 'stdio' ? <Terminal size={17} /> : <Link size={17} />}</span>
             <span><strong>{server.name}</strong><small>{server.description || server.transport}</small></span>
             <em className={`tone-${statusTone(server)}`}>{serverStatusLabel(server, t)}</em>
           </button>)}
+          </section>)}
         </div>
       </aside>
 
@@ -344,6 +376,8 @@ function MCPDetail({ server, config, envItems, envKey, envValue, busy, onEnvKey,
   onRemove: () => void;
 }) {
   const { t } = useTranslation();
+  // AgentDock 对 Plugin 托管 MCP 的 enable/disable/remove 返回 MCP_OWNED_BY_PLUGIN，界面同步收敛这些入口。
+  const pluginOwned = isPluginOwned(server);
   return <article className="mcp-detail-card">
     <header>
       <div><span className="nexus-eyebrow">{server.transport}</span><h3>{server.name}</h3><p>{server.description || t('No description.')}</p></div>
@@ -352,9 +386,10 @@ function MCPDetail({ server, config, envItems, envKey, envValue, busy, onEnvKey,
     <div className="mcp-actions">
       {server.transport === 'streamable_http' && (server.status === 'auth_required' || server.status === 'authorizing') ? <button type="button" className="nx-button" disabled={!!busy || !server.enabled} onClick={onAuthorize}><LogIn size={15} />{server.status === 'authorizing' ? t('Open authorization') : t('Authorize')}</button> : null}
       <button type="button" className="nx-button is-secondary" disabled={!!busy || !server.enabled || server.status === 'auth_required' || server.status === 'authorizing'} title={server.enabled ? t('Rediscover MCP tools') : t('Please enable the MCP service first')} onClick={onRefresh}><RefreshCw size={15} />{t('Refresh tools')}</button>
-      <button type="button" className="nx-button is-secondary" disabled={!!busy} onClick={onToggle}><Power size={15} />{server.enabled ? t('Disable') : t('Enable')}</button>
-      <button type="button" className="nx-button is-danger" disabled={!!busy} onClick={onRemove}><Trash2 size={15} />{t('Remove')}</button>
+      {!pluginOwned && <button type="button" className="nx-button is-secondary" disabled={!!busy} onClick={onToggle}><Power size={15} />{server.enabled ? t('Disable') : t('Enable')}</button>}
+      {!pluginOwned && <button type="button" className="nx-button is-danger" disabled={!!busy} onClick={onRemove}><Trash2 size={15} />{t('Remove')}</button>}
     </div>
+    {pluginOwned && <div className="nx-alert is-info mcp-plugin-owned" role="note"><Package size={15} /><span><strong>{t('Managed by plugin {{name}}', { name: server.plugin_name || t('Plugin') })}</strong><small>{t('Enable, disable and removal follow the parent plugin lifecycle. You can still refresh tools, authorize and configure isolated environment variables here.')}</small></span>{server.plugin_name && <a className="nx-button is-secondary is-small" href={`#plugins/${encodeURIComponent(server.plugin_name)}`}>{t('View Plugin')}</a>}</div>}
     <section className="mcp-metrics"><div><span>{t('Tools')}</span><strong>{server.tool_count || 0}</strong></div><div><span>{t('Transport')}</span><strong>{server.transport}</strong></div><div><span>{t('Status')}</span><strong>{serverStatusLabel(server, t)}</strong></div></section>
     {server.last_error && <div className={`nx-alert is-${server.status === 'auth_required' || server.status === 'authorizing' ? 'warning' : 'error'}`}>{server.last_error}</div>}
     <section className="mcp-section"><h4>{t('Connection configuration')}</h4><dl><div><dt>{config.transport === 'stdio' ? t('Command') : 'URL'}</dt><dd>{config.transport === 'stdio' ? [config.command, ...(config.args || [])].filter(Boolean).join(' ') : config.url || t('None')}</dd></div>{config.cwd && <div><dt>{t('Working directory')}</dt><dd>{config.cwd}</dd></div>}</dl></section>
