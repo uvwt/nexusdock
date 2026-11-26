@@ -109,7 +109,7 @@ type RuntimeTaskEvent struct {
 	CreatedAt string `json:"created_at,omitempty"`
 }
 
-// RuntimeTaskFinalReview 对应任务详情里的 final_review；Stage 3 进化依赖 review_revision 与事实清单。
+// RuntimeTaskFinalReview 对应任务详情里的 final_review，包含 review_revision 与事实清单。
 type RuntimeTaskFinalReview struct {
 	Status         string   `json:"status"`
 	Summary        string   `json:"summary,omitempty"`

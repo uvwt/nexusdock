@@ -4,7 +4,7 @@ import type { RecallPage } from './components/recall/types';
 import { useRecallWorkspaceController } from './components/recall/useRecallWorkspaceController';
 import './recall.css';
 
-const recallPages: RecallPage[] = ['library', 'cards', 'evolution', 'vectors'];
+const recallPages: RecallPage[] = ['library', 'cards', 'vectors'];
 
 function recallPageFromHash(): RecallPage {
   const [, page] = window.location.hash.replace(/^#\/?/, '').split('/');
@@ -26,5 +26,5 @@ export default function RecallWorkspace({ refreshToken }: { refreshToken: number
     setPage(next);
   }
 
-  return <RecallWorkspaceView {...viewModel} page={page} refreshToken={refreshToken} onNavigate={navigate} />;
+  return <RecallWorkspaceView {...viewModel} page={page} onNavigate={navigate} />;
 }

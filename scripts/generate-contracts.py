@@ -478,22 +478,10 @@ def build_schemas() -> dict[str, dict[str, Any]]:
         },
         ("enabled", "endpoint", "model", "timeout_seconds", "api_key"),
     )
-    schemas["Stage3SettingsInput"] = obj(
-        "Nexus Stage 3 外部模型运行时配置。",
-        {
-            "enabled": scalar("boolean", "是否启用 Stage 3 辅助进化。"),
-            "endpoint": scalar("string", "OpenAI 兼容 Chat Completions HTTP(S) 地址。"),
-            "model": scalar("string", "Stage 3 模型名称。"),
-            "timeout_seconds": scalar("integer", "模型请求超时秒数。", minimum=1, maximum=300),
-            "interval_minutes": scalar("integer", "Stage 3 执行间隔分钟数。", minimum=60, maximum=10080),
-            "api_key": ref("RuntimeSecretUpdate"),
-        },
-        ("enabled", "endpoint", "model", "timeout_seconds", "interval_minutes", "api_key"),
-    )
     schemas["RuntimeAISettingsUpdateRequest"] = obj(
-        "保存 Nexus Stage 3 与向量检索运行时配置。",
-        {"embedding": ref("EmbeddingSettingsInput"), "stage3": ref("Stage3SettingsInput")},
-        ("embedding", "stage3"),
+        "保存 Nexus 向量检索运行时配置。",
+        {"embedding": ref("EmbeddingSettingsInput")},
+        ("embedding",),
     )
     schemas["EmbeddingSettingsView"] = obj(
         "已脱敏的向量检索运行时配置。",
@@ -506,28 +494,14 @@ def build_schemas() -> dict[str, dict[str, Any]]:
         },
         ("enabled", "endpoint", "model", "timeout_seconds", "api_key_configured"),
     )
-    schemas["Stage3SettingsView"] = obj(
-        "已脱敏的 Stage 3 外部模型运行时配置。",
-        {
-            "enabled": scalar("boolean", "是否启用 Stage 3。"),
-            "endpoint": scalar("string", "当前模型地址。"),
-            "model": scalar("string", "当前模型名称。"),
-            "timeout_seconds": scalar("integer", "请求超时秒数。", minimum=1, maximum=300),
-            "interval_minutes": scalar("integer", "执行间隔分钟数。", minimum=60, maximum=10080),
-            "api_key_configured": scalar("boolean", "是否已配置 API Key；不返回明文。"),
-            "configured": scalar("boolean", "Stage 3 是否具备运行所需的启用、地址和模型配置。"),
-        },
-        ("enabled", "endpoint", "model", "timeout_seconds", "interval_minutes", "api_key_configured", "configured"),
-    )
     schemas["RuntimeAISettingsView"] = obj(
-        "Nexus 当前已脱敏的 AI 与向量检索配置。",
+        "Nexus 当前已脱敏的向量检索运行时配置。",
         {
             "embedding": ref("EmbeddingSettingsView"),
-            "stage3": ref("Stage3SettingsView"),
             "persisted": scalar("boolean", "是否已保存 SQLite 覆盖配置；false 表示当前来自环境变量或默认值。"),
             "updated_at": scalar("string", "最近一次持久化更新时间。", format="date-time"),
         },
-        ("embedding", "stage3", "persisted"),
+        ("embedding", "persisted"),
     )
     schemas["RuntimeAISettingsResponse"] = obj(
         "运行时 AI 设置响应。",
@@ -559,10 +533,10 @@ def build_schemas() -> dict[str, dict[str, Any]]:
         ("mcp_apps_enabled",),
     )
     schemas["RuntimeAIConnectionTestResponse"] = obj(
-        "Stage 3 或向量服务的脱敏连接测试结果。",
+        "向量服务的脱敏连接测试结果。",
         {
             "ok": scalar("boolean", "连接测试是否成功。"),
-            "target": scalar("string", "测试目标。", enum=["stage3", "embedding"]),
+            "target": scalar("string", "测试目标。", enum=["embedding"]),
             "model": scalar("string", "测试使用的模型名称。"),
             "message": scalar("string", "脱敏后的测试结果说明。"),
             "latency_ms": scalar("integer", "测试耗时毫秒。", minimum=0),
@@ -935,7 +909,6 @@ def build_openapi(schemas: dict[str, Any]) -> dict[str, Any]:
     parameters = {
         "SessionId": path_param("sessionID", "浏览器 Session ID。", uuid=False),
         "RecallPath": path_param("path", "URL 编码后的召回相对路径。", uuid=False),
-        "EvolutionId": path_param("evolutionID", "Evolution 生命周期记录 ID。", uuid=False),
         "RuntimeNodeId": path_param("nodeID", "Nexus 中登记的 AgentDock 节点 ID。", uuid=False),
         "RuntimeTaskId": path_param("taskID", "AgentDock Runtime task ID。", uuid=False),
         "RuntimeSkillSource": path_param("source", "AgentDock Runtime skill source。", uuid=False),
@@ -984,10 +957,10 @@ def build_openapi(schemas: dict[str, Any]) -> dict[str, Any]:
         "/health": {"get": operation("getHealth", "读取服务健康状态", success=ok(ref("HealthResponse")))},
         "/v1/system/status": {"get": operation("getSystemStatus", "读取 Nexus 与 SQLite 状态", success=ok(ref("SystemStatus")))},
         "/v1/settings/ai": {
-            "get": operation("getRuntimeAISettings", "读取已脱敏的 Stage 3 与向量检索配置", success=ok(ref("RuntimeAISettingsResponse"))),
+            "get": operation("getRuntimeAISettings", "读取已脱敏的向量检索配置", success=ok(ref("RuntimeAISettingsResponse"))),
             "put": operation(
                 "updateRuntimeAISettings",
-                "保存并立即应用 Stage 3 与向量检索配置",
+                "保存并立即应用向量检索配置",
                 request=body(ref("RuntimeAISettingsUpdateRequest")),
                 success=ok(ref("RuntimeAISettingsResponse")),
             ),
@@ -1006,9 +979,6 @@ def build_openapi(schemas: dict[str, Any]) -> dict[str, Any]:
         },
         "/v1/settings/mcp-token/reset": {
             "post": operation("resetMCPAccessToken", "重置 Nexus MCP 固定访问 Token 并立即使旧 Token 失效", success=ok(ref("MCPAccessTokenResponse")))
-        },
-        "/v1/settings/ai/test/stage3": {
-            "post": operation("testStage3Connection", "使用已保存配置测试 Stage 3 模型连接", success=ok(ref("RuntimeAIConnectionTestResponse")))
         },
         "/v1/settings/ai/test/embedding": {
             "post": operation("testEmbeddingConnection", "使用已保存配置测试 Embedding 服务连接", success=ok(ref("RuntimeAIConnectionTestResponse")))
@@ -1119,12 +1089,6 @@ def build_openapi(schemas: dict[str, Any]) -> dict[str, Any]:
                 request=body(ref("RecallCardSearchRequest")),
                 success=ok(ref("RecallCardSearchResponse")),
             )
-        },
-        "/v1/evolution/lifecycle": {
-            "get": operation("listEvolutionLifecycle", "只读列出 Evolution 生命周期记录")
-        },
-        "/v1/evolution/lifecycle/{evolutionID}": {
-            "get": operation("getEvolutionLifecycle", "只读读取 Evolution 生命周期记录详情", params=[p("EvolutionId")])
         },
         "/v1/embeddings/status": {
             "get": operation("getEmbeddingStatus", "读取 Recall 嵌入服务和索引状态", success=ok(ref("EmbeddingStatusResponse")))

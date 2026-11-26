@@ -63,10 +63,6 @@ func TestRuntimeAISettingsAPIProtectsSecretsAndAppliesEmbeddingConfiguration(t *
 			"enabled": true, "endpoint": embedding.URL, "model": "test-embedding", "timeout_seconds": 15,
 			"api_key": map[string]any{"action": "replace", "value": embeddingToken},
 		},
-		"stage3": map[string]any{
-			"enabled": false, "endpoint": "", "model": "", "timeout_seconds": 60, "interval_minutes": 360,
-			"api_key": map[string]any{"action": "keep"},
-		},
 	}
 	payload, _ := json.Marshal(body)
 	update := httptest.NewRecorder()
@@ -109,16 +105,9 @@ func TestRuntimeAISettingsAPIProtectsSecretsAndAppliesEmbeddingConfiguration(t *
 
 func TestRuntimeAIConnectionTestsUseSavedSecrets(t *testing.T) {
 	const (
-		stage3Token    = "stage3-test-secret"
 		embeddingToken = "embedding-test-secret"
 	)
-	var stage3Authorization, embeddingAuthorization, stage3Path string
-	model := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		stage3Authorization = r.Header.Get("Authorization")
-		stage3Path = r.URL.Path
-		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"message": map[string]any{"content": "OK"}}}})
-	}))
-	defer model.Close()
+	var embeddingAuthorization string
 	embedding := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		embeddingAuthorization = r.Header.Get("Authorization")
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": []map[string]any{{"index": 0, "embedding": []float64{1, 0}}}})
@@ -132,10 +121,6 @@ func TestRuntimeAIConnectionTestsUseSavedSecrets(t *testing.T) {
 			"enabled": true, "endpoint": embedding.URL, "model": "embed-test", "timeout_seconds": 5,
 			"api_key": map[string]any{"action": "replace", "value": embeddingToken},
 		},
-		"stage3": map[string]any{
-			"enabled": true, "endpoint": model.URL + "/v1", "model": "chat-test", "timeout_seconds": 5, "interval_minutes": 360,
-			"api_key": map[string]any{"action": "replace", "value": stage3Token},
-		},
 	}
 	payload, _ := json.Marshal(body)
 	update := httptest.NewRecorder()
@@ -146,35 +131,21 @@ func TestRuntimeAIConnectionTestsUseSavedSecrets(t *testing.T) {
 		t.Fatalf("settings update status=%d body=%s", update.Code, update.Body.String())
 	}
 
-	for _, test := range []struct {
-		path   string
-		target string
-	}{
-		{path: "/v1/settings/ai/test/stage3", target: "stage3"},
-		{path: "/v1/settings/ai/test/embedding", target: "embedding"},
-	} {
-		response := httptest.NewRecorder()
-		req = httptest.NewRequest(http.MethodPost, test.path, nil)
-		handler.ServeHTTP(response, req)
-		if response.Code != http.StatusOK {
-			t.Fatalf("%s test status=%d body=%s", test.target, response.Code, response.Body.String())
-		}
-		if strings.Contains(response.Body.String(), stage3Token) || strings.Contains(response.Body.String(), embeddingToken) {
-			t.Fatalf("%s test response leaked a secret: %s", test.target, response.Body.String())
-		}
-		var result runtimeAITestResult
-		if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
-			t.Fatal(err)
-		}
-		if !result.OK || result.Target != test.target || result.Message == "" {
-			t.Fatalf("unexpected %s test result: %#v", test.target, result)
-		}
+	response := httptest.NewRecorder()
+	req = httptest.NewRequest(http.MethodPost, "/v1/settings/ai/test/embedding", nil)
+	handler.ServeHTTP(response, req)
+	if response.Code != http.StatusOK {
+		t.Fatalf("embedding test status=%d body=%s", response.Code, response.Body.String())
 	}
-	if stage3Authorization != "Bearer "+stage3Token {
-		t.Fatalf("stage3 authorization=%q", stage3Authorization)
+	if strings.Contains(response.Body.String(), embeddingToken) {
+		t.Fatalf("embedding test response leaked a secret: %s", response.Body.String())
 	}
-	if stage3Path != "/v1/chat/completions" {
-		t.Fatalf("stage3 request path=%q", stage3Path)
+	var result runtimeAITestResult
+	if err := json.Unmarshal(response.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if !result.OK || result.Target != "embedding" || result.Message == "" {
+		t.Fatalf("unexpected embedding test result: %#v", result)
 	}
 	if embeddingAuthorization != "Bearer "+embeddingToken {
 		t.Fatalf("embedding authorization=%q", embeddingAuthorization)

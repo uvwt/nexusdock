@@ -6,7 +6,7 @@ import type {
 } from '../../api/generated';
 
 export type EntryType = 'file' | 'directory';
-export type RecallPage = 'library' | 'cards' | 'evolution' | 'vectors';
+export type RecallPage = 'library' | 'cards' | 'vectors';
 export type RecallEntry = { path: string; name?: string; type: EntryType; size_bytes?: number; modified?: string };
 export type Recall = {
   path: string;

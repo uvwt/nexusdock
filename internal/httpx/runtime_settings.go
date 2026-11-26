@@ -3,13 +3,44 @@ package httpx
 import (
 	"errors"
 	"net/http"
+	"regexp"
+	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/uvwt/nexusdock/internal/recall"
 	"github.com/uvwt/nexusdock/internal/settings"
-	"github.com/uvwt/nexusdock/internal/stage3"
 )
+
+var (
+	secretAssignmentPattern = regexp.MustCompile(`(?i)(api[_-]?key|access[_-]?token|auth[_-]?token|token|password|passwd|secret|cookie|private[_-]?key)\s*[:=]\s*([^\s,;]+)`)
+	bearerPattern           = regexp.MustCompile(`(?i)bearer\s+[A-Za-z0-9._~+/=-]{8,}`)
+	jwtPattern              = regexp.MustCompile(`\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b`)
+	commonTokenPattern      = regexp.MustCompile(`\b(?:sk|ghp|github_pat|xox[baprs])[-_][A-Za-z0-9_-]{12,}\b`)
+	privateKeyPattern       = regexp.MustCompile(`(?s)-----BEGIN [A-Z ]*PRIVATE KEY-----.*?-----END [A-Z ]*PRIVATE KEY-----`)
+)
+
+func redactRuntimeError(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	value = privateKeyPattern.ReplaceAllString(value, "[REDACTED_PRIVATE_KEY]")
+	value = secretAssignmentPattern.ReplaceAllString(value, "$1=[REDACTED]")
+	value = bearerPattern.ReplaceAllString(value, "Bearer [REDACTED]")
+	value = jwtPattern.ReplaceAllString(value, "[REDACTED_JWT]")
+	value = commonTokenPattern.ReplaceAllString(value, "[REDACTED_TOKEN]")
+	const maxBytes = 2048
+	if len(value) <= maxBytes {
+		return value
+	}
+	limit := maxBytes
+	for limit > 0 && !utf8.RuneStart(value[limit]) {
+		limit--
+	}
+	return value[:limit]
+}
 
 type runtimeAITestResult struct {
 	OK        bool   `json:"ok"`
@@ -22,12 +53,11 @@ type runtimeAITestResult struct {
 // runtimeAIState 只管理运行期可热更新的 AI 配置与由它派生的 Embedding 实例。
 // 这组状态拥有共同的更新时机，使用独立锁，避免与 MCP Gateway 的展示开关共享 Server 全局锁。
 type runtimeAIState struct {
-	mu              sync.RWMutex
-	config          settings.RuntimeAIConfig
-	embedding       *recall.EmbeddingService
-	settingsStore   *settings.Store
-	recallStore     *recall.Store
-	evolutionWorker *stage3.Worker
+	mu            sync.RWMutex
+	config        settings.RuntimeAIConfig
+	embedding     *recall.EmbeddingService
+	settingsStore *settings.Store
+	recallStore   *recall.Store
 }
 
 func newRuntimeAIState(store *recall.Store) runtimeAIState {
@@ -73,30 +103,6 @@ func (s *runtimeAIState) updateSettings(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "settings": view})
 }
 
-func (s *runtimeAIState) testStage3Connection(w http.ResponseWriter, r *http.Request) {
-	cfg := s.currentConfig()
-	started := time.Now()
-	result := runtimeAITestResult{Target: "stage3", Model: cfg.Stage3Model}
-	client, err := stage3.NewClient(stage3.Config{
-		Endpoint: cfg.Stage3Endpoint,
-		Model:    cfg.Stage3Model,
-		APIKey:   cfg.Stage3APIKey,
-		Timeout:  cfg.Stage3Timeout,
-	})
-	if err == nil {
-		err = client.Probe(r.Context())
-	}
-	result.LatencyMS = time.Since(started).Milliseconds()
-	if err != nil {
-		result.Message = "模型连接测试失败：" + stage3.RedactText(err.Error())
-		writeJSON(w, http.StatusOK, result)
-		return
-	}
-	result.OK = true
-	result.Message = "模型连接正常，认证和模型名均可用。"
-	writeJSON(w, http.StatusOK, result)
-}
-
 func (s *runtimeAIState) testEmbeddingConnection(w http.ResponseWriter, r *http.Request) {
 	started := time.Now()
 	result := runtimeAITestResult{Target: "embedding"}
@@ -111,7 +117,7 @@ func (s *runtimeAIState) testEmbeddingConnection(w http.ResponseWriter, r *http.
 	result.Model = status.Model
 	if status.Reachable == nil || !*status.Reachable {
 		if status.Error != "" {
-			result.Message = "向量连接测试失败：" + stage3.RedactText(status.Error)
+			result.Message = "向量连接测试失败：" + redactRuntimeError(status.Error)
 		} else {
 			result.Message = "向量服务未启用或当前不可达。"
 		}
@@ -144,11 +150,5 @@ func (s *runtimeAIState) applyConfig(cfg settings.RuntimeAIConfig) {
 	s.mu.Lock()
 	s.config = cfg
 	s.embedding = embedding
-	worker := s.evolutionWorker
 	s.mu.Unlock()
-
-	// Worker 生命周期属于组合根；设置状态只在保存成功后发出唤醒信号，让新配置立即生效。
-	if worker != nil {
-		worker.Wake()
-	}
 }

@@ -42,7 +42,7 @@ func TestRuntimeSettingsUsesFixedDefaultsBeforeFirstSave(t *testing.T) {
 	if view.Persisted || cfg != DefaultRuntimeAIConfig() {
 		t.Fatalf("unexpected default settings: cfg=%#v view=%#v", cfg, view)
 	}
-	if cfg.EmbeddingEnabled || cfg.Stage3Enabled || view.Embedding.APIKeyConfigured || view.Stage3.APIKeyConfigured {
+	if cfg.EmbeddingEnabled || view.Embedding.APIKeyConfigured {
 		t.Fatalf("product settings should be disabled and secret-free before first save: %#v", view)
 	}
 }
@@ -51,16 +51,15 @@ func TestRuntimeSettingsEncryptsSecretsAndSupportsKeepReplaceClear(t *testing.T)
 	store, db := newRuntimeSettingsTestStore(t)
 	input := UpdateInput{
 		Embedding: EmbeddingInput{Enabled: true, Endpoint: "http://embedding.local/v1/embeddings", Model: "bge-m3", TimeoutSeconds: 20, APIKey: SecretInput{Action: "replace", Value: "embedding-secret-value"}},
-		Stage3:    Stage3Input{Enabled: true, Endpoint: "https://model.local/v1/chat/completions", Model: "gpt-example", TimeoutSeconds: 40, IntervalMinutes: 360, APIKey: SecretInput{Action: "replace", Value: "model-secret-value"}},
 	}
 	cfg, view, err := store.Update(t.Context(), input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.EmbeddingAPIKey != "embedding-secret-value" || cfg.Stage3APIKey != "model-secret-value" || !view.Persisted {
+	if cfg.EmbeddingAPIKey != "embedding-secret-value" || !view.Persisted {
 		t.Fatalf("updated settings mismatch: cfg=%#v view=%#v", cfg, view)
 	}
-	if !view.Embedding.APIKeyConfigured || !view.Stage3.APIKeyConfigured {
+	if !view.Embedding.APIKeyConfigured {
 		t.Fatalf("configured flags missing: %#v", view)
 	}
 
@@ -75,22 +74,27 @@ func TestRuntimeSettingsEncryptsSecretsAndSupportsKeepReplaceClear(t *testing.T)
 			t.Fatal(err)
 		}
 		text := string(ciphertext)
-		if strings.Contains(text, "embedding-secret-value") || strings.Contains(text, "model-secret-value") {
+		if strings.Contains(text, "embedding-secret-value") {
 			t.Fatal("database contains plaintext runtime AI secret")
 		}
 	}
 
 	input.Embedding.APIKey = SecretInput{Action: "keep"}
-	input.Stage3.APIKey = SecretInput{Action: "clear"}
 	cfg, view, err = store.Update(t.Context(), input)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.EmbeddingAPIKey != "embedding-secret-value" || cfg.Stage3APIKey != "" {
-		t.Fatalf("keep/clear semantics failed: embedding=%q model=%q", cfg.EmbeddingAPIKey, cfg.Stage3APIKey)
+	if cfg.EmbeddingAPIKey != "embedding-secret-value" || !view.Embedding.APIKeyConfigured {
+		t.Fatalf("keep semantics failed: embedding=%q view=%#v", cfg.EmbeddingAPIKey, view)
 	}
-	if !view.Embedding.APIKeyConfigured || view.Stage3.APIKeyConfigured {
-		t.Fatalf("configured flags after clear mismatch: %#v", view)
+
+	input.Embedding.APIKey = SecretInput{Action: "clear"}
+	cfg, view, err = store.Update(t.Context(), input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.EmbeddingAPIKey != "" || view.Embedding.APIKeyConfigured {
+		t.Fatalf("clear semantics failed: embedding=%q view=%#v", cfg.EmbeddingAPIKey, view)
 	}
 }
 
@@ -98,7 +102,6 @@ func TestRuntimeSettingsRejectsInvalidInput(t *testing.T) {
 	store, _ := newRuntimeSettingsTestStore(t)
 	_, _, err := store.Update(context.Background(), UpdateInput{
 		Embedding: EmbeddingInput{Enabled: true, Endpoint: "file:///tmp/embed", Model: "bge", TimeoutSeconds: 30, APIKey: SecretInput{Action: "keep"}},
-		Stage3:    Stage3Input{Enabled: false, TimeoutSeconds: 60, IntervalMinutes: 360, APIKey: SecretInput{Action: "keep"}},
 	})
 	var validation ValidationError
 	if err == nil || !strings.Contains(err.Error(), "HTTP") || !strings.Contains(err.Error(), "向量") {
