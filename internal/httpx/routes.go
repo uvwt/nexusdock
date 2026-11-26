@@ -55,9 +55,6 @@ func (s *Server) Handler() http.Handler {
 	r.Group(func(r chi.Router) {
 		r.Use(s.withDeviceOrAPIAccess)
 		s.registerWorkflowTemplateRoutes(r)
-		if s.privateNotes != nil {
-			s.registerPrivateNoteRoutes(r)
-		}
 		s.registerRecallRoutes(r)
 	})
 

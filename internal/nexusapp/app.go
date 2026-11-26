@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
@@ -19,7 +20,6 @@ import (
 	"github.com/uvwt/nexusdock/internal/core"
 	"github.com/uvwt/nexusdock/internal/httpx"
 	"github.com/uvwt/nexusdock/internal/observability"
-	"github.com/uvwt/nexusdock/internal/privatenotes"
 	"github.com/uvwt/nexusdock/internal/recall"
 	"github.com/uvwt/nexusdock/internal/settings"
 	"github.com/uvwt/nexusdock/internal/workflow"
@@ -56,10 +56,7 @@ func run(args []string) error {
 	if err != nil {
 		return fmt.Errorf("initialize recall store: %w", err)
 	}
-	privateNoteStore, err := privatenotes.New(filepath.Join(cfg.RecallRepoDir, "private-notes"))
-	if err != nil {
-		return fmt.Errorf("initialize private notes: %w", err)
-	}
+	warnLegacyPrivateNotesIfPresent(cfg.RecallRepoDir, logger)
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
@@ -156,7 +153,6 @@ func run(args []string) error {
 		httpx.WithMCPSettings(mcpSettings),
 		httpx.WithMCPAppsEnabled(mcpAppsEnabled),
 		httpx.WithMCPTokenStore(mcpTokenStore),
-		httpx.WithPrivateNotes(privateNoteStore),
 		httpx.WithWorkflowRegistry(workflowRegistry),
 		httpx.WithPublishedToolBridge(publishedToolBridge),
 		httpx.WithArtifactService(artifactService),
@@ -178,6 +174,47 @@ func run(args []string) error {
 	}
 	logger.Info("nexusdock stopped")
 	return nil
+}
+
+// warnLegacyPrivateNotesIfPresent 在启动阶段做一次只读探测：
+// private_note_manage 已移除，但自部署老仓库中可能仍保留着历史 private-notes/ 文件。
+// 出于数据安全与防误迁原则，这里绝不自动迁入普通 Recall，也绝不自动删除或修改文件，
+// 仅记录一条 WARN 日志告知用户文件原封保留且继续与 Recall 隔离，同时绝不阻塞启动。
+func warnLegacyPrivateNotesIfPresent(recallRepoDir string, logger *slog.Logger) {
+	if recallRepoDir == "" {
+		return
+	}
+	if logger == nil {
+		logger = slog.Default()
+	}
+	privateNotesDir := filepath.Join(recallRepoDir, "private-notes")
+	hasNotes := dirContainsAnyFile(filepath.Join(privateNotesDir, "notes"))
+	hasEncrypted := dirContainsAnyFile(filepath.Join(privateNotesDir, "encrypted"))
+	if !hasNotes && !hasEncrypted {
+		return
+	}
+	logger.Warn(
+		"legacy private-notes files detected; private_note_manage has been removed, existing files are preserved untouched and remain isolated from ordinary Recall (never auto-migrated or deleted); use the standard age CLI to decrypt .md.age backups offline if needed",
+		"path", privateNotesDir,
+		"has_notes", hasNotes,
+		"has_encrypted", hasEncrypted,
+	)
+}
+
+var errLegacyFileFound = errors.New("legacy private note file found")
+
+func dirContainsAnyFile(dir string) bool {
+	err := filepath.WalkDir(dir, func(_ string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			// 只读探测遇到不存在或权限异常时跳过，绝不阻塞启动。
+			return nil
+		}
+		if !entry.IsDir() {
+			return errLegacyFileFound
+		}
+		return nil
+	})
+	return errors.Is(err, errLegacyFileFound)
 }
 
 func serveHTTP(ctx context.Context, server *http.Server) error {

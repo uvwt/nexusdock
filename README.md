@@ -57,7 +57,7 @@ NexusDock does not replace AgentDock and does not copy every node's runtime stat
 - View the online state, version, and capabilities of multiple AgentDock nodes
 - Pair, rename, disable, and remove devices from one place
 - Inspect node-local tasks, Skills, and dynamic MCP servers without duplicating their state
-- Store and search shared Recall, experience cards, and private notes
+- Store and search shared Recall and experience cards
 - Publish, retire, match, and reuse workflow templates across devices
 - Expose one MCP endpoint that combines NexusDock-owned shared tools with routed AgentDock capabilities
 - Authenticate MCP clients with OAuth or a dedicated MCP Access Token
@@ -148,7 +148,6 @@ Resetting the MCP Access Token invalidates the previous fixed token immediately 
 - Shared Markdown Recall workspace
 - Keyword search and optional semantic retrieval
 - Experience cards and vector recall
-- Private-note vault with age-encrypted backup copies
 - Central workflow template registry with versioned publish, retire, list, get, and match operations
 
 NexusDock does not automatically configure or push a Git remote for Recall. Remote backup remains under the deployment owner's control.
@@ -172,7 +171,7 @@ Without an Embedding or model provider, device management, MCP routing, Recall f
 | Path | Purpose |
 | --- | --- |
 | `/var/lib/nexus` | NexusDock control-plane state, accounts, devices, sessions, settings, secrets, and workflow data |
-| `/recall` | Shared Recall content and private-note data |
+| `/recall` | Shared Recall content |
 
 Default HTTP port:
 

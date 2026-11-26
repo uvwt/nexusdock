@@ -24,7 +24,6 @@ func nexusToolDefinitionsWithApps(mcpAppsEnabled bool) []*mcpsdk.Tool {
 		{name: mcpcontract.ToolRecallRead, title: "Read NexusDock Recall entry", description: "Read one central Recall entry by path."},
 		{name: mcpcontract.ToolRecallWrite, title: "Write NexusDock Recall entry", description: "Plan, create, replace, append, patch, update facts, diff, or delete central Recall content. The model must choose target and action explicitly.", uiURI: protocol.RecallUIResourceURI},
 		{name: mcpcontract.ToolRecallMaintain, title: "Maintain NexusDock Recall", description: "Inspect sync/index state or rebuild the central Recall index."},
-		{name: mcpcontract.ToolPrivateNoteManage, title: "Manage private notes", description: "Explicit low-frequency entrypoint for sensitive private notes."},
 		{name: mcpcontract.ToolWorkflowTemplateManage, title: "Manage workflow templates", description: "List, get, get multiple, publish, retire, or match NexusDock workflow templates. get_many requires the model to compose the returned templates before task creation."},
 	}
 	tools := make([]*mcpsdk.Tool, 0, len(presentations))

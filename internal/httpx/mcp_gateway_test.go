@@ -111,7 +111,7 @@ func TestCentralToolSchemasAreEnforcedAtRuntime(t *testing.T) {
 	}{
 		{name: "required", tool: "recall_search", args: map[string]any{}},
 		{name: "enum", tool: "recall_search", args: map[string]any{"query": "memory", "kind": "unsupported"}},
-		{name: "bounds", tool: "private_note_manage", args: map[string]any{"action": "search", "query": "secret", "max_results": 101}},
+		{name: "bounds", tool: "workflow_template_manage", args: map[string]any{"action": "get_many", "template_ids": []string{"only-one"}}},
 		{name: "additional properties", tool: "agentdock_context", args: map[string]any{"unexpected": true}},
 	}
 	for _, test := range tests {
@@ -169,6 +169,23 @@ func TestRecallUpdateFactPreviewsAndWrites(t *testing.T) {
 	updated, _ := store.Read("profile.md")
 	if !strings.Contains(updated.Content, "editor:new") {
 		t.Fatalf("updated content = %q", updated.Content)
+	}
+}
+
+func TestRecallReadRejectsPrivateNotesPaths(t *testing.T) {
+	store, err := recall.NewStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := &Server{store: store}
+	for _, path := range []string{"private-notes", "private-notes/secret.md", `private-notes\secret.md`} {
+		_, err := server.callRecallRead(recallReadInput{Path: path})
+		if err == nil {
+			t.Fatalf("callRecallRead(%q) unexpectedly succeeded", path)
+		}
+		if err.Error() != "private-notes paths are protected and outside ordinary Recall" {
+			t.Fatalf("callRecallRead(%q) error = %q", path, err.Error())
+		}
 	}
 }
 
