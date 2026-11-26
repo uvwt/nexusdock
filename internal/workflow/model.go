@@ -45,7 +45,6 @@ type Template struct {
 	Version              string     `json:"version"`
 	Title                string     `json:"title"`
 	Description          string     `json:"description,omitempty"`
-	SourceEvolutionID    string     `json:"source_evolution_id,omitempty"`
 	Status               Status     `json:"status"`
 	Match                MatchRule  `json:"match,omitempty"`
 	CompletionConditions []string   `json:"completion_conditions"`
@@ -72,9 +71,6 @@ func validateTemplate(t Template) error {
 	}
 	if strings.TrimSpace(t.Title) == "" {
 		return errors.New("template title is required")
-	}
-	if t.SourceEvolutionID != "" && !validEvolutionID(t.SourceEvolutionID) {
-		return errors.New("source_evolution_id must be a valid evo_ identifier")
 	}
 	if len(normalizeTexts(t.CompletionConditions)) == 0 {
 		return errors.New("template requires at least one completion condition")
@@ -131,19 +127,6 @@ func validateTemplateGuardrails(t Template) error {
 		}
 	}
 	return nil
-}
-
-func validEvolutionID(value string) bool {
-	value = strings.TrimSpace(value)
-	if !strings.HasPrefix(value, "evo_") || len(value) < len("evo_")+16 || len(value) > len("evo_")+64 {
-		return false
-	}
-	for _, r := range value[len("evo_"):] {
-		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
-			return false
-		}
-	}
-	return true
 }
 
 func validPhase(value string) bool {

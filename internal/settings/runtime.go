@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"github.com/uvwt/nexusdock/internal/recall"
-	"github.com/uvwt/nexusdock/internal/stage3"
 )
 
 const (
@@ -43,18 +42,8 @@ type EmbeddingInput struct {
 	APIKey         SecretInput `json:"api_key"`
 }
 
-type Stage3Input struct {
-	Enabled         bool        `json:"enabled"`
-	Endpoint        string      `json:"endpoint"`
-	Model           string      `json:"model"`
-	TimeoutSeconds  int         `json:"timeout_seconds"`
-	IntervalMinutes int         `json:"interval_minutes"`
-	APIKey          SecretInput `json:"api_key"`
-}
-
 type UpdateInput struct {
 	Embedding EmbeddingInput `json:"embedding"`
-	Stage3    Stage3Input    `json:"stage3"`
 }
 
 type EmbeddingView struct {
@@ -65,19 +54,8 @@ type EmbeddingView struct {
 	APIKeyConfigured bool   `json:"api_key_configured"`
 }
 
-type Stage3View struct {
-	Enabled          bool   `json:"enabled"`
-	Endpoint         string `json:"endpoint"`
-	Model            string `json:"model"`
-	TimeoutSeconds   int    `json:"timeout_seconds"`
-	IntervalMinutes  int    `json:"interval_minutes"`
-	APIKeyConfigured bool   `json:"api_key_configured"`
-	Configured       bool   `json:"configured"`
-}
-
 type View struct {
 	Embedding EmbeddingView `json:"embedding"`
-	Stage3    Stage3View    `json:"stage3"`
 	Persisted bool          `json:"persisted"`
 	UpdatedAt string        `json:"updated_at,omitempty"`
 }
@@ -88,22 +66,12 @@ type RuntimeAIConfig struct {
 	EmbeddingModel    string
 	EmbeddingAPIKey   string
 	EmbeddingTimeout  time.Duration
-	Stage3Enabled     bool
-	Stage3Endpoint    string
-	Stage3Model       string
-	Stage3APIKey      string
-	Stage3Timeout     time.Duration
-	Stage3Interval    time.Duration
 }
-
-const DefaultStage3Interval = 6 * time.Hour
 
 func DefaultRuntimeAIConfig() RuntimeAIConfig {
 	return RuntimeAIConfig{
 		EmbeddingModel:   recall.DefaultEmbeddingModel,
 		EmbeddingTimeout: recall.DefaultEmbeddingTimeout,
-		Stage3Timeout:    stage3.DefaultRequestTimeout,
-		Stage3Interval:   DefaultStage3Interval,
 	}
 }
 
@@ -137,14 +105,14 @@ func (s *Store) Load(ctx context.Context) (RuntimeAIConfig, View, error) {
 		return RuntimeAIConfig{}, View{}, ErrUnavailable
 	}
 	cfg := DefaultRuntimeAIConfig()
-	var embeddingEnabled, stage3Enabled int
-	var embeddingTimeout, stage3Timeout, interval int
+	var embeddingEnabled int
+	var embeddingTimeout int
 	var updatedAt string
 	err := s.db.QueryRowContext(ctx, `SELECT embedding_enabled, embedding_endpoint, embedding_model, embedding_timeout_seconds,
-		stage3_enabled, stage3_endpoint, stage3_model, stage3_timeout_seconds, stage3_interval_minutes, updated_at
+		updated_at
 		FROM runtime_ai_settings WHERE singleton_id = 1`).Scan(
 		&embeddingEnabled, &cfg.EmbeddingEndpoint, &cfg.EmbeddingModel, &embeddingTimeout,
-		&stage3Enabled, &cfg.Stage3Endpoint, &cfg.Stage3Model, &stage3Timeout, &interval, &updatedAt,
+		&updatedAt,
 	)
 	persisted := true
 	if errors.Is(err, sql.ErrNoRows) {
@@ -154,20 +122,12 @@ func (s *Store) Load(ctx context.Context) (RuntimeAIConfig, View, error) {
 	} else {
 		cfg.EmbeddingEnabled = embeddingEnabled == 1
 		cfg.EmbeddingTimeout = time.Duration(embeddingTimeout) * time.Second
-		cfg.Stage3Enabled = stage3Enabled == 1
-		cfg.Stage3Timeout = time.Duration(stage3Timeout) * time.Second
-		cfg.Stage3Interval = time.Duration(interval) * time.Minute
 	}
 
 	if value, found, err := s.loadSecret(ctx, "embedding_api_key"); err != nil {
 		return RuntimeAIConfig{}, View{}, err
 	} else if found {
 		cfg.EmbeddingAPIKey = value
-	}
-	if value, found, err := s.loadSecret(ctx, "stage3_api_key"); err != nil {
-		return RuntimeAIConfig{}, View{}, err
-	} else if found {
-		cfg.Stage3APIKey = value
 	}
 	return cfg, viewOf(cfg, persisted, updatedAt), nil
 }
@@ -187,29 +147,23 @@ func (s *Store) Update(ctx context.Context, input UpdateInput) (RuntimeAIConfig,
 	}
 	defer tx.Rollback()
 
+	// 历史 SQLite 表结构保留未使用的 stage3_* 列（带 NOT NULL/CHECK 约束）以避免破坏已升级库；
+	// 写入时只更新 embedding 字段并用合法默认值填充历史列。
 	_, err = tx.ExecContext(ctx, `INSERT INTO runtime_ai_settings(
 		singleton_id, embedding_enabled, embedding_endpoint, embedding_model, embedding_timeout_seconds,
 		stage3_enabled, stage3_endpoint, stage3_model, stage3_timeout_seconds, stage3_interval_minutes, updated_at
-	) VALUES(1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	) VALUES(1, ?, ?, ?, ?, 0, '', '', 60, 360, ?)
 	ON CONFLICT(singleton_id) DO UPDATE SET
 		embedding_enabled=excluded.embedding_enabled, embedding_endpoint=excluded.embedding_endpoint,
 		embedding_model=excluded.embedding_model, embedding_timeout_seconds=excluded.embedding_timeout_seconds,
-		stage3_enabled=excluded.stage3_enabled, stage3_endpoint=excluded.stage3_endpoint,
-		stage3_model=excluded.stage3_model, stage3_timeout_seconds=excluded.stage3_timeout_seconds,
-		stage3_interval_minutes=excluded.stage3_interval_minutes, updated_at=excluded.updated_at`,
+		updated_at=excluded.updated_at`,
 		boolInt(normalized.Embedding.Enabled), normalized.Embedding.Endpoint, normalized.Embedding.Model, normalized.Embedding.TimeoutSeconds,
-		boolInt(normalized.Stage3.Enabled), normalized.Stage3.Endpoint, normalized.Stage3.Model, normalized.Stage3.TimeoutSeconds,
-		normalized.Stage3.IntervalMinutes, now)
+		now)
 	if err != nil {
 		return RuntimeAIConfig{}, View{}, fmt.Errorf("保存运行时 AI 设置: %w", err)
 	}
-	for name, secret := range map[string]SecretInput{
-		"embedding_api_key": normalized.Embedding.APIKey,
-		"stage3_api_key":    normalized.Stage3.APIKey,
-	} {
-		if err := s.applySecret(ctx, tx, name, secret, now); err != nil {
-			return RuntimeAIConfig{}, View{}, err
-		}
+	if err := s.applySecret(ctx, tx, "embedding_api_key", normalized.Embedding.APIKey, now); err != nil {
+		return RuntimeAIConfig{}, View{}, err
 	}
 	if err := tx.Commit(); err != nil {
 		return RuntimeAIConfig{}, View{}, fmt.Errorf("提交运行时 AI 设置: %w", err)
@@ -220,8 +174,6 @@ func (s *Store) Update(ctx context.Context, input UpdateInput) (RuntimeAIConfig,
 func normalizeInput(input UpdateInput) (UpdateInput, error) {
 	input.Embedding.Endpoint = strings.TrimSpace(input.Embedding.Endpoint)
 	input.Embedding.Model = strings.TrimSpace(input.Embedding.Model)
-	input.Stage3.Endpoint = strings.TrimSpace(input.Stage3.Endpoint)
-	input.Stage3.Model = strings.TrimSpace(input.Stage3.Model)
 	if input.Embedding.Enabled {
 		if err := validateEndpoint(input.Embedding.Endpoint, "向量服务地址"); err != nil {
 			return UpdateInput{}, err
@@ -230,40 +182,23 @@ func normalizeInput(input UpdateInput) (UpdateInput, error) {
 			return UpdateInput{}, ValidationError{Message: "向量模型不能为空"}
 		}
 	}
-	if input.Stage3.Enabled {
-		if err := validateEndpoint(input.Stage3.Endpoint, "Stage 3 模型地址"); err != nil {
-			return UpdateInput{}, err
-		}
-		if input.Stage3.Model == "" {
-			return UpdateInput{}, ValidationError{Message: "Stage 3 模型不能为空"}
-		}
-	}
 	if input.Embedding.TimeoutSeconds < 1 || input.Embedding.TimeoutSeconds > 300 {
 		return UpdateInput{}, ValidationError{Message: "向量请求超时必须在 1 到 300 秒之间"}
 	}
-	if input.Stage3.TimeoutSeconds < 1 || input.Stage3.TimeoutSeconds > 300 {
-		return UpdateInput{}, ValidationError{Message: "Stage 3 请求超时必须在 1 到 300 秒之间"}
+	action := strings.ToLower(strings.TrimSpace(input.Embedding.APIKey.Action))
+	if action != "keep" && action != "replace" && action != "clear" {
+		return UpdateInput{}, ValidationError{Message: "API Key 操作必须是 keep、replace 或 clear"}
 	}
-	if input.Stage3.IntervalMinutes < 60 || input.Stage3.IntervalMinutes > 10080 {
-		return UpdateInput{}, ValidationError{Message: "Stage 3 执行间隔必须在 60 到 10080 分钟之间"}
-	}
-	for _, secret := range []SecretInput{input.Embedding.APIKey, input.Stage3.APIKey} {
-		action := strings.ToLower(strings.TrimSpace(secret.Action))
-		if action != "keep" && action != "replace" && action != "clear" {
-			return UpdateInput{}, ValidationError{Message: "API Key 操作必须是 keep、replace 或 clear"}
+	if action == "replace" {
+		value := strings.TrimSpace(input.Embedding.APIKey.Value)
+		if value == "" {
+			return UpdateInput{}, ValidationError{Message: "替换 API Key 时新值不能为空"}
 		}
-		if action == "replace" {
-			value := strings.TrimSpace(secret.Value)
-			if value == "" {
-				return UpdateInput{}, ValidationError{Message: "替换 API Key 时新值不能为空"}
-			}
-			if len(value) > maxSecretBytes {
-				return UpdateInput{}, ValidationError{Message: "API Key 过长"}
-			}
+		if len(value) > maxSecretBytes {
+			return UpdateInput{}, ValidationError{Message: "API Key 过长"}
 		}
 	}
-	input.Embedding.APIKey.Action = strings.ToLower(strings.TrimSpace(input.Embedding.APIKey.Action))
-	input.Stage3.APIKey.Action = strings.ToLower(strings.TrimSpace(input.Stage3.APIKey.Action))
+	input.Embedding.APIKey.Action = action
 	return input, nil
 }
 
@@ -414,12 +349,6 @@ func viewOf(cfg RuntimeAIConfig, persisted bool, updatedAt string) View {
 		Embedding: EmbeddingView{
 			Enabled: cfg.EmbeddingEnabled, Endpoint: cfg.EmbeddingEndpoint, Model: cfg.EmbeddingModel,
 			TimeoutSeconds: int(cfg.EmbeddingTimeout / time.Second), APIKeyConfigured: strings.TrimSpace(cfg.EmbeddingAPIKey) != "",
-		},
-		Stage3: Stage3View{
-			Enabled: cfg.Stage3Enabled, Endpoint: cfg.Stage3Endpoint, Model: cfg.Stage3Model,
-			TimeoutSeconds: int(cfg.Stage3Timeout / time.Second), IntervalMinutes: int(cfg.Stage3Interval / time.Minute),
-			APIKeyConfigured: strings.TrimSpace(cfg.Stage3APIKey) != "",
-			Configured:       cfg.Stage3Enabled && strings.TrimSpace(cfg.Stage3Endpoint) != "" && strings.TrimSpace(cfg.Stage3Model) != "",
 		},
 		Persisted: persisted,
 		UpdatedAt: updatedAt,

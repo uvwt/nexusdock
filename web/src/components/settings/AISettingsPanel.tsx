@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { TFunction } from 'i18next';
-import { Activity, BrainCircuit, DatabaseZap, Save, SearchCheck } from 'lucide-react';
+import { Activity, DatabaseZap, Save, SearchCheck } from 'lucide-react';
 import { ApiError, api } from '../../api/client';
 import type {
   EmbeddingStatusResponse,
@@ -13,7 +13,7 @@ import type {
 } from '../../api/generated';
 
 type SecretForm = { value: string; clear: boolean };
-type FormState = Pick<RuntimeAISettingsView, 'embedding' | 'stage3'>;
+type FormState = Pick<RuntimeAISettingsView, 'embedding'>;
 
 function errorMessage(error: unknown, t: TFunction): string {
   if (error instanceof ApiError) return error.message;
@@ -30,13 +30,11 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
   const { t } = useTranslation();
   const [form, setForm] = useState<FormState | null>(null);
   const [embeddingSecret, setEmbeddingSecret] = useState<SecretForm>({ value: '', clear: false });
-  const [stage3Secret, setStage3Secret] = useState<SecretForm>({ value: '', clear: false });
   const [embeddingStatus, setEmbeddingStatus] = useState<EmbeddingStatusResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [reindexing, setReindexing] = useState(false);
-  const [testingTarget, setTestingTarget] = useState<'stage3' | 'embedding' | null>(null);
-  const [stage3Test, setStage3Test] = useState<RuntimeAIConnectionTestResponse | null>(null);
+  const [testingEmbedding, setTestingEmbedding] = useState(false);
   const [embeddingTest, setEmbeddingTest] = useState<RuntimeAIConnectionTestResponse | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'error' | 'info'; text: string } | null>(null);
 
@@ -52,10 +50,8 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
     setLoading(true);
     try {
       const settingsResult = await api<RuntimeAISettingsResponse>('/v1/settings/ai');
-      setForm({ embedding: settingsResult.settings.embedding, stage3: settingsResult.settings.stage3 });
+      setForm({ embedding: settingsResult.settings.embedding });
       setEmbeddingSecret({ value: '', clear: false });
-      setStage3Secret({ value: '', clear: false });
-      setStage3Test(null);
       setEmbeddingTest(null);
       setNotice(null);
       void refreshEmbeddingStatus(settingsResult.settings.embedding.enabled);
@@ -82,23 +78,13 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
           timeout_seconds: form.embedding.timeout_seconds,
           api_key: secretAction(embeddingSecret),
         },
-        stage3: {
-          enabled: form.stage3.enabled,
-          endpoint: form.stage3.endpoint.trim(),
-          model: form.stage3.model.trim(),
-          timeout_seconds: form.stage3.timeout_seconds,
-          interval_minutes: form.stage3.interval_minutes,
-          api_key: secretAction(stage3Secret),
-        },
       };
       const result = await api<RuntimeAISettingsResponse>('/v1/settings/ai', {
         method: 'PUT',
         body: JSON.stringify(payload),
       });
-      setForm({ embedding: result.settings.embedding, stage3: result.settings.stage3 });
+      setForm({ embedding: result.settings.embedding });
       setEmbeddingSecret({ value: '', clear: false });
-      setStage3Secret({ value: '', clear: false });
-      setStage3Test(null);
       setEmbeddingTest(null);
       setNotice({ tone: 'success', text: t('Configuration saved and applied. Nexus does not need to restart.') });
       void refreshEmbeddingStatus(result.settings.embedding.enabled);
@@ -124,20 +110,19 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
     }
   }
 
-  async function testConnection(target: 'stage3' | 'embedding') {
-    setTestingTarget(target);
-    const setResult = target === 'stage3' ? setStage3Test : setEmbeddingTest;
-    setResult(null);
+  async function testEmbeddingConnection() {
+    setTestingEmbedding(true);
+    setEmbeddingTest(null);
     try {
-      const result = await api<RuntimeAIConnectionTestResponse>(`/v1/settings/ai/test/${target}`, {
+      const result = await api<RuntimeAIConnectionTestResponse>('/v1/settings/ai/test/embedding', {
         method: 'POST',
         timeoutMs: 310_000,
       });
-      setResult(result);
+      setEmbeddingTest(result);
     } catch (error) {
-      setResult({ ok: false, target, message: errorMessage(error, t), latency_ms: 0 });
+      setEmbeddingTest({ ok: false, target: 'embedding', message: errorMessage(error, t), latency_ms: 0 });
     } finally {
-      setTestingTarget(null);
+      setTestingEmbedding(false);
     }
   }
 
@@ -148,7 +133,6 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
   }
 
   const reachableTone = embeddingStatus?.reachable === true ? 'is-ok' : embeddingStatus?.enabled ? 'is-warn' : 'is-muted';
-  const stage3State = form.stage3.enabled ? (form.stage3.configured ? t('Enabled') : t('Waiting for complete configuration')) : t('Disabled');
   const embeddingState = embeddingStatus?.enabled ? (embeddingStatus.reachable ? t('Service available') : t('Service unreachable')) : t('Disabled');
   const embeddingMeta = embeddingStatus?.enabled
     ? (embeddingStatus.index ? t('Index {{count}} items · {{dimension}} dimensions', { count: embeddingStatus.index.count ?? 0, dimension: embeddingStatus.index.dimension ?? 0 }) : t('Waiting for index status'))
@@ -158,28 +142,6 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
     {notice && <div className={`nx-alert is-${notice.tone}`}>{notice.text}</div>}
 
     <form className="ai-settings-form-page" onSubmit={submit}>
-      <section className="ai-config-section">
-        <header className="ai-config-head">
-          <div className="ai-config-title"><span className="nexus-panel-icon"><BrainCircuit size={17} /></span><div><h3>{t('AI experience discovery')}</h3><p>{t('Periodically analyzes historical tasks and existing experiences to uncover overlooked patterns and reusable knowledge, then hands candidates to AgentDock for further validation.')}</p></div></div>
-          <label className="ai-switch-row">
-            <input type="checkbox" checked={form.stage3.enabled} onChange={(event) => setForm({ ...form, stage3: { ...form.stage3, enabled: event.target.checked } })} />
-            <span><strong>{stage3State}</strong></span>
-          </label>
-        </header>
-        <div className="ai-config-body">
-          <div className="ai-field-grid ai-stage3-fields">
-            <label className="ai-field is-wide"><span>{t('Chat Completions endpoint')}</span><input type="url" required={form.stage3.enabled} value={form.stage3.endpoint} onChange={(event) => setForm({ ...form, stage3: { ...form.stage3, endpoint: event.target.value } })} placeholder="https://api.example.com/v1/chat/completions" /></label>
-            <label className="ai-field"><span>{t('Model')}</span><input type="text" required={form.stage3.enabled} value={form.stage3.model} onChange={(event) => setForm({ ...form, stage3: { ...form.stage3, model: event.target.value } })} placeholder="gpt-5-mini" /></label>
-            <label className="ai-field"><span>{t('Request timeout (seconds)')}</span><input type="number" min={1} max={300} value={form.stage3.timeout_seconds} onChange={(event) => setForm({ ...form, stage3: { ...form.stage3, timeout_seconds: Number(event.target.value) } })} /></label>
-            <label className="ai-field"><span>{t('Run interval (minutes)')}</span><input type="number" min={60} max={10080} value={form.stage3.interval_minutes} onChange={(event) => setForm({ ...form, stage3: { ...form.stage3, interval_minutes: Number(event.target.value) } })} /></label>
-            <label className="ai-field is-wide"><span>API Key {form.stage3.api_key_configured ? t('· Configured; leave blank to keep') : t('· Not configured')}</span><input type="password" autoComplete="new-password" disabled={stage3Secret.clear} value={stage3Secret.value} onChange={(event) => setStage3Secret({ value: event.target.value, clear: false })} placeholder={form.stage3.api_key_configured ? '••••••••' : t('Optional')} /></label>
-            {form.stage3.api_key_configured && <label className="ai-clear-secret"><input type="checkbox" checked={stage3Secret.clear} onChange={(event) => setStage3Secret({ value: '', clear: event.target.checked })} /><span>{t('Clear saved API Key')}</span></label>}
-          </div>
-          <div className="ai-config-actions"><p>{t('Connection tests use the currently saved server configuration. Save form changes first.')}</p><button type="button" className="nx-button is-secondary" disabled={loading || saving || testingTarget !== null} onClick={() => void testConnection('stage3')}><Activity size={15} />{testingTarget === 'stage3' ? t('Testing…') : t('Test connection')}</button></div>
-          {stage3Test && <div className={`nx-alert is-${stage3Test.ok ? 'success' : 'error'}`}>{stage3Test.message}{stage3Test.latency_ms > 0 ? ` · ${stage3Test.latency_ms} ms` : ''}</div>}
-        </div>
-      </section>
-
       <section className="ai-config-section">
         <header className="ai-config-head">
           <div className="ai-config-title"><span className="nexus-panel-icon"><DatabaseZap size={17} /></span><div><h3>{t('Vector search')}</h3><p>{t('Shared by Recall semantic search and Workflow template matching, compatible with the OpenAI Embeddings API.')}</p></div></div>
@@ -199,7 +161,7 @@ export default function AISettingsPanel({ refreshToken }: { refreshToken: number
             <label className="ai-field is-wide"><span>API Key {form.embedding.api_key_configured ? t('· Configured; leave blank to keep') : t('· Not configured')}</span><input type="password" autoComplete="new-password" disabled={embeddingSecret.clear} value={embeddingSecret.value} onChange={(event) => setEmbeddingSecret({ value: event.target.value, clear: false })} placeholder={form.embedding.api_key_configured ? '••••••••' : t('Local Embedding can leave this blank')} /></label>
             {form.embedding.api_key_configured && <label className="ai-clear-secret"><input type="checkbox" checked={embeddingSecret.clear} onChange={(event) => setEmbeddingSecret({ value: '', clear: event.target.checked })} /><span>{t('Clear saved API Key')}</span></label>}
           </div>
-          <div className="ai-config-actions"><p>{t('Rebuilding indexes regenerates vector data for Recall and Workflow.')}</p><div><button type="button" className="nx-button is-secondary" disabled={loading || saving || testingTarget !== null} onClick={() => void testConnection('embedding')}><Activity size={15} />{testingTarget === 'embedding' ? t('Testing…') : t('Test connection')}</button><button type="button" className="nx-button is-secondary" disabled={!form.embedding.enabled || reindexing || saving || testingTarget !== null} onClick={() => void reindex()}><SearchCheck size={15} />{reindexing ? t('Rebuilding…') : t('Rebuild indexes')}</button></div></div>
+          <div className="ai-config-actions"><p>{t('Rebuilding indexes regenerates vector data for Recall and Workflow.')}</p><div><button type="button" className="nx-button is-secondary" disabled={loading || saving || testingEmbedding} onClick={() => void testEmbeddingConnection()}><Activity size={15} />{testingEmbedding ? t('Testing…') : t('Test connection')}</button><button type="button" className="nx-button is-secondary" disabled={!form.embedding.enabled || reindexing || saving || testingEmbedding} onClick={() => void reindex()}><SearchCheck size={15} />{reindexing ? t('Rebuilding…') : t('Rebuild indexes')}</button></div></div>
           {embeddingTest && <div className={`nx-alert is-${embeddingTest.ok ? 'success' : 'error'}`}>{embeddingTest.message}{embeddingTest.latency_ms > 0 ? ` · ${embeddingTest.latency_ms} ms` : ''}</div>}
           {embeddingStatus?.error && <div className="nx-alert is-error">{embeddingStatus.error}</div>}
         </div>

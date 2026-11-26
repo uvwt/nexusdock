@@ -28,7 +28,6 @@ import (
 	"github.com/uvwt/nexusdock/internal/privatenotes"
 	"github.com/uvwt/nexusdock/internal/recall"
 	"github.com/uvwt/nexusdock/internal/settings"
-	"github.com/uvwt/nexusdock/internal/stage3"
 	"github.com/uvwt/nexusdock/internal/workflow"
 )
 
@@ -152,12 +151,6 @@ func WithMCPTokenStore(store *auth.MCPTokenStore) ServerOption {
 // REST 与集中式 MCP workflow 工具共用同一实例。
 func WithWorkflowRegistry(registry *workflow.Registry) ServerOption {
 	return func(server *Server) { server.workflowRegistry = registry }
-}
-
-// WithEvolutionWorker 注入组合根拥有的 Stage 3 进化 Worker；
-// HTTP 层只在运行期 AI 设置保存成功后唤醒它，不参与调度与执行。
-func WithEvolutionWorker(worker *stage3.Worker) ServerOption {
-	return func(server *Server) { server.runtimeAI.evolutionWorker = worker }
 }
 
 // WithPublishedToolBridge 注入组合根创建的节点工具契约 Bridge；

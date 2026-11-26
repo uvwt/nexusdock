@@ -1,5 +1,5 @@
 // Code generated from scripts/generate-contracts.py by swagger-typescript-api. DO NOT EDIT.
-// OpenAPI-SHA256: 24258ed9f60e5f8485c9b8bb4ea2cf4a247c8566ab7cb1bd7244248b8e1d6090
+// OpenAPI-SHA256: da296a54ca679ae7628a46b5d3ea5780e680343067c1abda3b6cd4d59a80a320
 
 /** 与 Nexus 配对的一台 AgentDock 节点。 */
 export interface AgentDockNode {
@@ -1090,7 +1090,7 @@ export interface RecallWriteRequest {
   verified_at?: string;
 }
 
-/** Stage 3 或向量服务的脱敏连接测试结果。 */
+/** 向量服务的脱敏连接测试结果。 */
 export interface RuntimeAIConnectionTestResponse {
   /**
    * 测试耗时毫秒。
@@ -1104,29 +1104,25 @@ export interface RuntimeAIConnectionTestResponse {
   /** 连接测试是否成功。 */
   ok: boolean;
   /** 测试目标。 */
-  target: "stage3" | "embedding";
+  target: "embedding";
 }
 
 /** 运行时 AI 设置响应。 */
 export interface RuntimeAISettingsResponse {
   /** 请求是否成功。 */
   ok: boolean;
-  /** Nexus 当前已脱敏的 AI 与向量检索配置。 */
+  /** Nexus 当前已脱敏的向量检索运行时配置。 */
   settings: RuntimeAISettingsView;
 }
 
-/** 保存 Nexus Stage 3 与向量检索运行时配置。 */
+/** 保存 Nexus 向量检索运行时配置。 */
 export interface RuntimeAISettingsUpdateRequest {
-  /** Nexus Stage 3 外部模型运行时配置。 */
-  stage3: Stage3SettingsInput;
   /** 向量检索与 Embedding 运行时配置。 */
   embedding: EmbeddingSettingsInput;
 }
 
-/** Nexus 当前已脱敏的 AI 与向量检索配置。 */
+/** Nexus 当前已脱敏的向量检索运行时配置。 */
 export interface RuntimeAISettingsView {
-  /** 已脱敏的 Stage 3 外部模型运行时配置。 */
-  stage3: Stage3SettingsView;
   /** 已脱敏的向量检索运行时配置。 */
   embedding: EmbeddingSettingsView;
   /** 是否已保存 SQLite 覆盖配置；false 表示当前来自环境变量或默认值。 */
@@ -1242,56 +1238,6 @@ export interface RuntimeSecretUpdate {
    * @maxLength 65536
    */
   value?: string;
-}
-
-/** Nexus Stage 3 外部模型运行时配置。 */
-export interface Stage3SettingsInput {
-  /** 运行时 AI 密钥更新指令；服务永不回显密钥明文。 */
-  api_key: RuntimeSecretUpdate;
-  /** 是否启用 Stage 3 辅助进化。 */
-  enabled: boolean;
-  /** OpenAI 兼容 Chat Completions HTTP(S) 地址。 */
-  endpoint: string;
-  /**
-   * Stage 3 执行间隔分钟数。
-   * @min 60
-   * @max 10080
-   */
-  interval_minutes: number;
-  /** Stage 3 模型名称。 */
-  model: string;
-  /**
-   * 模型请求超时秒数。
-   * @min 1
-   * @max 300
-   */
-  timeout_seconds: number;
-}
-
-/** 已脱敏的 Stage 3 外部模型运行时配置。 */
-export interface Stage3SettingsView {
-  /** 是否已配置 API Key；不返回明文。 */
-  api_key_configured: boolean;
-  /** Stage 3 是否具备运行所需的启用、地址和模型配置。 */
-  configured: boolean;
-  /** 是否启用 Stage 3。 */
-  enabled: boolean;
-  /** 当前模型地址。 */
-  endpoint: string;
-  /**
-   * 执行间隔分钟数。
-   * @min 60
-   * @max 10080
-   */
-  interval_minutes: number;
-  /** 当前模型名称。 */
-  model: string;
-  /**
-   * 请求超时秒数。
-   * @min 1
-   * @max 300
-   */
-  timeout_seconds: number;
 }
 
 /** Nexus 系统与数据存储状态。 */

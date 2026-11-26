@@ -4,7 +4,6 @@ import type { RecallPage, RecallWorkspaceViewModel } from './types';
 import RecallActionDialog from './RecallActionDialog';
 import RecallEditor from './RecallEditor';
 import RecallExperienceCardsPage from './RecallExperienceCardsPage';
-import RecallEvolutionPage from './RecallEvolutionPage';
 import RecallFileBrowser from './RecallFileBrowser';
 import RecallNoticeArea from './RecallNoticeArea';
 import RecallStats from './RecallStats';
@@ -12,7 +11,6 @@ import RecallVectorRecallPage from './RecallVectorRecallPage';
 
 type Props = RecallWorkspaceViewModel & {
   page: RecallPage;
-  refreshToken: number;
   onNavigate: (page: RecallPage) => void;
 };
 
@@ -22,7 +20,6 @@ export default function RecallWorkspaceView(props: Props) {
   const recallNavigation = useMemo<Array<{ id: RecallPage; label: string }>>(() => [
     { id: 'library', label: t('Library') },
     { id: 'cards', label: t('Experience Cards') },
-    { id: 'evolution', label: t('Evolution') },
     { id: 'vectors', label: t('Vector Recall') },
   ], [t]);
 
@@ -46,7 +43,6 @@ export default function RecallWorkspaceView(props: Props) {
       </section>
     </>}
     {props.page === 'cards' && <RecallExperienceCardsPage entries={props.state.cardEntries} loading={props.state.loading} />}
-    {props.page === 'evolution' && <RecallEvolutionPage refreshToken={props.refreshToken} />}
     {props.page === 'vectors' && <RecallVectorRecallPage state={props.state} actions={props.actions} onOpenCard={openCardFromTools} />}
   </section>;
 }

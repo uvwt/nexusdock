@@ -87,36 +87,6 @@ func TestRouterSecurityDomainsKeepDeviceOutOfAdminRoutes(t *testing.T) {
 	}
 }
 
-func TestRouterInternalLifecycleRequiresEnabledDevice(t *testing.T) {
-	server, deviceToken := newRouteSecurityTestServer(t)
-	handler := server.Handler()
-
-	unauthorized := httptest.NewRequest(
-		http.MethodPost,
-		"/internal/recall/lifecycle/query",
-		strings.NewReader("{}"),
-	)
-	unauthorized.Header.Set("Content-Type", "application/json")
-	unauthorizedResponse := httptest.NewRecorder()
-	handler.ServeHTTP(unauthorizedResponse, unauthorized)
-	if unauthorizedResponse.Code != http.StatusUnauthorized {
-		t.Fatalf("internal lifecycle route allowed anonymous request: status=%d body=%s", unauthorizedResponse.Code, unauthorizedResponse.Body.String())
-	}
-
-	authorized := httptest.NewRequest(
-		http.MethodPost,
-		"/internal/recall/lifecycle/query",
-		strings.NewReader("{}"),
-	)
-	authorized.Header.Set("Content-Type", "application/json")
-	authorized.Header.Set("Authorization", "Bearer "+deviceToken)
-	authorizedResponse := httptest.NewRecorder()
-	handler.ServeHTTP(authorizedResponse, authorized)
-	if authorizedResponse.Code != http.StatusOK {
-		t.Fatalf("enabled device could not reach internal lifecycle route: status=%d body=%s", authorizedResponse.Code, authorizedResponse.Body.String())
-	}
-}
-
 func TestRouterLeavesLoginAssetsPublicWhileProtectingUI(t *testing.T) {
 	server := newNodeTestServer(t)
 	handler := server.Handler()

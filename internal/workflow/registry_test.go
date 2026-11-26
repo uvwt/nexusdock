@@ -162,6 +162,26 @@ func TestGetReportsCorruptPublishedVersion(t *testing.T) {
 	}
 }
 
+func TestRegistryIgnoresLegacySourceEvolutionID(t *testing.T) {
+	registry := NewRegistry(t.TempDir())
+	publishedPath := registry.templatePath("published", "development.legacy", "1.0.0")
+	if err := os.MkdirAll(filepath.Dir(publishedPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	legacyJSON := `{"id":"development.legacy","version":"1.0.0","title":"Legacy workflow","description":"From before evolution removal","source_evolution_id":"evo_0123456789abcdef","status":"active","match":{"keywords":["legacy"]},"completion_conditions":["ok"],"steps":[{"id":"step1","title":"Step 1","phase":"verify"}]}`
+	if err := os.WriteFile(publishedPath, []byte(legacyJSON), 0o600); err != nil {
+		t.Fatalf("write legacy published template: %v", err)
+	}
+
+	got, err := registry.Get("development.legacy", "1.0.0")
+	if err != nil {
+		t.Fatalf("legacy published template with source_evolution_id should load cleanly: %v", err)
+	}
+	if got.ID != "development.legacy" || got.Title != "Legacy workflow" || got.Status != StatusActive {
+		t.Fatalf("unexpected decoded legacy template: %#v", got)
+	}
+}
+
 func TestRegistryFilesRemainPrivate(t *testing.T) {
 	registry := NewRegistry(t.TempDir())
 	if err := registry.ensureDirs(); err != nil {

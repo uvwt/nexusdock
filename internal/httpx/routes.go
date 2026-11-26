@@ -47,10 +47,8 @@ func (s *Server) Handler() http.Handler {
 		r.Get("/v1/settings/mcp-token", s.access.getMCPAccessToken)
 		r.Post("/v1/settings/mcp-token/reset", s.access.resetMCPAccessToken)
 		r.Put("/v1/settings/ai", s.runtimeAI.updateSettings)
-		r.Post("/v1/settings/ai/test/stage3", s.runtimeAI.testStage3Connection)
 		r.Post("/v1/settings/ai/test/embedding", s.runtimeAI.testEmbeddingConnection)
 		s.registerRuntimeRoutes(r)
-		s.registerEvolutionAdminRoutes(r)
 	})
 
 	// 共享数据域：已启用的 AgentDock Device Token 与管理员 Web Session 均可访问。
@@ -61,12 +59,6 @@ func (s *Server) Handler() http.Handler {
 			s.registerPrivateNoteRoutes(r)
 		}
 		s.registerRecallRoutes(r)
-	})
-
-	// 内部设备域：生命周期写操作只允许已配对且启用的 AgentDock。
-	r.Group(func(r chi.Router) {
-		r.Use(s.withEvolutionAccess)
-		s.registerEvolutionInternalRoutes(r)
 	})
 
 	// UI 与 SPA fallback 最后注册。登录页所需 /ui/assets/* 已在公开路由中单独放行。

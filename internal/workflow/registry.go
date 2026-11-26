@@ -246,11 +246,15 @@ func (r *Registry) load(area, id, version string) (Template, error) {
 }
 
 // decodeTemplate 使用严格 JSON：未知字段与多余 JSON 值都视为模板文件损坏。
+// 仅兼容忽略历史上已落盘但现已移除的 source_evolution_id 字段。
 func decodeTemplate(data []byte) (Template, error) {
-	var template Template
+	var stored struct {
+		Template
+		LegacySourceEvolutionID string `json:"source_evolution_id,omitempty"`
+	}
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&template); err != nil {
+	if err := decoder.Decode(&stored); err != nil {
 		return Template{}, err
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
@@ -259,7 +263,7 @@ func decodeTemplate(data []byte) (Template, error) {
 		}
 		return Template{}, fmt.Errorf("read trailing template data: %w", err)
 	}
-	return template, nil
+	return stored.Template, nil
 }
 
 func (r *Registry) publishIntentPath() string {

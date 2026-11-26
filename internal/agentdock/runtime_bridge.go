@@ -267,12 +267,6 @@ func (h *Hub) RuntimeMCPManage(ctx context.Context, nodeID string, request json.
 	return payload, nil
 }
 
-// RuntimeEvolve 提交进化候选；Nexus 只关心上游是否接受，不解析响应内容。
-func (h *Hub) RuntimeEvolve(ctx context.Context, nodeID string, payload json.RawMessage) error {
-	_, err := h.invokeRuntime(ctx, nodeID, http.MethodPost, "/internal/runtime/evolve", nil, payload)
-	return err
-}
-
 // RuntimeMCPOAuthCallback 把 OAuth Provider 回到 Nexus 的一次性 code/state 原样投递给
 // 目标 AgentDock。Nexus 不保存 PKCE verifier、access token 或 refresh token；真正的
 // token exchange 仍只发生在节点本地。
