@@ -45,6 +45,7 @@ FORBIDDEN_PATH_PREFIXES = (
     "/v1/runtime/capabilities",
     "/v1/events",
     "/v1/schedules",
+    "/v1/private-notes",
 )
 FORBIDDEN_FIELDS = {"recall_root"}
 FORBIDDEN_ERROR_CODES = {
@@ -103,9 +104,6 @@ ERROR_CODES = [
     "INVALID_MCP_NAME",
     "INVALID_PATH",
     "INVALID_PLUGIN_NAME",
-    "INVALID_PRIVATE_NOTE_MAINTENANCE_ACTION",
-    "INVALID_PRIVATE_NOTE_PATH",
-    "INVALID_PRIVATE_NOTE_STATUS_ACTION",
     "INVALID_QUERY",
     "INVALID_RUNTIME_SETTINGS",
     "INVALID_SKILL_FILE",
@@ -130,18 +128,6 @@ ERROR_CODES = [
     "ORIGIN_REJECTED",
     "PATCH_FAILED",
     "PREVIEW_FAILED",
-    "PRIVATE_NOTES_AGE_IDENTITY_INVALID",
-    "PRIVATE_NOTES_AGE_RECIPIENT_INVALID",
-    "PRIVATE_NOTES_AGE_RECIPIENT_MISSING",
-    "PRIVATE_NOTES_ROOT_REQUIRED",
-    "PRIVATE_NOTE_ENCRYPTED_MISSING",
-    "PRIVATE_NOTE_EXISTS",
-    "PRIVATE_NOTE_METADATA_INVALID",
-    "PRIVATE_NOTE_METADATA_TOO_LARGE",
-    "PRIVATE_NOTE_NOT_FOUND",
-    "PRIVATE_NOTE_OPERATION_FAILED",
-    "PRIVATE_NOTE_SYMLINK_REJECTED",
-    "PRIVATE_NOTE_UNSAFE_FILE",
     "READ_FAILED",
     "REQUEST_TOO_LARGE",
     "SEARCH_CARDS_FAILED",
@@ -576,15 +562,6 @@ def source_public_error_codes() -> set[str]:
         codes.update(re.findall(r'(?:writeError|writeAuthError)\([^\n]*?"([A-Z][A-Z0-9_]+)"', text))
         codes.update(re.findall(r'Code:\s*"([A-Z][A-Z0-9_]+)"', text))
         codes.update(re.findall(r'code\s*:=\s*"([A-Z][A-Z0-9_]+)"', text))
-
-    private_notes = ROOT / "internal" / "privatenotes"
-    for path in sorted(private_notes.glob("*.go")):
-        if path.name.endswith("_test.go"):
-            continue
-        text = path.read_text(encoding="utf-8")
-        codes.update(re.findall(r'coded\("([A-Z][A-Z0-9_]+)"', text))
-        if path.name == "store.go":
-            codes.update(re.findall(r'return\s+"([A-Z][A-Z0-9_]+)"', text))
     return codes
 
 

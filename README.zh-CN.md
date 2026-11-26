@@ -57,7 +57,7 @@ NexusDock 不替代 AgentDock，也不会把每个节点的 Runtime 状态复制
 - 查看多台 AgentDock 的在线状态、版本与能力
 - 在一个地方完成设备配对、重命名、停用和移除
 - 查看节点本机的任务、Skill 与动态 MCP，而不复制这些运行状态
-- 集中保存和搜索 Recall、经验卡片与私密笔记
+- 集中保存和搜索 Recall 与经验卡片
 - 集中发布、退役、匹配和复用 Workflow 模板
 - 用一个 MCP 地址同时访问 NexusDock 共享工具与路由后的 AgentDock 能力
 - 使用 OAuth 或独立 MCP Access Token 认证 MCP 客户端
@@ -148,7 +148,6 @@ Authorization: Bearer <MCP Access Token>
 - 共享 Markdown Recall 工作区
 - 关键词搜索与可选语义召回
 - 经验卡片与向量召回
-- 私密笔记保险库与 age 加密备份副本
 - 集中的 Workflow 模板注册表，支持版本化发布、退役、读取与匹配
 
 NexusDock 不会自动配置或推送 Recall 的 Git remote，远程备份方式由部署者自行管理。
@@ -172,7 +171,7 @@ Embedding 与外部模型都是可选能力。需要语义 Recall、Workflow 向
 | 路径 | 用途 |
 | --- | --- |
 | `/var/lib/nexus` | NexusDock 控制面状态、账号、设备、会话、设置、密钥与 Workflow 数据 |
-| `/recall` | 共享 Recall 内容与私密笔记数据 |
+| `/recall` | 共享 Recall 内容 |
 
 默认 HTTP 端口：
 

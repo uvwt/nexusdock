@@ -16,7 +16,6 @@ import (
 	protocol "github.com/uvwt/agentdock-protocol"
 	"github.com/uvwt/nexusdock/internal/agentdock"
 	"github.com/uvwt/nexusdock/internal/observability"
-	"github.com/uvwt/nexusdock/internal/privatenotes"
 	"github.com/uvwt/nexusdock/internal/recall"
 	"go.opentelemetry.io/otel/codes"
 )
@@ -343,7 +342,7 @@ func nodeInputSchema(schema map[string]any) map[string]any {
 
 func dynamicToolArguments(request *mcpsdk.CallToolRequest) (map[string]any, error) {
 	// 节点工具是 Nexus 不理解的开放协议载荷；这里保持动态 JSON 仅用于透明转发，
-	// 不把它继续传入 Nexus 自有 Recall / Workflow / Private Note 编排。
+	// 不把它继续传入 Nexus 自有 Recall / Workflow 编排。
 	arguments := map[string]any{}
 	if request == nil || request.Params == nil || len(request.Params.Arguments) == 0 || string(request.Params.Arguments) == "null" {
 		return arguments, nil
@@ -481,8 +480,9 @@ func (s *Server) callRecallSearch(ctx context.Context, input recallSearchInput) 
 
 func (s *Server) callRecallRead(input recallReadInput) (map[string]any, error) {
 	path := strings.TrimSpace(input.Path)
-	if strings.HasPrefix(path, "private-notes/") {
-		return nil, errors.New("private notes must be read through private_note_manage")
+	normalized := strings.ReplaceAll(strings.TrimPrefix(path, "/"), "\\", "/")
+	if normalized == "private-notes" || strings.HasPrefix(normalized, "private-notes/") {
+		return nil, errors.New("private-notes paths are protected and outside ordinary Recall")
 	}
 	memory, err := s.store.Read(path)
 	if err != nil {
@@ -536,12 +536,6 @@ func (s *Server) callNexusTool(ctx context.Context, name string, raw json.RawMes
 			return nil, err
 		}
 		return s.callRecallMaintain(ctx, input)
-	case "private_note_manage":
-		var input privateNoteManageInput
-		if err := decodeToolInput(raw, &input); err != nil {
-			return nil, err
-		}
-		return s.callPrivateNote(ctx, input)
 	default:
 		return nil, fmt.Errorf("unknown NexusDock tool: %s", name)
 	}
@@ -871,51 +865,6 @@ func (s *Server) lintRecall(input recallMaintainInput) (map[string]any, error) {
 		"terms": terms, "regex": input.Regex, "files_scanned": filesScanned,
 		"finding_count": len(findings), "findings": findings, "truncated": len(findings) >= maximum,
 	})
-}
-
-func (s *Server) callPrivateNote(ctx context.Context, input privateNoteManageInput) (map[string]any, error) {
-	if s.privateNotes == nil {
-		return nil, errors.New("private notes are not configured")
-	}
-	action := strings.ToLower(strings.TrimSpace(input.Action))
-	result, err := s.callPrivateNoteOperation(ctx, input, action)
-	if result != nil {
-		delete(result, "ok")
-		result["action"] = action
-		result["private_note_store"] = "NexusDock Private Notes"
-		result["recall_endpoint"] = s.cfg.PublicURL
-	}
-	return result, err
-}
-
-func (s *Server) callPrivateNoteOperation(ctx context.Context, input privateNoteManageInput, action string) (map[string]any, error) {
-	switch action {
-	case "search":
-		result, err := s.executePrivateNoteSearch(ctx, privateNoteSearchRequest{
-			Query: input.Query, MaxResults: input.MaxResults,
-		})
-		return asBoundaryMap(result, err)
-	case "read":
-		result, err := s.privateNotes.Read(input.Path, input.MaxBytes)
-		return asBoundaryMap(result, err)
-	case "write":
-		result, err := s.privateNotes.Write(privatenotes.WriteRequest{
-			Path: input.Path, Category: input.Category, Title: input.Title, Summary: input.Summary,
-			Tags: input.Tags, Content: input.Content, Confirmed: input.Confirmed, Overwrite: input.Overwrite,
-		})
-		return asBoundaryMap(result, err)
-	case "delete":
-		result, err := s.privateNotes.Delete(input.Path, input.Confirmed)
-		return asBoundaryMap(result, err)
-	case "status":
-		result, err := s.privateNotes.Status(ctx, input.StatusAction)
-		return asBoundaryMap(result, err)
-	case "maintain":
-		result, err := s.privateNotes.Maintain(ctx, input.MaintenanceAction)
-		return asBoundaryMap(result, err)
-	default:
-		return nil, fmt.Errorf("unsupported private note action: %s", action)
-	}
 }
 
 // asBoundaryMap 只用于把已完成编排的明确结果转换成 MCP JSON 输出形状。

@@ -23,7 +23,6 @@ var centralOutputContractCoverageInventory = map[string]centralOutputContractCov
 	"recall_read":              {Variants: []string{"success"}},
 	"recall_write":             {Variants: []string{"plan", "create", "replace", "append", "patch", "update_fact", "diff", "delete"}},
 	"recall_maintain":          {Variants: []string{"list", "lint", "embedding_status"}},
-	"private_note_manage":      {Variants: []string{"search", "read", "write", "delete", "status", "maintain"}},
 	"workflow_template_manage": {Variants: []string{"publish", "retire", "list", "get", "get_many", "match", "vector_index"}},
 }
 

@@ -7,14 +7,12 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/uvwt/nexusdock/internal/agentdock"
 	"github.com/uvwt/nexusdock/internal/config"
 	"github.com/uvwt/nexusdock/internal/core"
-	"github.com/uvwt/nexusdock/internal/privatenotes"
 	"github.com/uvwt/nexusdock/internal/recall"
 )
 
@@ -36,11 +34,7 @@ func newTestHandler(t *testing.T, cfg config.Config, options ...ServerOption) ht
 	if err != nil {
 		t.Fatalf("NewStore: %v", err)
 	}
-	privateNotes, err := privatenotes.New(filepath.Join(store.Root(), "private-notes"))
-	if err != nil {
-		t.Fatalf("New private notes store: %v", err)
-	}
-	serverOptions := []ServerOption{WithSystemDatabase(db), WithAgentDockNodes(nodes, agentdock.NewHub(nodes)), WithPrivateNotes(privateNotes), WithWorkflowRegistry(newTestWorkflowRegistry(cfg.NexusDataDir))}
+	serverOptions := []ServerOption{WithSystemDatabase(db), WithAgentDockNodes(nodes, agentdock.NewHub(nodes)), WithWorkflowRegistry(newTestWorkflowRegistry(cfg.NexusDataDir))}
 	serverOptions = append(serverOptions, options...)
 	handler := NewServer(cfg, store, slog.Default(), serverOptions...).Handler()
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

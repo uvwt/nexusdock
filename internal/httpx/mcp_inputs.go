@@ -55,23 +55,6 @@ type recallMaintainInput struct {
 	MaxResults  int      `json:"max_results"`
 }
 
-type privateNoteManageInput struct {
-	Action            string   `json:"action"`
-	Query             string   `json:"query"`
-	MaxResults        int      `json:"max_results"`
-	Path              string   `json:"path"`
-	Category          string   `json:"category"`
-	Title             string   `json:"title"`
-	Summary           string   `json:"summary"`
-	Tags              []string `json:"tags"`
-	Content           string   `json:"content"`
-	Confirmed         bool     `json:"confirmed"`
-	Overwrite         bool     `json:"overwrite"`
-	MaxBytes          int      `json:"max_bytes"`
-	StatusAction      string   `json:"status_action"`
-	MaintenanceAction string   `json:"maintenance_action"`
-}
-
 type workflowTemplateManageInput struct {
 	Action             string             `json:"action"`
 	Template           *workflow.Template `json:"template"`

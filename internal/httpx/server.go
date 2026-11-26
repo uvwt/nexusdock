@@ -25,7 +25,6 @@ import (
 	"github.com/uvwt/nexusdock/internal/auth"
 	"github.com/uvwt/nexusdock/internal/config"
 	"github.com/uvwt/nexusdock/internal/observability"
-	"github.com/uvwt/nexusdock/internal/privatenotes"
 	"github.com/uvwt/nexusdock/internal/recall"
 	"github.com/uvwt/nexusdock/internal/settings"
 	"github.com/uvwt/nexusdock/internal/workflow"
@@ -85,7 +84,6 @@ type Server struct {
 	tracing             *observability.Tracing
 	db                  *sql.DB
 	store               *recall.Store
-	privateNotes        *privatenotes.Store
 	agentDock           *agentdock.Store
 	agentDockHub        *agentdock.Hub
 	logger              *slog.Logger
@@ -137,10 +135,6 @@ func WithMCPSettings(store *settings.MCPStore) ServerOption {
 
 func WithMCPAppsEnabled(enabled bool) ServerOption {
 	return func(server *Server) { server.mcpAppsEnabledState = enabled }
-}
-
-func WithPrivateNotes(store *privatenotes.Store) ServerOption {
-	return func(server *Server) { server.privateNotes = store }
 }
 
 func WithMCPTokenStore(store *auth.MCPTokenStore) ServerOption {

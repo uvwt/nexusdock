@@ -89,10 +89,6 @@ func TestCentralRecallAndWorkflowInputContractParity(t *testing.T) {
 		t.Fatal("recall_maintain missing AgentDock max_results input")
 	}
 
-	privateNote := contractSchemaProperties(t, definitions["private_note_manage"].InputSchema)
-	assertIntegerBounds(t, "private_note_manage.max_results", privateNote["max_results"], 1, 100)
-	assertIntegerBounds(t, "private_note_manage.max_bytes", privateNote["max_bytes"], 1, 1048576)
-
 	workflow := contractSchemaProperties(t, definitions["workflow_template_manage"].InputSchema)
 	wantWorkflowFields := []string{
 		"action", "template", "template_id", "template_ids", "template_version", "template_status",
@@ -156,14 +152,6 @@ func contractSchemaProperties(t *testing.T, schema any) map[string]any {
 		t.Fatalf("schema properties=%#v", object["properties"])
 	}
 	return properties
-}
-
-func assertIntegerBounds(t *testing.T, name string, raw any, minimum, maximum int) {
-	t.Helper()
-	property, ok := raw.(map[string]any)
-	if !ok || property["type"] != "integer" || property["minimum"] != minimum || property["maximum"] != maximum {
-		t.Fatalf("%s=%#v", name, raw)
-	}
 }
 
 func sortedKeys(values map[string]any) []string {
